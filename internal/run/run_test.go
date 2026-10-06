@@ -205,10 +205,7 @@ Unused aor 0: not-selected
 			"states the build error of an instrumentation that the type checker rejects under List",
 			func(t *testing.T) {
 				t.Parallel()
-				dir := module(
-					t,
-					with(arithFiles, map[string]string{"names.go": "package fixture\n\nvar " + helperName + " = 0\n"}),
-				)
+				dir := module(t, with(arithFiles, map[string]string{"hiding.go": hiding}))
 				rec := runIn(t, dir, run.Config{List: true})
 				assert.Equal(t, codes(rec), []spec.ErrorCode{spec.ErrorBuild}, "the instrumentation fails")
 				assert.HasPrefix(

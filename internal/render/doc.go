@@ -22,7 +22,10 @@
 // constant or a zero value that the form writes as code. A form writes the
 // constants true and false as comparisons of literals, and a return of zero
 // values returns variables of the instrumentation's own that contain the
-// function's zero results.
+// function's zero results. Each name that the instrumentation adds starts
+// with the first of _mutate, _mutate1, _mutate2 and so on with which no
+// identifier of the package or of its tests starts, so no declaration hides
+// such a name or takes its place.
 //
 // Plain writes one mutant into its file without a switch, for the mutant's
 // ordinary build. The mutant's source keeps the code that the mutant leaves

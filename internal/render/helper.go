@@ -15,10 +15,14 @@ import (
 // helperHead declares the switch, the trace and the helpers that the forms
 // share. Its verbs are the build constraint, the package name, the
 // protocol's variable, the trace's variable, the trace's first line and the
-// length of the table of executed sites. It imports under names of its own,
-// so no declaration of the package hides an import, and it writes the
-// constants true and false as comparisons of literals, which no declaration
-// of the package hides either.
+// length of the table of executed sites. Its declarations and imports have
+// names that start with namePrefix, in whose place named writes the
+// package's prefix, so no declaration of the package hides one or takes its
+// place. It writes the constants true and false as comparisons of literals,
+// which no declaration of the package hides either. A package-level
+// declaration of a predeclared name that it uses, such as nil or int, hides
+// that name in the helper file too, and the type checker then rejects the
+// file.
 //
 // Each helper first checks, in a few instructions that the compiler
 // inlines, whether the run traces or activates a mutant of its site, and
@@ -118,12 +122,14 @@ func Imports() []string { return []string{"os", "strconv", "sync/atomic"} }
 // the variable variable, and the generic function of each site of sites
 // that calls one. It returns the range of each site's function too. first
 // maps each site to its first ordinal, and ordinals counts every ordinal of
-// the program. When lift is true, the file requires go1.18.
+// the program. Each name of the instrumentation starts with prefix. When
+// lift is true, the file requires go1.18.
 func helper(
 	name, variable string,
 	sites []*enumerate.Site,
 	first map[*enumerate.Site]int,
 	ordinals int,
+	prefix string,
 	lift bool,
 ) ([]byte, []span) {
 	var b bytes.Buffer
@@ -131,29 +137,33 @@ func helper(
 	if lift {
 		constraint = fmt.Sprintf(buildConstraint, generics) + "\n"
 	}
-	fmt.Fprintf(&b, helperHead, constraint, name, variable, TraceVar, traceStart+"\n", ordinals+1)
+	fmt.Fprintf(&b, named(prefix, helperHead), constraint, name, variable, TraceVar, traceStart+"\n", ordinals+1)
 	var spans []span
+	// site contains the functions of one site. They contain no code of the
+	// package, so named renames the names of the instrumentation in the
+	// whole text.
+	var site bytes.Buffer
 	for _, s := range sites {
-		begin := b.Len()
+		site.Reset()
 		o := first[s]
 		switch s.Form {
 		case enumerate.Ordered:
 			original := "x " + s.Op.String() + " y"
-			perSite(&b, o, "[T _mutateOrdered](x, y T) bool", "(x, y)", len(s.Mutants), original)
-			fmt.Fprintf(&b, "\tswitch _mutateActive - %d {\n", o)
+			perSite(&site, o, "[T _mutateOrdered](x, y T) bool", "(x, y)", len(s.Mutants), original)
+			fmt.Fprintf(&site, "\tswitch _mutateActive - %d {\n", o)
 			for i, m := range s.Mutants {
-				fmt.Fprintf(&b, "\tcase %d:\n\t\treturn %s\n", i, comparison(m))
+				fmt.Fprintf(&site, "\tcase %d:\n\t\treturn %s\n", i, comparison(m))
 			}
-			fmt.Fprintf(&b, "\t}\n\treturn %s\n}\n", original)
+			fmt.Fprintf(&site, "\t}\n\treturn %s\n}\n", original)
 		case enumerate.Arithmetic, enumerate.Compound:
 			constraint := "_mutateNumber"
 			if s.Op == token.REM {
 				constraint = "_mutateInteger"
 			}
 			original := "x " + s.Op.String() + " y"
-			perSite(&b, o, "[T "+constraint+"](x, y T) T", "(x, y)", 1, original)
+			perSite(&site, o, "[T "+constraint+"](x, y T) T", "(x, y)", 1, original)
 			fmt.Fprintf(
-				&b,
+				&site,
 				"\tif _mutateActive == %d {\n\t\treturn x %s y\n\t}\n\treturn %s\n}\n",
 				o,
 				s.Mutants[0].Op,
@@ -161,20 +171,22 @@ func helper(
 			)
 		case enumerate.IncDecPost:
 			original := "x " + step(s.Op) + " 1"
-			perSite(&b, o, "[T _mutateNumber](x T) T", "(x)", 1, original)
+			perSite(&site, o, "[T _mutateNumber](x T) T", "(x)", 1, original)
 			fmt.Fprintf(
-				&b,
+				&site,
 				"\tif _mutateActive == %d {\n\t\treturn x %s 1\n\t}\n\treturn %s\n}\n",
 				o,
 				step(s.Mutants[0].Op),
 				original,
 			)
 		case enumerate.Minus:
-			perSite(&b, o, "[T _mutateNumber](x T) T", "(x)", 1, "-x")
-			fmt.Fprintf(&b, "\tif _mutateActive == %d {\n\t\treturn x\n\t}\n\treturn -x\n}\n", o)
+			perSite(&site, o, "[T _mutateNumber](x T) T", "(x)", 1, "-x")
+			fmt.Fprintf(&site, "\tif _mutateActive == %d {\n\t\treturn x\n\t}\n\treturn -x\n}\n", o)
 		default:
 			continue
 		}
+		begin := b.Len()
+		b.WriteString(named(prefix, site.String()))
 		spans = append(spans, span{start: begin, end: b.Len(), site: s})
 	}
 	return b.Bytes(), spans

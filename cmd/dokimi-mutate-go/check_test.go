@@ -107,10 +107,8 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 			var errs bytes.Buffer
 			s := testSession(os.Environ(), io.Discard, &errs, "")
-			dir := module(
-				t,
-				with(addFiles, map[string]string{"names.go": "package fixture\n\nvar _mutateActive = 0\n"}),
-			)
+			// The file hides nil, which the instrumentation's helper file uses.
+			dir := module(t, with(addFiles, map[string]string{"hiding.go": "package fixture\n\nvar nil = 0\n"}))
 			got := s.list(t.Context(), load.Listed{ImportPath: fixture, Dir: dir}, 1)
 			assert.Equal(t, got, exitFailed, "the listing fails")
 			assert.HasPrefix(t, errs.String(), name+": fixture: build: ", "the note states the run error")

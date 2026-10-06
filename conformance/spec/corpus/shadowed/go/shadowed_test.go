@@ -55,3 +55,23 @@ func TestSame(t *testing.T) {
 		t.Fatalf("same(1, 1) = %v, same(1, 2) = %v", same(1, 1), same(1, 2))
 	}
 }
+
+func TestNext(t *testing.T) {
+	if got := next(1); got != 2 {
+		t.Fatalf("next(1) = %d, want 2", got)
+	}
+}
+
+func TestDouble(t *testing.T) {
+	if got := double(3); got != 6 {
+		t.Fatalf("double(3) = %d, want 6", got)
+	}
+}
+
+func TestAnswer(t *testing.T) {
+	for _, tt := range []struct{ n, want int }{{1, 42}, {0, 0}, {-1, -1}} {
+		if got := answer(tt.n); got != tt.want {
+			t.Fatalf("answer(%d) = %d, want %d", tt.n, got, tt.want)
+		}
+	}
+}

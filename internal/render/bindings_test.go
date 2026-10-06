@@ -55,7 +55,7 @@ func TestBindings(t *testing.T) {
 			names := ids(r)
 			got := map[string]string{}
 			for _, m := range r.Mutants {
-				got[names[m]] = string(render.Plain(p, m).Files[filepath.Join(p.Dir, "f.go")])
+				got[names[m]] = string(render.Plain(p, m, prefix).Files[filepath.Join(p.Dir, "f.go")])
 			}
 			assert.Equal(t, got["f sbr-zero 0"], "package fixture\n\n"+
 				"func f(n int) (count int, _mutateZero1 error) { _mutateZero0 := count;\n\tcount = n\n"+

@@ -12,9 +12,21 @@ import (
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
-// helperName is a variable of the instrumentation's helper file, which a
-// package or a test that declares it collides with.
-const helperName = "_mutateActive"
+// hiding is a file of the package fixture that declares a variable named
+// hiddenName, a predeclared name that the instrumentation's helper file
+// uses. The declaration hides the predeclared name in the helper file too.
+const (
+	hiddenName = "nil"
+	hiding     = "package fixture\n\nvar " + hiddenName + " = 0\n"
+)
+
+// claiming and claimingTest are a file and a test file of the package
+// fixture that declare names that the instrumentation declares in a package
+// without such names.
+const (
+	claiming     = "package fixture\n\nvar _mutateActive, _mutateIs = 0, 0\n"
+	claimingTest = "package fixture\n\nfunc _mutateHit(int) {}\n"
+)
 
 // instrumentedOverlay is the shell pattern of the overlay argument of the
 // instrumented build.
@@ -46,33 +58,44 @@ func TestBuild(t *testing.T) {
 		t.Run("states the build error of an instrumented build that fails while the unchanged source builds",
 			func(t *testing.T) {
 				t.Parallel()
-				// The test file declares a name of the instrumentation's helper
-				// file, which only the instrumented build compiles.
-				dir := module(t, with(arithFiles, map[string]string{
-					"helper_test.go": "package fixture\n\nvar " + helperName + " = 0\n",
-				}))
+				// The test file hides a predeclared name of the helper file in
+				// the test binary, which the instrumentation does not
+				// type-check.
+				dir := module(t, with(arithFiles, map[string]string{"hiding_test.go": hiding}))
 				rec := runIn(t, dir, run.Config{})
 				assert.Equal(t, codes(rec), []spec.ErrorCode{spec.ErrorBuild}, "the instrumented build fails")
 				assert.That(t, rec.Errors[0].Message).
 					HasPrefix("the instrumented build fails, and the unchanged source builds: ",
 						"the message states that the unchanged source builds").
-					Contains(helperName, "and names the name that collides")
+					Contains(hiddenName, "and names the hidden name")
 				assert.Equal(t, rec.Mutants[0].Reason, instrumentedReason, "the record states why no mutant runs")
 			},
 		)
 
-		t.Run("states the build error of a package that declares a name of the instrumentation", func(t *testing.T) {
+		t.Run(
+			"states the build error of a package that hides a predeclared name of the helper file",
+			func(t *testing.T) {
+				t.Parallel()
+				dir := module(t, with(arithFiles, map[string]string{"hiding.go": hiding}))
+				rec := runIn(t, dir, run.Config{})
+				assert.Equal(t, codes(rec), []spec.ErrorCode{spec.ErrorBuild}, "the instrumentation fails")
+				assert.That(t, rec.Errors[0].Message).
+					HasPrefix("render: the type checker rejects the instrumented package: ",
+						"the message states the type checker's verdict").
+					Contains(hiddenName, "and names the hidden name")
+				assert.Equal(t, rec.Mutants[0].Reason, instrumentedReason, "the record states why no mutant runs")
+			},
+		)
+
+		t.Run("runs a package whose files and tests declare the names of the instrumentation", func(t *testing.T) {
 			t.Parallel()
-			dir := module(t, with(arithFiles, map[string]string{
-				"names.go": "package fixture\n\nvar " + helperName + " = 0\n",
-			}))
+			dir := module(
+				t,
+				with(arithFiles, map[string]string{"claiming.go": claiming, "claiming_test.go": claimingTest}),
+			)
 			rec := runIn(t, dir, run.Config{})
-			assert.Equal(t, codes(rec), []spec.ErrorCode{spec.ErrorBuild}, "the instrumentation fails")
-			assert.That(t, rec.Errors[0].Message).
-				HasPrefix("render: the type checker rejects the instrumented package: ",
-					"the message states the type checker's verdict").
-				Contains(helperName, "and names the name that collides")
-			assert.Equal(t, rec.Mutants[0].Reason, instrumentedReason, "the record states why no mutant runs")
+			assert.Empty(t, rec.Errors, "the instrumented build builds")
+			assert.Equal(t, verdicts(rec), arithVerdicts, "every mutant has the verdict of the package without them")
 		})
 
 		t.Run("states the build error of a package of the suite whose tests do not compile", func(t *testing.T) {

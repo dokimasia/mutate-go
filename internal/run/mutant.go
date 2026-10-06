@@ -138,9 +138,9 @@ func (r *runner) runs(p *program, i int) []part {
 // confirm runs the ordinary build of the mutant at index i, whose ordinal
 // is ordinal, in programs, and returns the outcome of that build's runs. It
 // writes the mutant into the package's source as render.Plain writes it,
-// builds each of programs from that source, and runs its whole suite with
-// the mutant's ordinal and without the instrumented variable, as
-// runPrograms states.
+// with the names of the instrumented program. It builds each of programs
+// from that source, and runs its whole suite with the mutant's ordinal and
+// without the instrumented variable, as runPrograms states.
 //
 // The outcome is confirmed unless ctx ended the confirmation, which makes
 // the mutant not-run. A build that the toolchain rejects makes the mutant
@@ -148,7 +148,7 @@ func (r *runner) runs(p *program, i int) []part {
 func (r *runner) confirm(ctx context.Context, i, ordinal int, programs []*program) outcome {
 	dir := filepath.Join(r.work, confirmPrefix+strconv.Itoa(i))
 	defer os.RemoveAll(dir)
-	overlay, err := render.Plain(r.pkg, r.order[i]).Write(filepath.Join(dir, sourceDir))
+	overlay, err := render.Plain(r.pkg, r.order[i], r.prog.Prefix).Write(filepath.Join(dir, sourceDir))
 	if err != nil {
 		return outcome{
 			verdict:   spec.Error,

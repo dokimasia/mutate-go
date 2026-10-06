@@ -413,12 +413,27 @@ returns variables of the instrumentation's own:
 - The function copies each other named result into its variable before its
   first statement, where the result is still the zero value.
 
+Every name that the instrumentation adds starts with `_mutate`: the
+declarations and imports of the helper file, and the variables of the
+results. When an identifier of the package's files or of its test files
+starts with `_mutate`, the names start with the first of `_mutate1`,
+`_mutate2` and so on with which no identifier starts. No declaration of the
+package or of its tests then hides one of the names or takes its place. A
+package-level variable `_mutateZero0` that the function reads, a result
+named `_mutateZero0` and a local variable `_mutateActive` keep their
+meaning, and the forms keep theirs.
+
 The helper file writes the constants `true` and `false` as `0 == 0` and
 `0 != 0`, which no declaration of the package can hide. Each of these edits
 is on the line that it changes. The mutant's copy of an increment's operand
 is on one line, with a raw string that spans lines written as an
 interpreted string, so every line of the file keeps its number, and
 `runtime.Caller` reports the line of the source.
+
+A package-level declaration of a predeclared type, of `nil` or of `panic`,
+in the package or in its tests, hides that name in the helper file as well,
+because the helper file belongs to the package and uses those names. The
+instrumented build then fails with the run error `build`.
 
 No form passes a function value, so no form makes an operand escape to
 the heap.
@@ -641,12 +656,15 @@ build:
   its run, its confirmation run and the closing control run, plus the time
   that the ordinary control run's builds took.
 
-The tests of the renderer build each of the 113 runnable mutants of two
+The tests of the renderer build each of the 127 runnable mutants of three
 fixtures both ways, and every mutant's ordinary build computes the value
 that its instrumented form computes. Four of them leave out the only use
 of a variable or of an imported package. Local variables of the first
 fixture hide the names `true`, `false`, `nil` and `new` and a type's name,
-and the second fixture declares constants named `true` and `false`.
+and the second fixture declares constants named `true` and `false`. The
+third declares `_mutateZero0` as a package-level variable that a function
+reads, as a named result and as a local variable of a branch, a
+package-level variable `_mutateIs`, and a local variable `_mutateActive`.
 
 On go-humanize v1.1.0, with one worker, a run took 13.5 s without
 confirmation and 18.5 s with it. All 42 survivors survived their ordinary

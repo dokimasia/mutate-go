@@ -1,5 +1,5 @@
 {
-    "digest": "sha256:b3cca5c6eb864583ddc85eefac7d286a5034ae3e52c4ee039e34f089dfdfc95b",
+    "digest": "sha256:ba1165395f94ac8e9be02078ed2bf3162b49c8b3d1fae4b3959c433c21c4b9df",
     "files": {
         "VERSION": "sha256:59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
         "spec/catalogue.json": "sha256:47f4e8b4220037bc74a83f6e90305a2e7173ee1c48cb496fb4ca3622c0907aa9",
@@ -117,11 +117,11 @@
         "spec/corpus/selection/go/copy_test.go": "sha256:07f8fcd3b91e4e134296fb549cb863144a4f0e82c5c4ef88b56dddd49fc71ae0",
         "spec/corpus/selection/go/expect.json": "sha256:b4aa8fdfc9ba737985ac96f5e8b43074185c610ebc88896c20263cbc425685e6",
         "spec/corpus/selection/go/go.mod": "sha256:46f331a63521db5231dd0051685d07f6b22185536bbc0c9a2d0b1e2d99b074d6",
-        "spec/corpus/shadowed/case.json": "sha256:b59a609578798a22f876f800d8c7c307bd009176dfc4fcf652e1124c9f89e9c5",
-        "spec/corpus/shadowed/go/expect.json": "sha256:a77ee3d0da7a44ffa68db536137cd57966309a41f8d9f3f07f1f9022f80914e4",
+        "spec/corpus/shadowed/case.json": "sha256:b119824afb9f91c2dce8affc7916460c9721b476d4ea8133e3e467a8c5f2a932",
+        "spec/corpus/shadowed/go/expect.json": "sha256:df6f2f0c554adb481bd51edc723e9899c2ba0af8b2151246bf8b2245e3b975bc",
         "spec/corpus/shadowed/go/go.mod": "sha256:46f331a63521db5231dd0051685d07f6b22185536bbc0c9a2d0b1e2d99b074d6",
-        "spec/corpus/shadowed/go/shadowed.go": "sha256:87f7461b1d679d20cec8582af45ec491bd47601b7f55a8648220024e00d0a171",
-        "spec/corpus/shadowed/go/shadowed_test.go": "sha256:5e20101bb259e737fb1bff6b40006b5e37ebb92d7f125eb9fc0df0318c66d9be",
+        "spec/corpus/shadowed/go/shadowed.go": "sha256:b1d0e4078b15f19369dd2cbd6d52152d463b15cef51db648dd4799d37f936d19",
+        "spec/corpus/shadowed/go/shadowed_test.go": "sha256:0e50d98cbc043e9647e651d9bcda6de4527c75d73bf1c113807f4a2e30635ca1",
         "spec/corpus/short-circuit/case.json": "sha256:7df93aa59310319458d69319677c514afc1f0dcd324e14016f59868a9bd65353",
         "spec/corpus/short-circuit/go/expect.json": "sha256:f17b9fe2bbada553d7b892ca21d8b452d303b27a6ccf8a83385eeba6147728dd",
         "spec/corpus/short-circuit/go/go.mod": "sha256:46f331a63521db5231dd0051685d07f6b22185536bbc0c9a2d0b1e2d99b074d6",

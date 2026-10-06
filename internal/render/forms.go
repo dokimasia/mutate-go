@@ -27,16 +27,18 @@ type span struct {
 	site       *enumerate.Site
 }
 
-// fileRenderer writes one instrumented file. edits lists the edits of the
-// text outside the forms in the order of their offsets, and next is the
-// first edit that the renderer has not written. zeros maps the function of
-// each Zero site to the variables that the site's form returns, separated
-// by commas.
+// fileRenderer writes one instrumented file. prefix starts each name of the
+// instrumentation that the forms write. edits lists the edits of the text
+// outside the forms in the order of their offsets, and next is the first
+// edit that the renderer has not written. zeros maps the function of each
+// Zero site to the variables that the site's form returns, separated by
+// commas.
 type fileRenderer struct {
 	fset     *token.FileSet
 	text     []byte
 	first    map[*enumerate.Site]int
 	children map[*enumerate.Site][]*enumerate.Site
+	prefix   string
 	edits    []edit
 	next     int
 	zeros    map[*enumerate.Function]string
@@ -46,16 +48,17 @@ type fileRenderer struct {
 
 // renderFile returns the text of f with each of sites replaced by its
 // form, and the range of each form in that text. first maps each site to
-// its first ordinal. The text binds the results of each function that a
-// Zero site of sites returns from, as zeroBindings states. When lift is
-// true, the text starts with a build constraint that raises the file's
-// language version to at least go1.18, and a line directive that keeps
-// every line's number.
+// its first ordinal, and each name of the instrumentation starts with
+// prefix. The text binds the results of each function that a Zero site of
+// sites returns from, as zeroBindings states. When lift is true, the text
+// starts with a build constraint that raises the file's language version to
+// at least go1.18, and a line directive that keeps every line's number.
 func renderFile(
 	fset *token.FileSet,
 	f *load.File,
 	sites []*enumerate.Site,
 	first map[*enumerate.Site]int,
+	prefix string,
 	lift bool,
 ) ([]byte, []span) {
 	r := &fileRenderer{
@@ -63,21 +66,22 @@ func renderFile(
 		text:     f.Text,
 		first:    first,
 		children: map[*enumerate.Site][]*enumerate.Site{},
+		prefix:   prefix,
 		zeros:    map[*enumerate.Function]string{},
 	}
 	for _, s := range sites {
 		if s.Form != enumerate.Zero || r.zeros[s.Func] != "" {
 			continue
 		}
-		edits, vars := zeroBindings(fset, s.Func)
+		edits, vars := zeroBindings(fset, s.Func, prefix)
 		r.edits, r.zeros[s.Func] = append(r.edits, edits...), strings.Join(vars, ", ")
 	}
 	slices.SortStableFunc(r.edits, func(a, b edit) int { return cmp.Compare(a.start, b.start) })
-	prefix := ""
+	head := ""
 	if lift {
-		prefix, r.text = liftVersion(fset, f)
+		head, r.text = liftVersion(fset, f)
 	}
-	r.buf.WriteString(prefix)
+	r.buf.WriteString(head)
 	r.writeRange(0, len(r.text), nest(sites, r.children))
 	return r.buf.Bytes(), r.spans
 }
@@ -147,6 +151,7 @@ func (r *fileRenderer) writeText(start, end int) {
 	r.buf.Write(r.text[start:end])
 }
 
+// off returns the offset of pos in the text of the file that r writes.
 func (r *fileRenderer) off(pos token.Pos) int { return r.fset.File(pos).Offset(pos) }
 
 // inner writes the node n of site s, with the sites nested in s.
@@ -160,7 +165,13 @@ func (r *fileRenderer) newlines(from, to int) {
 	r.buf.WriteString(strings.Repeat("\n", bytes.Count(r.text[from:to], []byte("\n"))))
 }
 
-func (r *fileRenderer) writef(format string, args ...any) { fmt.Fprintf(&r.buf, format, args...) }
+// writef writes format, a constant of the renderer, with the names of the
+// instrumentation in it renamed as named renames them, formatted with args.
+// The renderer passes the package's code and the names that it has already
+// renamed as args, which writef leaves alone.
+func (r *fileRenderer) writef(format string, args ...any) {
+	fmt.Fprintf(&r.buf, named(r.prefix, format), args...)
+}
 
 // writeSite writes the form of s, which switches on the active mutant.
 func (r *fileRenderer) writeSite(s *enumerate.Site) {
@@ -320,11 +331,11 @@ const languagePrefix = "go1."
 // version go1.N, where N is its verb.
 const buildConstraint = "//go:build " + languagePrefix + "%d\n"
 
-// liftVersion returns the prefix of f's instrumented text, and f's text
-// with each build constraint line before the package clause blanked. The
-// prefix is a build constraint that requires go1.18 or the version that
-// f's own constraint requires, whichever is later, and a line directive
-// that numbers the line after it 1. The file is in the build, so the build
+// liftVersion returns the head of f's instrumented text, and f's text with
+// each build constraint line before the package clause blanked. The head is
+// a build constraint that requires go1.18 or the version that f's own
+// constraint requires, whichever is later, and a line directive that
+// numbers the line after it 1. The file is in the build, so the build
 // satisfies its own constraint, and only the version that it implies stays.
 func liftVersion(fset *token.FileSet, f *load.File) (string, []byte) {
 	text := append([]byte(nil), f.Text...)

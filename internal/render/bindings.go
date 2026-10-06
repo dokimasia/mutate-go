@@ -21,9 +21,9 @@ const (
 )
 
 // zeroVar starts the name of each variable that a Zero form returns,
-// followed by the index of the result. The prefix _mutate marks the
-// instrumentation's own names, as in the helper file.
-const zeroVar = "_mutateZero"
+// followed by the index of the result. named writes the package's prefix in
+// place of its own.
+const zeroVar = namePrefix + "Zero"
 
 // edit replaces the bytes from start to end of a file's text with text. An
 // edit whose start is its end inserts text before the byte at start. Edits
@@ -34,11 +34,13 @@ type edit struct {
 }
 
 // zeroBindings returns the edits that give each result of fn a variable
-// that contains the result's zero value wherever fn's body runs. It returns
-// the edits in the order of their offsets, and the variables' names in the
-// order of the results. A Zero form returns these variables. No declaration
-// at the site changes them, as a local variable named nil or after the
-// result's type changes a zero value written as code.
+// that contains the result's zero value wherever fn's body runs. The names
+// of the variables start with the package's prefix, so no identifier of the
+// package is one of them. It returns the edits in the order of their
+// offsets, and the variables' names in the order of the results. A Zero
+// form returns these variables. No declaration at the site changes them, as
+// a local variable named nil or after the result's type changes a zero
+// value written as code.
 //
 //   - Results without names get the names, as func() T becomes
 //     func() (_mutateZero0 T). The program cannot name such a variable, and
@@ -48,14 +50,15 @@ type edit struct {
 //     statement, where the result is still the zero value.
 //
 // zeroBindings allocates the edits and the names.
-func zeroBindings(fset *token.FileSet, fn *enumerate.Function) ([]edit, []string) {
+func zeroBindings(fset *token.FileSet, fn *enumerate.Function, prefix string) ([]edit, []string) {
 	off := func(pos token.Pos) int { return fset.File(pos).Offset(pos) }
+	zero := named(prefix, zeroVar)
 	results := fn.Type.Results
 	var edits []edit
 	var vars, copies, sources []string
 	for _, field := range results.List {
 		if len(field.Names) == 0 {
-			v := zeroVar + strconv.Itoa(len(vars))
+			v := zero + strconv.Itoa(len(vars))
 			at := off(field.Type.Pos())
 			if results.Opening.IsValid() {
 				edits = append(edits, edit{start: at, end: at, text: v + " "})
@@ -71,7 +74,7 @@ func zeroBindings(fset *token.FileSet, fn *enumerate.Function) ([]edit, []string
 			continue
 		}
 		for _, name := range field.Names {
-			v := zeroVar + strconv.Itoa(len(vars))
+			v := zero + strconv.Itoa(len(vars))
 			if name.Name == "_" {
 				edits = append(edits, edit{start: off(name.Pos()), end: off(name.End()), text: v})
 			} else {

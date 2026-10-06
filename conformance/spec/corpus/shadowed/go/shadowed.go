@@ -58,3 +58,27 @@ func same(a, b int) bool {
 	}
 	return true
 }
+
+// _mutateZero0 is the step that next adds. Its name is the name of the first
+// variable in the overlay's example of a zero return.
+var _mutateZero0 = 1
+
+// next returns n plus the package-level variable _mutateZero0.
+func next(n int) int {
+	return n + _mutateZero0
+}
+
+// double returns twice n in a result named _mutateZero0.
+func double(n int) (_mutateZero0 int) {
+	return 2 * n
+}
+
+// answer returns 42 for a positive n, from a local variable named
+// _mutateZero0 that its branch declares, and n otherwise.
+func answer(n int) int {
+	if n > 0 {
+		_mutateZero0 := 42
+		return _mutateZero0
+	}
+	return n
+}

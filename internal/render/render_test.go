@@ -36,6 +36,10 @@ func TestRender(t *testing.T) {
 		}{
 			{name: "computes each mutant as the catalogue defines it when its ordinal is active", fx: everyKind},
 			{name: "computes the constants true and false where the package hides their names", fx: hiddenConstants},
+			{
+				name: "computes each mutant where the package declares the names of the instrumentation",
+				fx:   clashingNames,
+			},
 		}
 		for _, tt := range semantics {
 			t.Run(tt.name, func(t *testing.T) {

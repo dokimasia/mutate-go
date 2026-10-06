@@ -1,8 +1,8 @@
 {
   "case": "shadowed",
   "confirm": true,
-  "proves": "A mutant's source means what the mutant states, whatever the target declares at the site. A return of zero values returns them where a local variable hides false, nil, new or the name of a result's type, where the body writes a named result before the return, and where a result is named _. Under confirmation, the ordinary build of each mutant skips code and returns zero values where local variables named true and false contain each other's value.",
-  "fixture": "positive, address, moved and first return a local variable named false, nil, point and new, names that their zero values contain. count returns a named result that its loop writes, and half returns a result named _. same compares two numbers while local variables named true and false contain each other's value. Only TestSame calls same, and it skips while the instrumented program runs.",
+  "proves": "A mutant's source means what the mutant states, whatever the target declares. A return of zero values returns them where a local variable hides false, nil, new or the name of a result's type, where the body writes a named result before the return, and where a result is named _. It returns them where the target declares _mutateZero0, the name of the first variable in the overlay's example of a zero return, as a package-level variable that the function reads, as a named result, or as a local variable of the return's block. Under confirmation, the ordinary build of each mutant skips code and returns zero values where local variables named true and false contain each other's value.",
+  "fixture": "positive, address, moved and first return a local variable named false, nil, point and new, names that their zero values contain. count returns a named result that its loop writes, and half returns a result named _. same compares two numbers while local variables named true and false contain each other's value. Only TestSame calls same, and it skips while the instrumented program runs. next adds the package-level variable _mutateZero0, double returns a result named _mutateZero0, and answer returns a local variable named _mutateZero0 from a branch.",
   "mutants": [
     { "scope": "positive", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
     { "scope": "positive", "kind": "ror-false", "nth": 0, "verdict": "killed" },
@@ -29,7 +29,16 @@
     { "scope": "same", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "confirmed": true },
     { "scope": "same", "kind": "uoi-not", "nth": 0, "verdict": "killed", "confirmed": true },
     { "scope": "same", "kind": "sbr-zero", "nth": 1, "verdict": "no-coverage", "confirmed": true },
-    { "scope": "same", "kind": "uoi-not", "nth": 1, "verdict": "killed", "confirmed": true }
+    { "scope": "same", "kind": "uoi-not", "nth": 1, "verdict": "killed", "confirmed": true },
+    { "scope": "next", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "next", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "double", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "double", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "answer", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "answer", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
+    { "scope": "answer", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "answer", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "answer", "kind": "sbr-zero", "nth": 1, "verdict": "killed" }
   ],
   "errors": []
 }

@@ -16,7 +16,9 @@ import (
 
 // Plain returns the program whose one file is the file of m's site, with m
 // written into it without a switch. The build of that program is m's
-// ordinary build.
+// ordinary build. prefix is the Prefix of the package's instrumented
+// program, with which the names of the variables that sbr-zero returns
+// start.
 //
 // The change evaluates the operands as m's expression does. It keeps the
 // code that m leaves out behind a constant that skips it, so every name that
@@ -45,7 +47,7 @@ import (
 //
 // Plain allocates the copy of the file, the change's text and, for sbr-zero,
 // the bindings of the results.
-func Plain(p *load.Package, m *enumerate.Mutant) *Program {
+func Plain(p *load.Package, m *enumerate.Mutant, prefix string) *Program {
 	s := m.Site
 	text := s.File.Text
 	off := func(pos token.Pos) int { return p.Fset.File(pos).Offset(pos) }
@@ -98,7 +100,7 @@ func Plain(p *load.Package, m *enumerate.Mutant) *Program {
 		head = "if " + falseExpr + " { " + source(s.Node) + " }"
 	case spec.SBRZero:
 		var vars []string
-		edits, vars = zeroBindings(p.Fset, s.Func)
+		edits, vars = zeroBindings(p.Fset, s.Func, prefix)
 		head = "if " + trueExpr + " { return " + strings.Join(vars, ", ") + " }; " + source(s.Node)
 	}
 	breaks := bytes.Count(text[start:end], []byte("\n")) - strings.Count(head+body, "\n")
@@ -106,5 +108,5 @@ func Plain(p *load.Package, m *enumerate.Mutant) *Program {
 	r := &fileRenderer{text: text, edits: append(edits, edit{start: start, end: end, text: change})}
 	r.buf.Grow(len(text) + len(change))
 	r.writeText(0, len(text))
-	return &Program{Files: map[string][]byte{s.File.Path: r.buf.Bytes()}}
+	return &Program{Files: map[string][]byte{s.File.Path: r.buf.Bytes()}, Prefix: prefix}
 }

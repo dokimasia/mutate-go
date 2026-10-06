@@ -43,7 +43,7 @@ func TestPlain(t *testing.T) {
 			path := filepath.Join(p.Dir, "f.go")
 			got := map[string]string{}
 			for _, m := range r.Mutants {
-				got[names[m]] = string(render.Plain(p, m).Files[path])
+				got[names[m]] = string(render.Plain(p, m, prefix).Files[path])
 			}
 			assert.Equal(t, got, want, "each mutant's source keeps the lines of the original")
 		})
@@ -56,7 +56,7 @@ func TestPlain(t *testing.T) {
 			path := filepath.Join(p.Dir, "f.go")
 			got := map[string]string{}
 			for _, m := range r.Mutants {
-				got[names[m]] = string(render.Plain(p, m).Files[path])
+				got[names[m]] = string(render.Plain(p, m, prefix).Files[path])
 			}
 			expect.Equal(t, got["g aor 0"], head+"\tn *= 3\n\treturn !ok == (n > 0)\n}\n",
 				"aor writes the compound operator")
@@ -70,7 +70,7 @@ func TestPlain(t *testing.T) {
 			ret := "return struct {\n\t\ta int\n\t\tb int // the second field\n\t}{n, n}\n}\n"
 			p, r := fixture(t, map[string]string{"f.go": "package fixture\n\nfunc f(n int) " + result + " {\n\t" + ret})
 			assert.Length(t, r.Mutants, 1, "the return is the only site")
-			got := string(render.Plain(p, r.Mutants[0]).Files[filepath.Join(p.Dir, "f.go")])
+			got := string(render.Plain(p, r.Mutants[0], prefix).Files[filepath.Join(p.Dir, "f.go")])
 			assert.Equal(t, got, "package fixture\n\nfunc f(n int) (_mutateZero0 "+result+") {\n"+
 				"\tif (0 == 0) { return _mutateZero0 }; "+ret,
 				"the result's type and the return keep their lines")
@@ -85,12 +85,17 @@ func TestPlain(t *testing.T) {
 				name: "builds each mutant to compute the constants true and false where the package hides their names",
 				fx:   hiddenConstants,
 			},
+			{
+				name: "builds each mutant to compute what its instrumented form computes where the package declares " +
+					"the names of the instrumentation",
+				fx: clashingNames,
+			},
 		}
 		for _, tt := range semantics {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				p, r := fixture(t, tt.fx.files)
-				instrument(t, p, r)
+				prog := instrument(t, p, r)
 				names := ids(r)
 				for _, m := range r.Mutants {
 					if m.Status != enumerate.Runnable {
@@ -98,7 +103,7 @@ func TestPlain(t *testing.T) {
 					}
 					t.Run(names[m], func(t *testing.T) {
 						t.Parallel()
-						bin := buildProgram(t, p, render.Plain(p, m))
+						bin := buildProgram(t, p, render.Plain(p, m, prog.Prefix))
 						assert.Equal(
 							t,
 							tt.fx.describe(lines(run(t, bin, p.Dir))),

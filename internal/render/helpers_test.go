@@ -39,6 +39,10 @@ const (
 // mutantVar is the protocol's variable, which states the active mutant.
 var mutantVar = spec.Load().Protocol.Variable
 
+// prefix starts each name of the instrumentation in a package that has no
+// identifier that starts with it.
+const prefix = "_mutate"
+
 const semantics = `package fixture
 
 import (
@@ -269,6 +273,48 @@ func TestPrint(t *testing.T) {
 }
 `
 
+// clashing is a package that declares the names that the instrumentation
+// gives its own declarations in a package without such names: a
+// package-level variable _mutateZero0 that Next reads, a result named
+// _mutateZero0, a local variable _mutateZero0 in a branch of Answer, a
+// package-level variable _mutateIs, and a local variable _mutateActive.
+const clashing = `package fixture
+
+var _mutateZero0, _mutateIs = 1, 2
+
+func Next(n int) int { return n + _mutateZero0 }
+
+func Double(n int) (_mutateZero0 int) { return _mutateIs * n }
+
+func Answer(n int) int {
+	if n > 0 {
+		_mutateZero0 := 42
+		return _mutateZero0
+	}
+	return n
+}
+
+func Either(a, b bool) bool {
+	_mutateActive := a
+	return _mutateActive || b
+}
+`
+
+const clashingTest = `package fixture
+
+import (
+	"fmt"
+	"testing"
+)
+
+func TestPrint(t *testing.T) {
+	fmt.Println("Next", Next(1))
+	fmt.Println("Double", Double(3))
+	fmt.Println("Answer", Answer(1), Answer(0), Answer(-1))
+	fmt.Println("Either", Either(false, true))
+}
+`
+
 // semanticsFixture is a package whose test prints one line per function of
 // the package: the function's name and its value. original is the value of
 // each function with no mutant active, and want the value of the function of
@@ -341,6 +387,30 @@ var hiddenConstants = semanticsFixture{
 		"Both lcr-false 0":    "false",
 		"Clear sbr-delete 0":  "[5]",
 		"Clear sbr-zero 0":    "[]",
+	},
+}
+
+// clashingNames is the package clashing, whose mutants compute what the
+// catalogue states with the names of the instrumentation after its
+// prefix. Answer states its value for 1, 0 and -1.
+var clashingNames = semanticsFixture{
+	files:    map[string]string{"f.go": clashing, "f_test.go": clashingTest},
+	original: map[string]string{"Next": "2", "Double": "6", "Answer": "42 0 -1", "Either": "true"},
+	want: map[string]string{
+		"Next sbr-zero 0":       "0",
+		"Next aor 0":            "0",
+		"Double sbr-zero 0":     "0",
+		"Double aor 0":          "0",
+		"Answer sbr-delete 0":   "1 0 -1",
+		"Answer ror-boundary 0": "42 42 -1",
+		"Answer ror-false 0":    "1 0 -1",
+		"Answer sbr-zero 0":     "0 0 -1",
+		"Answer sbr-zero 1":     "42 0 0",
+		"Either uoi-not 0":      "true",
+		"Either sbr-zero 0":     "false",
+		"Either lcr-left 0":     "false",
+		"Either lcr-right 0":    "true",
+		"Either lcr-true 0":     "true",
 	},
 }
 
