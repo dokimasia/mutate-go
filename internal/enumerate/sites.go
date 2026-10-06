@@ -449,6 +449,11 @@ func (e *enumerator) minus(f *load.File, n *ast.UnaryExpr, scope string) {
 // branches, returns, increments and decrements, every statement that
 // contains a label, and the list's final statement that is not empty when
 // that statement is terminating.
+//
+// A statement whose parent is a block, a case clause or a communication
+// clause is an element of the parent's list, except the communication of a
+// select statement's clause, so delete finds the list from the parent that
+// the walk passes, without a search of the list.
 func (e *enumerator) delete(f *load.File, st ast.Stmt, parent ast.Node, scope string) {
 	var list []ast.Stmt
 	switch p := parent.(type) {
@@ -457,11 +462,11 @@ func (e *enumerator) delete(f *load.File, st ast.Stmt, parent ast.Node, scope st
 	case *ast.CaseClause:
 		list = p.Body
 	case *ast.CommClause:
+		if p.Comm == st {
+			return
+		}
 		list = p.Body
 	default:
-		return
-	}
-	if !slices.Contains(list, st) {
 		return
 	}
 	switch s := st.(type) {

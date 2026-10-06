@@ -4,10 +4,14 @@
 package enumerate
 
 import (
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
+	"math"
+	"slices"
+	"sort"
 	"strings"
 
 	"go.dokimi.dev/mutate/internal/load"
@@ -368,30 +372,109 @@ func (e *enumerator) parseAnnotations(f *load.File) {
 	}
 }
 
-// ruleOf returns the family of the first suppression of s's file, in the
-// order that the enumeration makes them, that suppresses s: a range that
-// contains s, the parentheses of a call that contain s, the call itself, or
-// the call that s's statement makes. It returns "" when none does. It
-// compares s with each suppression of its file once, so a site costs
-// O(suppressions of its file).
-func (e *enumerator) ruleOf(s *Site) spec.Family {
-	for _, sup := range e.suppressions[s.File] {
-		inside := sup.start <= s.Start && s.End <= sup.end
-		if sup.call != nil {
-			args := sup.lparen < s.Start && s.End <= sup.rparen
-			whole := s.Start == sup.start && s.End == sup.end
-			inside = args || whole || s.Form == Delete && callOf(s.Node.(ast.Stmt)) == sup.call
-		}
-		if inside {
-			return sup.family
-		}
-	}
-	return ""
+// ruleIndex finds, for a site of one file, the first suppression of the
+// file, in the order that the enumeration makes them, that suppresses the
+// site: a range that contains the site, the parentheses of a call that
+// contain the site, the call itself, or the call that the site's statement
+// makes.
+//
+// The ranges and the parentheses are ranges of the syntax tree, so any two
+// are disjoint or nested, and the ones that contain a site form a chain.
+// nodes lists them by start, the longer of two with one start first, each
+// with the innermost node that contains it. A site's innermost node is the
+// last node that starts at or before the site, or the first ancestor of that
+// node that ends at or after the site's end, and the node's first is the
+// node of least order in its chain. A lookup costs a binary search and the
+// walk up from that node, which is at most the depth of the ranges'
+// nesting.
+//
+// # Allocation contract
+//
+// newRuleIndex allocates the nodes and two maps. rule does not allocate.
+type ruleIndex struct {
+	nodes []ruleNode
+	// whole maps the range of each call that a family suppresses, and calls
+	// the call, to the first of its suppressions.
+	whole map[[2]int]ruleNode
+	calls map[*ast.CallExpr]ruleNode
 }
 
-// suppress suppresses m by rule, the family that ruleOf returns for m's
-// site, or else by the first annotation of the site's line that lists m's
-// kind, its class or the keyword of every kind.
+// ruleNode is one suppression of a ruleIndex: the range of the sites that
+// it contains, from start to end, its family, and its position in the
+// enumeration's order. parent is the index of the innermost node that
+// contains the node, or -1, and first is the index of the node of least
+// order among the node and its ancestors.
+type ruleNode struct {
+	start, end    int
+	family        spec.Family
+	order         int
+	parent, first int
+}
+
+// newRuleIndex indexes sups, the suppressions of one file in the order that
+// the enumeration makes them.
+func newRuleIndex(sups []suppression) *ruleIndex {
+	x := &ruleIndex{whole: map[[2]int]ruleNode{}, calls: map[*ast.CallExpr]ruleNode{}}
+	for order, sup := range sups {
+		n := ruleNode{start: sup.start, end: sup.end, family: sup.family, order: order}
+		if sup.call != nil {
+			whole := [2]int{sup.start, sup.end}
+			if _, ok := x.whole[whole]; !ok {
+				x.whole[whole] = n
+			}
+			if _, ok := x.calls[sup.call]; !ok {
+				x.calls[sup.call] = n
+			}
+			n.start, n.end = sup.lparen+1, sup.rparen
+		}
+		x.nodes = append(x.nodes, n)
+	}
+	slices.SortStableFunc(x.nodes, func(a, b ruleNode) int {
+		return cmp.Or(cmp.Compare(a.start, b.start), cmp.Compare(b.end, a.end))
+	})
+	var stack []int
+	for i := range x.nodes {
+		n := &x.nodes[i]
+		for len(stack) > 0 && x.nodes[stack[len(stack)-1]].end < n.end {
+			stack = stack[:len(stack)-1]
+		}
+		n.parent, n.first = -1, i
+		if len(stack) > 0 {
+			n.parent = stack[len(stack)-1]
+			if p := x.nodes[n.parent].first; x.nodes[p].order < n.order {
+				n.first = p
+			}
+		}
+		stack = append(stack, i)
+	}
+	return x
+}
+
+// rule returns the family of the first suppression that suppresses s, or
+// "" when none does.
+func (x *ruleIndex) rule(s *Site) spec.Family {
+	best := ruleNode{order: math.MaxInt}
+	i := sort.Search(len(x.nodes), func(i int) bool { return x.nodes[i].start > s.Start }) - 1
+	for i >= 0 && x.nodes[i].end < s.End {
+		i = x.nodes[i].parent
+	}
+	if i >= 0 {
+		best = x.nodes[x.nodes[i].first]
+	}
+	if n, ok := x.whole[[2]int{s.Start, s.End}]; ok && n.order < best.order {
+		best = n
+	}
+	if s.Form == Delete {
+		if n, ok := x.calls[callOf(s.Node.(ast.Stmt))]; ok && n.order < best.order {
+			best = n
+		}
+	}
+	return best.family
+}
+
+// suppress suppresses m by rule, the family that a ruleIndex returns for
+// m's site, or else by the first annotation of the site's line that lists
+// m's kind, its class or the keyword of every kind.
 func (e *enumerator) suppress(m *Mutant, rule spec.Family) {
 	if rule != "" {
 		m.Status, m.Rule, m.Reason = Suppressed, rule, ""

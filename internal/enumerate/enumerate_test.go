@@ -180,6 +180,20 @@ clamp sbr-zero 2: not-selected
 `, "every mutant outside the lines is not-selected")
 		})
 
+		t.Run("selects the lines of ranges that overlap or meet in any order", func(t *testing.T) {
+			t.Parallel()
+			r := enumerateFixture(t, map[string]string{"clamp.go": clamp}, enumerate.Options{Lines: []enumerate.Range{
+				{File: "clamp.go", First: 7, Last: 7},
+				{File: "other.go", First: 1, Last: 100},
+				{File: "clamp.go", First: 8, Last: 9},
+				{File: "clamp.go", First: 5, Last: 5},
+				{File: "clamp.go", First: 8, Last: 8},
+				{File: "clamp.go", First: 4, Last: 4},
+			}})
+			assert.Equal(t, statuses(r), "clamp sbr-zero 2: not-selected\n",
+				"only the mutant on line 10, outside every range, is not-selected")
+		})
+
 		t.Run("marks every mutant not selected under a selection without a range", func(t *testing.T) {
 			t.Parallel()
 			r := enumerateFixture(

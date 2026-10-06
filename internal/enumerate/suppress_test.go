@@ -77,6 +77,23 @@ pipe aor 0: n+1 -> "n-1"
 `, "each family suppresses what its rules name, and no rule names the buffer of a channel")
 		})
 
+		t.Run("suppresses a site inside two families by the family made first", func(t *testing.T) {
+			t.Parallel()
+			r := all(t, map[string]string{"both.go": `package fixture
+
+import "log"
+
+func both(n int) {
+	log.Print(make([]int, 0, n+1))
+	_ = make([]int, 0, n+2)
+}
+`})
+			assert.Equal(t, listing(r, ""), `both sbr-delete 0: log.Print(make([]int, 0, n+1)) -> "" [logging]
+both aor 0: n+1 -> "n-1" [logging]
+both aor 1: n+2 -> "n-2" [capacity]
+`, "the logging call, which the walk meets first, suppresses the capacity inside it")
+		})
+
 		t.Run("suppresses the argument of a method expression's call one place after the receiver", func(t *testing.T) {
 			t.Parallel()
 			r := all(t, map[string]string{"grow.go": `package fixture

@@ -4,9 +4,11 @@
 package enumerate
 
 import (
+	"cmp"
 	"go/ast"
 	"go/token"
 	"go/types"
+	"slices"
 	"sort"
 	"strings"
 
@@ -369,6 +371,8 @@ func (e *enumerator) result(lines []Range) *Result {
 	})
 	r := &Result{Sites: e.sites, Mutants: []*Mutant{}, Skipped: []Skip{}}
 	occurrences := map[string]int{}
+	rules := map[*load.File]*ruleIndex{}
+	selection := lineIndex(lines)
 	for _, s := range e.sites {
 		sort.SliceStable(
 			s.Mutants,
@@ -376,7 +380,10 @@ func (e *enumerator) result(lines []Range) *Result {
 		)
 		s.StartPos, s.EndPos = e.position(s.File, s.Start), e.position(s.File, s.End)
 		tokens := Tokens(s.File.Text[s.Start:s.End])
-		rule := e.ruleOf(s)
+		if rules[s.File] == nil {
+			rules[s.File] = newRuleIndex(e.suppressions[s.File])
+		}
+		rule := rules[s.File].rule(s)
 		for _, m := range s.Mutants {
 			group := strings.Join([]string{s.File.Name, s.Scope, string(m.Kind), tokens}, keySeparator)
 			m.Occurrence = occurrences[group]
@@ -388,7 +395,7 @@ func (e *enumerator) result(lines []Range) *Result {
 			// mutant outside the selection is not-selected, whatever else
 			// excludes it, and states no rule or reason.
 			e.suppress(m, rule)
-			if !selected(lines, s.File.Name, s.StartPos.Line) {
+			if !selected(selection, s.File.Name, s.StartPos.Line) {
 				m.Status, m.Rule, m.Reason = NotSelected, "", ""
 			}
 			r.Mutants = append(r.Mutants, m)
@@ -420,18 +427,43 @@ func (e *enumerator) result(lines []Range) *Result {
 	return r
 }
 
-// selected reports whether a site that starts on line of file lies in the
-// selection. A nil selection selects every line, and an empty one none.
-func selected(lines []Range, file string, line int) bool {
+// lineIndex returns the ranges of a selection by file, sorted by their first
+// lines and merged where they overlap or meet, so selected finds the range
+// of a line with a binary search. It returns nil for a nil selection, which
+// selects every line, and an empty map for an empty one, which selects
+// none.
+func lineIndex(lines []Range) map[string][]Range {
 	if lines == nil {
+		return nil
+	}
+	byFile := map[string][]Range{}
+	for _, r := range lines {
+		byFile[r.File] = append(byFile[r.File], r)
+	}
+	for file, ranges := range byFile {
+		slices.SortFunc(ranges, func(a, b Range) int { return cmp.Compare(a.First, b.First) })
+		merged := ranges[:1]
+		for _, r := range ranges[1:] {
+			if last := &merged[len(merged)-1]; r.First <= last.Last+1 {
+				last.Last = max(last.Last, r.Last)
+			} else {
+				merged = append(merged, r)
+			}
+		}
+		byFile[file] = merged
+	}
+	return byFile
+}
+
+// selected reports whether a site that starts on line of file lies in the
+// selection that index, a lineIndex, states.
+func selected(index map[string][]Range, file string, line int) bool {
+	if index == nil {
 		return true
 	}
-	for _, r := range lines {
-		if r.File == file && r.First <= line && line <= r.Last {
-			return true
-		}
-	}
-	return false
+	ranges := index[file]
+	i := sort.Search(len(ranges), func(i int) bool { return ranges[i].First > line }) - 1
+	return i >= 0 && line <= ranges[i].Last
 }
 
 // typeName returns a name for t that resolves in every file of the package
