@@ -1,0 +1,14 @@
+{
+  "case": "sample",
+  "sample": 2,
+  "proves": "A run that allows a number of mutant runs starts the runs of that many mutants in the order of their keys, and gives every later mutant not-run. Such a run does not fail, and its score is the score of its sample.",
+  "fixture": "area and perimeter compute the area and the perimeter of a rectangle, and TestRectangle checks both, so every mutant that runs is killed. The two least keys are those of area's sbr-zero and of perimeter's first aor.",
+  "mutants": [
+    { "scope": "area", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "area", "kind": "aor", "nth": 0, "verdict": "not-run" },
+    { "scope": "perimeter", "kind": "sbr-zero", "nth": 0, "verdict": "not-run" },
+    { "scope": "perimeter", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "perimeter", "kind": "aor", "nth": 1, "verdict": "not-run" }
+  ],
+  "errors": []
+}

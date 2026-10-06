@@ -12,6 +12,14 @@ import (
 	"strings"
 
 	"go.dokimi.dev/mutate/internal/load"
+	"go.dokimi.dev/mutate/internal/spec"
+)
+
+// The builtins whose calls the zero-value rule and the terminating-statement
+// rule read.
+const (
+	builtinNew   = "new"
+	builtinPanic = "panic"
 )
 
 // frame is one node on the path from the walk's root to the visited node,
@@ -49,7 +57,7 @@ func (e *enumerator) walk(f *load.File, root ast.Node, scope string, fn *ast.Fun
 		}
 		if e.constantSite(n) {
 			if constants == 0 {
-				e.addSkip(f, n, SkipConstant)
+				e.addSkip(f, n, spec.SkipConstant)
 			}
 			constants++
 		}
@@ -119,13 +127,13 @@ func (e *enumerator) newSite(f *load.File, n ast.Node, scope string, form Form, 
 	return s
 }
 
-func (e *enumerator) addSkip(f *load.File, n ast.Node, reason string) {
+func (e *enumerator) addSkip(f *load.File, n ast.Node, reason spec.SkipReason) {
 	e.skips = append(e.skips, skip{f: f, start: e.off(n.Pos()), end: e.off(n.End()), reason: reason})
 }
 
 // add makes a mutant of kind at s, which writes op in place of the site's
 // operator, and whose source is replacement.
-func (s *Site) add(kind string, op token.Token, replacement string) *Mutant {
+func (s *Site) add(kind spec.Kind, op token.Token, replacement string) *Mutant {
 	m := &Mutant{Site: s, Kind: kind, Op: op, Replacement: replacement}
 	s.Mutants = append(s.Mutants, m)
 	return m
@@ -168,17 +176,16 @@ func (e *enumerator) swapped(f *load.File, s *Site, opPos token.Pos, n int, to s
 
 // equality makes the mutants of == and !=: true and false. Every such
 // comparison is a site, whatever its operands' types, because each of its
-// kinds needs only the comparison's result. The walk does not visit a
-// comparison whose value is a constant.
+// kinds needs only the comparison's result. The walk skips a comparison
+// whose value is a constant.
 func (e *enumerator) equality(f *load.File, n *ast.BinaryExpr, scope string) {
-	tv := e.pkg.Info.Types[n]
-	if !isPlainBool(tv.Type) {
-		e.addSkip(f, n, SkipNamedBool)
+	if !isPlainBool(e.pkg.Info.TypeOf(n)) {
+		e.addSkip(f, n, spec.SkipNamedBool)
 		return
 	}
 	s := e.newSite(f, n, scope, Equality, n.Op)
-	s.add(RORTrue, token.ILLEGAL, "true")
-	s.add(RORFalse, token.ILLEGAL, "false")
+	s.add(spec.RORTrue, token.ILLEGAL, "true")
+	s.add(spec.RORFalse, token.ILLEGAL, "false")
 }
 
 // ordered makes the mutants of <, <=, > and >=: the boundary, and false for
@@ -187,53 +194,51 @@ func (e *enumerator) equality(f *load.File, n *ast.BinaryExpr, scope string) {
 // does, so they subsume it.
 func (e *enumerator) ordered(f *load.File, n *ast.BinaryExpr, scope string) {
 	info := e.pkg.Info
-	tv := info.Types[n]
 	operand := info.TypeOf(n.X)
 	switch {
-	case !isPlainBool(tv.Type):
-		e.addSkip(f, n, SkipNamedBool)
+	case !isPlainBool(info.TypeOf(n)):
+		e.addSkip(f, n, spec.SkipNamedBool)
 		return
 	case isTypeParam(operand):
-		e.addSkip(f, n, SkipTypeParameter)
+		e.addSkip(f, n, spec.SkipTypeParameter)
 		return
 	case e.contextShift(operand, n):
-		e.addSkip(f, n, SkipContextShift)
+		e.addSkip(f, n, spec.SkipContextShift)
 		return
 	}
 	s := e.newSite(f, n, scope, Ordered, n.Op)
 	s.TypeArg = e.typeArg(operand, n.Pos())
 	b := boundary[n.Op]
-	s.add(RORBoundary, b, e.swapped(f, s, n.OpPos, len(n.Op.String()), b.String()))
+	s.add(spec.RORBoundary, b, e.swapped(f, s, n.OpPos, len(n.Op.String()), b.String()))
 	if n.Op == token.LEQ || n.Op == token.GEQ {
-		s.add(RORTrue, token.ILLEGAL, "true")
+		s.add(spec.RORTrue, token.ILLEGAL, "true")
 	} else {
-		s.add(RORFalse, token.ILLEGAL, "false")
+		s.add(spec.RORFalse, token.ILLEGAL, "false")
 	}
 }
 
-// arithmetic makes the mutant of +, -, *, / and % on numbers whose
-// operands and result have one type. Arithmetic on numbers whose value is
-// a constant is a constant site, which the walk does not visit. A mutant
-// that divides an integer by a constant 0 is not viable, with the
-// compiler's message as its reason.
+// arithmetic makes the mutant of +, -, *, / and % on numbers. The package
+// type-checks, so both operands and the result have one type. Arithmetic on
+// numbers whose value is a constant is a constant site, which the walk
+// skips. A mutant that divides an integer by a constant 0 is not viable,
+// with the compiler's message as its reason.
 func (e *enumerator) arithmetic(f *load.File, n *ast.BinaryExpr, scope string) {
-	info := e.pkg.Info
-	operand := info.TypeOf(n.X)
-	if !isNumber(operand) || !types.Identical(info.TypeOf(n), operand) {
+	operand := e.pkg.Info.TypeOf(n.X)
+	if !isNumber(operand) {
 		return
 	}
 	switch {
 	case isTypeParam(operand):
-		e.addSkip(f, n, SkipTypeParameter)
+		e.addSkip(f, n, spec.SkipTypeParameter)
 		return
 	case e.contextShift(operand, n):
-		e.addSkip(f, n, SkipContextShift)
+		e.addSkip(f, n, spec.SkipContextShift)
 		return
 	}
 	s := e.newSite(f, n, scope, Arithmetic, n.Op)
 	s.TypeArg = e.typeArg(operand, n.Pos())
 	to := arith[n.Op]
-	m := s.add(AOR, to, e.swapped(f, s, n.OpPos, len(n.Op.String()), to.String()))
+	m := s.add(spec.AOR, to, e.swapped(f, s, n.OpPos, len(n.Op.String()), to.String()))
 	if to == token.QUO && zeroDivisor(e.pkg.Info, operand, n.Y) {
 		m.Status, m.Reason = NotViable, divisionByZero
 	}
@@ -255,7 +260,7 @@ func (e *enumerator) contextShift(operand types.Type, n *ast.BinaryExpr) bool {
 	if _, ok := e.typeName(operand); ok {
 		return false
 	}
-	return hasContextShift(e.pkg.Info, n.X) || hasContextShift(e.pkg.Info, n.Y)
+	return e.hasContextShift(n.X) || e.hasContextShift(n.Y)
 }
 
 // connector makes the mutants of && and ||: each operand alone, and false
@@ -264,27 +269,27 @@ func (e *enumerator) contextShift(operand types.Type, n *ast.BinaryExpr) bool {
 // subsume a negated operand.
 func (e *enumerator) connector(f *load.File, n *ast.BinaryExpr, scope string) {
 	if !isPlainBool(e.pkg.Info.TypeOf(n)) {
-		e.addSkip(f, n, SkipNamedBool)
+		e.addSkip(f, n, spec.SkipNamedBool)
 		return
 	}
-	e.operands[unparen(n.X)] = true
-	e.operands[unparen(n.Y)] = true
+	e.operands[ast.Unparen(n.X)] = true
+	e.operands[ast.Unparen(n.Y)] = true
 	s := e.newSite(f, n, scope, Connector, n.Op)
-	s.add(LCRLeft, token.ILLEGAL, e.text(f, n.X))
-	s.add(LCRRight, token.ILLEGAL, e.text(f, n.Y))
-	kind, value := LCRFalse, "false"
+	s.add(spec.LCRLeft, token.ILLEGAL, e.text(f, n.X))
+	s.add(spec.LCRRight, token.ILLEGAL, e.text(f, n.Y))
+	kind, value := spec.LCRFalse, "false"
 	if n.Op == token.LOR {
-		kind, value = LCRTrue, "true"
+		kind, value = spec.LCRTrue, "true"
 	}
 	s.add(kind, token.ILLEGAL, value)
 }
 
-// compound makes the mutant of +=, -=, *=, /= and %= on one number. A
-// mutant that divides an integer by a constant 0 is not viable, as
-// arithmetic states.
+// compound makes the mutant of +=, -=, *=, /= and %= on one number. The
+// package type-checks, so such an assignment has one target. A mutant that
+// divides an integer by a constant 0 is not viable, as arithmetic states.
 func (e *enumerator) compound(f *load.File, n *ast.AssignStmt, scope string) {
 	op, ok := assign[n.Tok]
-	if !ok || len(n.Lhs) != 1 {
+	if !ok {
 		return
 	}
 	t := e.pkg.Info.TypeOf(n.Lhs[0])
@@ -293,16 +298,16 @@ func (e *enumerator) compound(f *load.File, n *ast.AssignStmt, scope string) {
 	}
 	switch {
 	case isTypeParam(t):
-		e.addSkip(f, n, SkipTypeParameter)
+		e.addSkip(f, n, spec.SkipTypeParameter)
 		return
 	case !sideEffectFree(n.Lhs[0]):
-		e.addSkip(f, n, SkipSideEffects)
+		e.addSkip(f, n, spec.SkipSideEffects)
 		return
 	}
 	s := e.newSite(f, n, scope, Compound, op)
 	s.TypeArg = e.typeArg(t, n.Pos())
 	to := arith[op]
-	m := s.add(AOR, to, e.swapped(f, s, n.TokPos, len(n.Tok.String()), to.String()+"="))
+	m := s.add(spec.AOR, to, e.swapped(f, s, n.TokPos, len(n.Tok.String()), to.String()+"="))
 	if to == token.QUO && zeroDivisor(e.pkg.Info, t, n.Rhs[0]) {
 		m.Status, m.Reason = NotViable, divisionByZero
 	}
@@ -324,10 +329,10 @@ func (e *enumerator) incdec(f *load.File, n *ast.IncDecStmt, parent ast.Node, sc
 		}
 		switch {
 		case isTypeParam(t):
-			e.addSkip(f, n, SkipTypeParameter)
+			e.addSkip(f, n, spec.SkipTypeParameter)
 			return
 		case !sideEffectFree(n.X):
-			e.addSkip(f, n, SkipSideEffects)
+			e.addSkip(f, n, spec.SkipSideEffects)
 			return
 		}
 		form = IncDecPost
@@ -342,7 +347,7 @@ func (e *enumerator) incdec(f *load.File, n *ast.IncDecStmt, parent ast.Node, sc
 	if form == IncDecPost {
 		s.TypeArg = e.typeArg(t, n.Pos())
 	}
-	s.add(UOIIncDec, to, e.swapped(f, s, n.TokPos, len(n.Tok.String()), to.String()))
+	s.add(spec.UOIIncDec, to, e.swapped(f, s, n.TokPos, len(n.Tok.String()), to.String()))
 }
 
 // not negates a boolean operand: an identifier, a selector, a call, an
@@ -372,7 +377,7 @@ func (e *enumerator) not(f *load.File, x ast.Expr, parent ast.Node, scope string
 	// The type checker records the source of a comma-ok assignment as a
 	// tuple, so the bool test excludes it.
 	tv, ok := e.pkg.Info.Types[x]
-	if !valuePosition(parent, x) || !ok || tv.Value != nil || !tv.IsValue() || !isPlainBool(tv.Type) {
+	if !ok || tv.Value != nil || !tv.IsValue() || !isPlainBool(tv.Type) || !valuePosition(parent, x) {
 		return
 	}
 	s := e.newSite(f, x, scope, Not, token.ILLEGAL)
@@ -380,14 +385,16 @@ func (e *enumerator) not(f *load.File, x ast.Expr, parent ast.Node, scope string
 	if operand != nil {
 		replacement = e.text(f, operand)
 	}
-	s.add(UOINot, token.ILLEGAL, replacement)
+	s.add(spec.UOINot, token.ILLEGAL, replacement)
 }
 
-// valuePosition reports whether x, a child of parent, is in a position
-// where a negation may replace it: not the target of an assignment, not
-// the operand of & or !, not a composite literal's key, not a selector's
-// name, not a called function, and not the expression of an increment, an
-// expression statement, a deferred call, a go statement or a range clause.
+// valuePosition reports whether x, a boolean value that is a child of
+// parent, is in a position where a negation may replace it: not the target
+// of an assignment, not the operand of & or !, not a composite literal's
+// key, and not the expression of an increment, an expression statement, a
+// deferred call, a go statement or a range clause. The type checker
+// records no type for a selector's name, and a called function is no
+// boolean, so neither reaches this test.
 func valuePosition(parent ast.Node, x ast.Expr) bool {
 	switch p := parent.(type) {
 	case *ast.AssignStmt:
@@ -396,10 +403,6 @@ func valuePosition(parent ast.Node, x ast.Expr) bool {
 		return p.Op != token.AND && p.Op != token.NOT
 	case *ast.KeyValueExpr:
 		return p.Key != x
-	case *ast.SelectorExpr:
-		return ast.Expr(p.Sel) != x
-	case *ast.CallExpr:
-		return p.Fun != x
 	case *ast.IncDecStmt, *ast.ExprStmt, *ast.DeferStmt, *ast.GoStmt, *ast.RangeStmt:
 		return false
 	}
@@ -413,17 +416,18 @@ func (e *enumerator) minus(f *load.File, n *ast.UnaryExpr, scope string) {
 		return
 	}
 	if isTypeParam(tv.Type) {
-		e.addSkip(f, n, SkipTypeParameter)
+		e.addSkip(f, n, spec.SkipTypeParameter)
 		return
 	}
 	s := e.newSite(f, n, scope, Minus, token.SUB)
 	s.TypeArg = e.typeArg(tv.Type, n.Pos())
-	s.add(UOIMinus, token.ILLEGAL, e.text(f, n.X))
+	s.add(spec.UOIMinus, token.ILLEGAL, e.text(f, n.X))
 }
 
-// delete removes one statement of a statement list. It keeps
-// declarations, labels, branches, returns, increments and decrements, and a
-// last statement that terminates its list.
+// delete removes one statement of a statement list. It keeps declarations,
+// branches, returns, increments and decrements, every statement that
+// contains a label, and the list's final statement that is not empty when
+// that statement is terminating.
 func (e *enumerator) delete(f *load.File, st ast.Stmt, parent ast.Node, scope string) {
 	var list []ast.Stmt
 	switch p := parent.(type) {
@@ -449,30 +453,30 @@ func (e *enumerator) delete(f *load.File, st ast.Stmt, parent ast.Node, scope st
 	default:
 		return
 	}
-	if list[len(list)-1] == st && isTerminating(e.pkg.Info, st) || hasLabel(st) {
+	if hasLabel(st) || final(list) == st && e.isTerminating(st) {
 		return
 	}
 	s := e.newSite(f, st, scope, Delete, token.ILLEGAL)
-	s.add(SBRDelete, token.ILLEGAL, "")
+	s.add(spec.SBRDelete, token.ILLEGAL, "")
 }
 
 // zero makes the mutant that returns the zero value of every result type
 // before a return statement whose results are not all zero values already.
 // The mutant does not evaluate the results.
 func (e *enumerator) zero(f *load.File, n *ast.ReturnStmt, fn *ast.FuncType, scope string) {
-	if fn == nil || fn.Results == nil || len(n.Results) == 0 || allZero(e.pkg.Info, n.Results) {
+	if fn == nil || fn.Results == nil || len(n.Results) == 0 || e.allZero(n.Results) {
 		return
 	}
 	var zeros []string
 	for _, field := range fn.Results.List {
 		zero := e.zeroOf(f, field.Type)
-		for i := 0; i < max(len(field.Names), 1); i++ {
+		for range max(len(field.Names), 1) {
 			zeros = append(zeros, zero)
 		}
 	}
 	s := e.newSite(f, n, scope, Zero, token.ILLEGAL)
 	s.Zeros = zeros
-	s.add(SBRZero, token.ILLEGAL, "return "+strings.Join(zeros, ", "))
+	s.add(spec.SBRZero, token.ILLEGAL, "return "+strings.Join(zeros, ", "))
 }
 
 // zeroOf returns the zero value of the type that the expression t writes,
@@ -481,9 +485,9 @@ func (e *enumerator) zero(f *load.File, n *ast.ReturnStmt, fn *ast.FuncType, sco
 // parameter T, which has no literal.
 func (e *enumerator) zeroOf(f *load.File, t ast.Expr) string {
 	typ := e.pkg.Info.TypeOf(t)
-	text := e.text(f, unparen(t))
+	text := e.text(f, ast.Unparen(t))
 	if isTypeParam(typ) {
-		return "*new(" + text + ")"
+		return "*" + builtinNew + "(" + text + ")"
 	}
 	switch u := typ.Underlying().(type) {
 	case *types.Basic:
@@ -501,20 +505,10 @@ func (e *enumerator) zeroOf(f *load.File, t ast.Expr) string {
 	return "nil"
 }
 
-func unparen(e ast.Expr) ast.Expr {
-	for {
-		p, ok := e.(*ast.ParenExpr)
-		if !ok {
-			return e
-		}
-		e = p.X
-	}
-}
-
 // allZero reports whether every result is the zero value of its type.
-func allZero(info *types.Info, results []ast.Expr) bool {
-	for _, e := range results {
-		if !isZero(info, e) {
+func (e *enumerator) allZero(results []ast.Expr) bool {
+	for _, x := range results {
+		if !e.isZero(x) {
 			return false
 		}
 	}
@@ -526,8 +520,9 @@ func allZero(info *types.Info, results []ast.Expr) bool {
 // of a struct or an array type whose every element is such a value. A
 // composite literal of a slice or a map type is not nil, so it is not a
 // zero value, and *new(x) of an expression x is the value of x.
-func isZero(info *types.Info, x ast.Expr) bool {
-	x = unparen(x)
+func (e *enumerator) isZero(x ast.Expr) bool {
+	info := e.pkg.Info
+	x = ast.Unparen(x)
 	tv := info.Types[x]
 	if tv.IsNil() {
 		return true
@@ -545,16 +540,12 @@ func isZero(info *types.Info, x ast.Expr) bool {
 	}
 	switch n := x.(type) {
 	case *ast.StarExpr:
-		call, ok := unparen(n.X).(*ast.CallExpr)
+		call, ok := ast.Unparen(n.X).(*ast.CallExpr)
 		if !ok {
 			return false
 		}
-		id, ok := unparen(call.Fun).(*ast.Ident)
-		if !ok {
-			return false
-		}
-		_, builtin := info.Uses[id].(*types.Builtin)
-		return builtin && id.Name == "new" && info.Types[call.Args[0]].IsType()
+		b, ok := e.callee(call).(*types.Builtin)
+		return ok && b.Name() == builtinNew && info.Types[call.Args[0]].IsType()
 	case *ast.CompositeLit:
 		switch tv.Type.Underlying().(type) {
 		case *types.Struct, *types.Array:
@@ -565,7 +556,7 @@ func isZero(info *types.Info, x ast.Expr) bool {
 			if kv, ok := elt.(*ast.KeyValueExpr); ok {
 				elt = kv.Value
 			}
-			if !isZero(info, elt) {
+			if !e.isZero(elt) {
 				return false
 			}
 		}
@@ -575,44 +566,50 @@ func isZero(info *types.Info, x ast.Expr) bool {
 }
 
 // isTerminating reports whether s is a terminating statement in the sense
-// of the Go specification. It errs towards yes, which only keeps a
-// statement from being deleted.
-func isTerminating(info *types.Info, s ast.Stmt) bool {
+// of the Go specification, by the rule that go/types applies, for a
+// statement that contains no labelled statement. delete keeps every
+// statement that contains a label, so a break with a label never decides a
+// deletion.
+func (e *enumerator) isTerminating(s ast.Stmt) bool {
 	switch s := s.(type) {
 	case *ast.ReturnStmt:
 		return true
 	case *ast.BranchStmt:
-		return s.Tok == token.GOTO
+		return s.Tok == token.GOTO || s.Tok == token.FALLTHROUGH
 	case *ast.ExprStmt:
-		call, ok := s.X.(*ast.CallExpr)
+		call, ok := ast.Unparen(s.X).(*ast.CallExpr)
 		if !ok {
 			return false
 		}
-		id, ok := unparen(call.Fun).(*ast.Ident)
-		if !ok {
-			return false
-		}
-		_, builtin := info.Uses[id].(*types.Builtin)
-		return builtin && id.Name == "panic"
+		b, ok := e.callee(call).(*types.Builtin)
+		return ok && b.Name() == builtinPanic
 	case *ast.BlockStmt:
-		return len(s.List) > 0 && isTerminating(info, s.List[len(s.List)-1])
+		return e.terminates(s.List)
 	case *ast.IfStmt:
-		return s.Else != nil && isTerminating(info, s.Body) && isTerminating(info, s.Else)
+		return s.Else != nil && e.isTerminating(s.Body) && e.isTerminating(s.Else)
 	case *ast.ForStmt:
-		return s.Cond == nil
+		return s.Cond == nil && !breaks(s.Body)
 	case *ast.SwitchStmt:
-		return clausesTerminate(info, s.Body)
+		return hasDefault(s.Body) && e.clausesTerminate(s.Body)
 	case *ast.TypeSwitchStmt:
-		return clausesTerminate(info, s.Body)
+		return hasDefault(s.Body) && e.clausesTerminate(s.Body)
 	case *ast.SelectStmt:
-		return clausesTerminate(info, s.Body)
-	case *ast.LabeledStmt:
-		return isTerminating(info, s.Stmt)
+		return e.clausesTerminate(s.Body)
 	}
 	return false
 }
 
-func clausesTerminate(info *types.Info, body *ast.BlockStmt) bool {
+// terminates reports whether a statement list ends in a terminating
+// statement: its final statement that is not empty is one.
+func (e *enumerator) terminates(list []ast.Stmt) bool {
+	last := final(list)
+	return last != nil && e.isTerminating(last)
+}
+
+// clausesTerminate reports whether the statement list of every clause of a
+// switch, a type switch or a select statement ends in a terminating
+// statement and contains no break of the statement.
+func (e *enumerator) clausesTerminate(body *ast.BlockStmt) bool {
 	for _, c := range body.List {
 		var list []ast.Stmt
 		switch c := c.(type) {
@@ -621,20 +618,47 @@ func clausesTerminate(info *types.Info, body *ast.BlockStmt) bool {
 		case *ast.CommClause:
 			list = c.Body
 		}
-		if len(list) == 0 {
-			return false
-		}
-		last := list[len(list)-1]
-		if b, ok := last.(*ast.BranchStmt); ok && b.Tok == token.FALLTHROUGH {
-			continue
-		}
-		if !isTerminating(info, last) {
+		if !e.terminates(list) || slices.ContainsFunc(list, breaks) {
 			return false
 		}
 	}
 	return true
 }
 
+// final returns the last statement of list that is not empty, or nil when
+// list has none.
+func final(list []ast.Stmt) ast.Stmt {
+	for _, s := range slices.Backward(list) {
+		if _, empty := s.(*ast.EmptyStmt); !empty {
+			return s
+		}
+	}
+	return nil
+}
+
+// hasDefault reports whether the body of a switch or a type switch
+// statement has a default clause.
+func hasDefault(body *ast.BlockStmt) bool {
+	return slices.ContainsFunc(body.List, func(c ast.Stmt) bool { return c.(*ast.CaseClause).List == nil })
+}
+
+// breaks reports whether s is or contains a break statement without a label
+// that ends the closest for, switch or select statement around s. A break
+// inside a nested for, range, switch, type switch or select statement ends
+// that statement.
+func breaks(s ast.Stmt) bool {
+	switch s := s.(type) {
+	case *ast.BranchStmt:
+		return s.Tok == token.BREAK && s.Label == nil
+	case *ast.BlockStmt:
+		return slices.ContainsFunc(s.List, breaks)
+	case *ast.IfStmt:
+		return breaks(s.Body) || s.Else != nil && breaks(s.Else)
+	}
+	return false
+}
+
+// hasLabel reports whether s is or contains a labelled statement.
 func hasLabel(s ast.Stmt) bool {
 	found := false
 	ast.Inspect(s, func(n ast.Node) bool {
@@ -645,9 +669,10 @@ func hasLabel(s ast.Stmt) bool {
 	return found
 }
 
+// allBlank reports whether every expression of es is the blank identifier.
 func allBlank(es []ast.Expr) bool {
-	for _, e := range es {
-		if id, ok := e.(*ast.Ident); !ok || id.Name != "_" {
+	for _, x := range es {
+		if id, ok := x.(*ast.Ident); !ok || id.Name != "_" {
 			return false
 		}
 	}
@@ -655,52 +680,49 @@ func allBlank(es []ast.Expr) bool {
 }
 
 func isTypeParam(t types.Type) bool {
-	_, ok := unalias(t).(*types.TypeParam)
+	_, ok := types.Unalias(t).(*types.TypeParam)
 	return ok
 }
 
 // isNumber reports whether t is an integer or floating-point type, or a
-// type parameter whose constraint embeds only unions of such types. The
-// walk passes isNumber a type parameter only as the type of an operand of
-// arithmetic, so its constraint embeds at least one type.
+// type parameter whose every type is one. A type parameter is one when
+// types.Satisfies reports that it satisfies numbers. go/types computes the
+// parameter's type set through embedded constraints, unions and
+// intersections.
 func isNumber(t types.Type) bool {
-	if tp, ok := unalias(t).(*types.TypeParam); ok {
-		iface := tp.Underlying().(*types.Interface)
-		for i := 0; i < iface.NumEmbeddeds(); i++ {
-			u, ok := iface.EmbeddedType(i).(*types.Union)
-			if !ok {
-				return false
-			}
-			for j := 0; j < u.Len(); j++ {
-				if !isNumber(u.Term(j).Type()) {
-					return false
-				}
-			}
-		}
-		return true
+	if tp, ok := types.Unalias(t).(*types.TypeParam); ok {
+		return types.Satisfies(tp, numbers)
 	}
 	b, ok := t.Underlying().(*types.Basic)
 	return ok && b.Info()&(types.IsInteger|types.IsFloat) != 0
 }
 
+// numbers is the constraint whose type set is every type whose underlying
+// type is a typed integer or floating-point type. It is complete, so
+// concurrent enumerations only read it.
+var numbers = func() *types.Interface {
+	var terms []*types.Term
+	for _, b := range types.Typ {
+		if b.Info()&types.IsUntyped == 0 && b.Info()&(types.IsInteger|types.IsFloat) != 0 {
+			terms = append(terms, types.NewTerm(true, b))
+		}
+	}
+	return types.NewInterfaceType(nil, []types.Type{types.NewUnion(terms)}).Complete()
+}()
+
 // isPlainBool reports whether t is bool or an untyped boolean.
 func isPlainBool(t types.Type) bool {
-	b, ok := unalias(t).(*types.Basic)
+	b, ok := types.Unalias(t).(*types.Basic)
 	return ok && (b.Kind() == types.Bool || b.Kind() == types.UntypedBool)
-}
-
-func isUntyped(t types.Type) bool {
-	b, ok := unalias(t).(*types.Basic)
-	return ok && b.Info()&types.IsUntyped != 0
 }
 
 // hasContextShift reports whether x contains a non-constant shift whose
 // left operand is an untyped constant.
-func hasContextShift(info *types.Info, x ast.Expr) bool {
+func (e *enumerator) hasContextShift(x ast.Expr) bool {
 	found := false
 	ast.Inspect(x, func(n ast.Node) bool {
 		b, ok := n.(*ast.BinaryExpr)
-		if ok && (b.Op == token.SHL || b.Op == token.SHR) && info.Types[b].Value == nil && untypedConst(info, b.X) {
+		if ok && (b.Op == token.SHL || b.Op == token.SHR) && e.pkg.Info.Types[b].Value == nil && e.untypedConst(b.X) {
 			found = true
 		}
 		return !found
@@ -709,27 +731,22 @@ func hasContextShift(info *types.Info, x ast.Expr) bool {
 }
 
 // untypedConst reports whether x is an untyped constant expression. The
-// type checker records the type that such a constant converts to, so the
-// test reads the syntax: literals, untyped named constants, and operators
-// on them.
-func untypedConst(info *types.Info, x ast.Expr) bool {
-	switch v := unparen(x).(type) {
-	case *ast.BasicLit:
-		return true
-	case *ast.Ident:
-		c, ok := info.Uses[v].(*types.Const)
-		return ok && isUntyped(c.Type())
-	case *ast.SelectorExpr:
-		c, ok := info.Uses[v.Sel].(*types.Const)
-		return ok && isUntyped(c.Type())
-	case *ast.UnaryExpr:
-		return untypedConst(info, v.X)
-	case *ast.BinaryExpr:
-		return untypedConst(info, v.X) && untypedConst(info, v.Y)
+// package's type information records the type that such a constant
+// converts to, so types.CheckExpr checks x again alone, at its own
+// position, where x keeps its untyped type. x type-checks in its package,
+// so it type-checks alone, and CheckExpr returns nil.
+func (e *enumerator) untypedConst(x ast.Expr) bool {
+	if e.pkg.Info.Types[x].Value == nil {
+		return false
 	}
-	return false
+	alone := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
+	_ = types.CheckExpr(e.pkg.Fset, e.pkg.Types, x.Pos(), x, alone)
+	b, ok := alone.Types[x].Type.(*types.Basic)
+	return ok && b.Info()&types.IsUntyped != 0
 }
 
+// sideEffectFree reports whether x is an identifier or a chain of selectors
+// on one, whose evaluation has no side effect.
 func sideEffectFree(x ast.Expr) bool {
 	switch v := x.(type) {
 	case *ast.Ident:

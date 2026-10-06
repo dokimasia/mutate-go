@@ -1,0 +1,260 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "sum.prefix",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "faad9747a8fe871e",
+      "file": "final.go",
+      "start": {
+        "line": 11,
+        "column": 2
+      },
+      "end": {
+        "line": 17,
+        "column": 3
+      },
+      "original": "for { if xs[i] == 0 { break } s.total += xs[i] i++ }",
+      "replacement": ""
+    },
+    {
+      "scope": "sum.prefix",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "a6729fb9da64b7aa",
+      "file": "final.go",
+      "start": {
+        "line": 12,
+        "column": 3
+      },
+      "end": {
+        "line": 14,
+        "column": 4
+      },
+      "original": "if xs[i] == 0 { break }",
+      "replacement": ""
+    },
+    {
+      "scope": "sum.prefix",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2f9d9e536bca3e41",
+      "file": "final.go",
+      "start": {
+        "line": 12,
+        "column": 6
+      },
+      "end": {
+        "line": 12,
+        "column": 16
+      },
+      "original": "xs[i] == 0",
+      "replacement": "true"
+    },
+    {
+      "scope": "sum.prefix",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "632edd0b6400950e",
+      "file": "final.go",
+      "start": {
+        "line": 12,
+        "column": 6
+      },
+      "end": {
+        "line": 12,
+        "column": 16
+      },
+      "original": "xs[i] == 0",
+      "replacement": "false"
+    },
+    {
+      "scope": "sum.prefix",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "c827d88c5bab42f7",
+      "file": "final.go",
+      "start": {
+        "line": 15,
+        "column": 3
+      },
+      "end": {
+        "line": 15,
+        "column": 19
+      },
+      "original": "s.total += xs[i]",
+      "replacement": "s.total -= xs[i]"
+    },
+    {
+      "scope": "sum.prefix",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "4d70ade5441b209f",
+      "file": "final.go",
+      "start": {
+        "line": 15,
+        "column": 3
+      },
+      "end": {
+        "line": 15,
+        "column": 19
+      },
+      "original": "s.total += xs[i]",
+      "replacement": ""
+    },
+    {
+      "scope": "sum.prefix",
+      "kind": "uoi-incdec",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f89564f6948c802c",
+      "file": "final.go",
+      "start": {
+        "line": 16,
+        "column": 3
+      },
+      "end": {
+        "line": 16,
+        "column": 6
+      },
+      "original": "i++",
+      "replacement": "i--"
+    },
+    {
+      "scope": "grade",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "752565970f2692c3",
+      "file": "final.go",
+      "start": {
+        "line": 23,
+        "column": 2
+      },
+      "end": {
+        "line": 30,
+        "column": 3
+      },
+      "original": "switch { case score >= 80: *g = \"high\" return case score >= 50: *g = \"pass\" return }",
+      "replacement": ""
+    },
+    {
+      "scope": "grade",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e1256c0db843746a",
+      "file": "final.go",
+      "start": {
+        "line": 24,
+        "column": 7
+      },
+      "end": {
+        "line": 24,
+        "column": 18
+      },
+      "original": "score >= 80",
+      "replacement": "score > 80"
+    },
+    {
+      "scope": "grade",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3a7dc1e07e2e4100",
+      "file": "final.go",
+      "start": {
+        "line": 24,
+        "column": 7
+      },
+      "end": {
+        "line": 24,
+        "column": 18
+      },
+      "original": "score >= 80",
+      "replacement": "true"
+    },
+    {
+      "scope": "grade",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "f086a151cab516c7",
+      "file": "final.go",
+      "start": {
+        "line": 25,
+        "column": 3
+      },
+      "end": {
+        "line": 25,
+        "column": 14
+      },
+      "original": "*g = \"high\"",
+      "replacement": ""
+    },
+    {
+      "scope": "grade",
+      "kind": "ror-boundary",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "6c69d60be74bea57",
+      "file": "final.go",
+      "start": {
+        "line": 27,
+        "column": 7
+      },
+      "end": {
+        "line": 27,
+        "column": 18
+      },
+      "original": "score >= 50",
+      "replacement": "score > 50"
+    },
+    {
+      "scope": "grade",
+      "kind": "ror-true",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "b7018045a62b9def",
+      "file": "final.go",
+      "start": {
+        "line": 27,
+        "column": 7
+      },
+      "end": {
+        "line": 27,
+        "column": 18
+      },
+      "original": "score >= 50",
+      "replacement": "true"
+    },
+    {
+      "scope": "grade",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "c46219203669bb0c",
+      "file": "final.go",
+      "start": {
+        "line": 28,
+        "column": 3
+      },
+      "end": {
+        "line": 28,
+        "column": 14
+      },
+      "original": "*g = \"pass\"",
+      "replacement": ""
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

@@ -11,25 +11,47 @@ import (
 	"strings"
 	"testing"
 
+	"go.dokimi.dev/assert"
+
 	"go.dokimi.dev/mutate/internal/enumerate"
 	"go.dokimi.dev/mutate/internal/load"
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
-// fixture writes files into a new directory, with a go.mod of the module
-// fixture at go 1.21 unless files has one, and loads the package there.
-func fixture(t *testing.T, files map[string]string) *load.Package {
+// The module of a fixture: the name of its module file, and the module file
+// that fixture writes where a test states none.
+const (
+	goMod  = "go.mod"
+	module = "module fixture\n\ngo 1.21\n"
+)
+
+// The modes of the files and the directories that the tests write.
+const (
+	fileMode = 0o644
+	dirMode  = 0o755
+)
+
+// moduleDir writes files into a new directory, with the module file module
+// unless files has one, and returns the directory.
+func moduleDir(t *testing.T, files map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
-	if _, ok := files["go.mod"]; !ok {
-		files["go.mod"] = "module fixture\n\ngo 1.21\n"
+	if _, ok := files[goMod]; !ok {
+		files[goMod] = module
 	}
 	for name, text := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		path := filepath.Join(dir, name)
+		assert.NoError(t, os.MkdirAll(filepath.Dir(path), dirMode), "the directory of "+name+" is created")
+		assert.NoError(t, os.WriteFile(path, []byte(text), fileMode), name+" is written")
 	}
-	return loadDir(t, dir)
+	return dir
+}
+
+// fixture writes files as moduleDir does, and loads the package in the
+// module's root directory.
+func fixture(t *testing.T, files map[string]string) *load.Package {
+	t.Helper()
+	return loadDir(t, moduleDir(t, files))
 }
 
 // loadDir loads the package in dir with the include directive of the
@@ -39,17 +61,22 @@ func loadDir(t *testing.T, dir string) *load.Package {
 	d := spec.Load()
 	include := d.Overlay.Comment + d.Catalogue.Include
 	p, err := load.Load(context.Background(), load.Config{Dir: dir, Env: os.Environ(), Include: include})
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err, "the fixture's package loads")
 	return p
 }
 
 // enumerateFixture loads files as the package of a fixture module and
-// enumerates it with lines as the selection.
-func enumerateFixture(t *testing.T, files map[string]string, lines ...enumerate.Range) *enumerate.Result {
+// enumerates it under opts.
+func enumerateFixture(t *testing.T, files map[string]string, opts enumerate.Options) *enumerate.Result {
 	t.Helper()
-	return enumerate.Enumerate(fixture(t, files), spec.Load(), lines)
+	return enumerate.Enumerate(fixture(t, files), spec.Load(), opts)
+}
+
+// all enumerates every line of the fixture files, without its generated
+// files.
+func all(t *testing.T, files map[string]string) *enumerate.Result {
+	t.Helper()
+	return enumerateFixture(t, files, enumerate.Options{})
 }
 
 // nth returns each mutant's position among the mutants of its scope and
@@ -58,7 +85,7 @@ func nth(r *enumerate.Result) map[*enumerate.Mutant]int {
 	out := map[*enumerate.Mutant]int{}
 	seen := map[string]int{}
 	for _, m := range r.Mutants {
-		id := m.Site.Scope + " " + m.Kind
+		id := m.Site.Scope + " " + string(m.Kind)
 		out[m] = seen[id]
 		seen[id]++
 	}
@@ -72,7 +99,7 @@ func listing(r *enumerate.Result, prefix string) string {
 	var b strings.Builder
 	n := nth(r)
 	for _, m := range r.Mutants {
-		if !strings.HasPrefix(m.Kind, prefix) {
+		if !strings.HasPrefix(string(m.Kind), prefix) {
 			continue
 		}
 		fmt.Fprintf(&b, "%s %s %d: %s -> %q", m.Site.Scope, m.Kind, n[m], m.Original, m.Replacement)
@@ -91,18 +118,18 @@ func listing(r *enumerate.Result, prefix string) string {
 }
 
 // statuses writes one line per mutant that is not runnable: its scope,
-// kind and nth, and its status.
+// kind and nth, and its status as the verdict that it gives.
 func statuses(r *enumerate.Result) string {
-	names := map[enumerate.Status]string{
-		enumerate.Suppressed:  "suppressed",
-		enumerate.NotViable:   "not-viable",
-		enumerate.NotSelected: "not-selected",
+	verdicts := map[enumerate.Status]spec.Verdict{
+		enumerate.Suppressed:  spec.Suppressed,
+		enumerate.NotViable:   spec.NotViable,
+		enumerate.NotSelected: spec.NotSelected,
 	}
 	var b strings.Builder
 	n := nth(r)
 	for _, m := range r.Mutants {
 		if m.Status != enumerate.Runnable {
-			fmt.Fprintf(&b, "%s %s %d: %s\n", m.Site.Scope, m.Kind, n[m], names[m.Status])
+			fmt.Fprintf(&b, "%s %s %d: %s\n", m.Site.Scope, m.Kind, n[m], verdicts[m.Status])
 		}
 	}
 	return b.String()
@@ -121,7 +148,7 @@ func skipped(r *enumerate.Result, src string) string {
 // offset returns the byte offset of p in src.
 func offset(src string, p enumerate.Position) int {
 	line := 1
-	for i := 0; i < len(src); i++ {
+	for i := range len(src) {
 		if line == p.Line {
 			return i + p.Column - 1
 		}
@@ -132,10 +159,11 @@ func offset(src string, p enumerate.Position) int {
 	return len(src)
 }
 
-// want fails t when got differs from want.
-func want(t *testing.T, got, want string) {
-	t.Helper()
-	if got != want {
-		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+// problems writes one line per problem: its code and its message.
+func problems(r *enumerate.Result) string {
+	var b strings.Builder
+	for _, p := range r.Problems {
+		fmt.Fprintf(&b, "%s %s\n", p.Code, p.Message)
 	}
+	return b.String()
 }

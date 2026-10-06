@@ -6,114 +6,131 @@ package spec_test
 import (
 	"bytes"
 	"encoding/json"
+	"go/ast"
+	"go/constant"
+	"go/importer"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
-	"reflect"
-	"regexp"
 	"strings"
 	"testing"
+
+	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/expect"
 
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
-// vendored is the directory of the vendored definition.
+// vendored is the directory of the vendored definition, as a path from this
+// package's directory.
 var vendored = filepath.Join("..", "..", "conformance", "spec")
 
-// strict decodes the file name of this package into v and fails t when the
-// file names a field that v's type lacks.
-func strict(t *testing.T, name string, v any) {
-	t.Helper()
-	data, err := os.ReadFile(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		t.Fatalf("%s: %v", name, err)
-	}
-}
+// semver matches a version as the definition writes one: major, minor and
+// patch.
+const semver = `^[0-9]+\.[0-9]+\.[0-9]+$`
+
+// The parts of this package's source that declared reads: the suffix of a Go
+// file, the suffix of a test file, and the compiler whose export data the
+// importer reads for the package's imports.
+const (
+	goSuffix   = ".go"
+	testSuffix = "_test.go"
+	compiler   = "gc"
+)
 
 func TestSpec(t *testing.T) {
 	t.Parallel()
-	t.Run("the copies", func(t *testing.T) {
-		t.Parallel()
-		t.Run("are the files of the vendored definition", func(t *testing.T) {
-			t.Parallel()
-			for _, name := range []string{"VERSION", "catalogue.json", "protocol.json", "overlay.json"} {
-				ours, err := os.ReadFile(name)
-				if err != nil {
-					t.Fatal(err)
-				}
-				theirs, err := os.ReadFile(filepath.Join(vendored, name))
-				if err != nil {
-					t.Fatal(err)
-				}
-				if !bytes.Equal(ours, theirs) {
-					t.Errorf("%s differs from %s, so make spec-sync has not run", name, filepath.Join(vendored, name))
-				}
-			}
-		})
-	})
+
 	t.Run("Load", func(t *testing.T) {
 		t.Parallel()
-		t.Run("states every field of the copied files", func(t *testing.T) {
+
+		t.Run("returns every field of the embedded files", func(t *testing.T) {
 			t.Parallel()
 			var want spec.Definition
-			strict(t, "catalogue.json", &want.Catalogue)
-			strict(t, "protocol.json", &want.Protocol)
-			strict(t, "overlay.json", &want.Overlay)
-			version, err := os.ReadFile("VERSION")
-			if err != nil {
-				t.Fatal(err)
-			}
+			strict(t, spec.CatalogueFile, &want.Catalogue)
+			strict(t, spec.ProtocolFile, &want.Protocol)
+			strict(t, spec.OverlayFile, &want.Overlay)
+			version, err := os.ReadFile(spec.VersionFile)
+			assert.NoError(t, err, "the version file reads")
 			want.Version = strings.TrimSpace(string(version))
-			if got := spec.Load(); !reflect.DeepEqual(got, want) {
-				t.Errorf("Load() = %+v, want %+v", got, want)
-			}
+			assert.Equal(t, spec.Load(), want, "Load decodes each embedded file into its type")
 		})
-		t.Run("returns a semantic version", func(t *testing.T) {
+
+		t.Run("returns the files of the vendored definition", func(t *testing.T) {
 			t.Parallel()
-			if v := spec.Load().Version; !regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(v) {
-				t.Errorf("Version = %q, want major.minor.patch", v)
+			for _, name := range []string{spec.VersionFile, spec.CatalogueFile, spec.ProtocolFile, spec.OverlayFile} {
+				ours, err := os.ReadFile(name)
+				assert.NoError(t, err, "the embedded copy of "+name+" reads")
+				theirs, err := os.ReadFile(filepath.Join(vendored, name))
+				assert.NoError(t, err, "the vendored "+name+" reads")
+				expect.Equal(
+					t,
+					string(ours),
+					string(theirs),
+					"the copy of "+name+" is the vendored file, so make spec-sync ran",
+				)
 			}
 		})
+
+		t.Run("decodes the files once", func(t *testing.T) {
+			t.Parallel()
+			first, second := spec.Load(), spec.Load()
+			assert.True(t, &first.Catalogue.Kinds[0] == &second.Catalogue.Kinds[0],
+				"two calls return the same decoded kinds")
+		})
+
+		t.Run("returns the catalogue's semantic version", func(t *testing.T) {
+			t.Parallel()
+			assert.Matches(t, spec.Load().Version, semver, "the catalogue's version is major.minor.patch")
+		})
+
 		t.Run("returns the overlay's semantic version", func(t *testing.T) {
 			t.Parallel()
-			if v := spec.Load().Overlay.Version; !regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(v) {
-				t.Errorf("Overlay.Version = %q, want major.minor.patch", v)
-			}
+			assert.Matches(t, spec.Load().Overlay.Version, semver, "the overlay's version is major.minor.patch")
 		})
 	})
-	t.Run("Families.Calls", func(t *testing.T) {
-		t.Parallel()
-		t.Run("returns the overlay's list of each family of the catalogue but capacity", func(t *testing.T) {
-			t.Parallel()
-			d := spec.Load()
-			data, err := os.ReadFile("overlay.json")
-			if err != nil {
-				t.Fatal(err)
-			}
-			var overlay struct {
-				Families map[string]json.RawMessage `json:"families"`
-			}
-			if err := json.Unmarshal(data, &overlay); err != nil {
-				t.Fatal(err)
-			}
-			want := map[string][]string{}
-			for _, family := range d.Catalogue.Families {
-				if family.ID == "capacity" {
-					continue
-				}
-				var names []string
-				if err := json.Unmarshal(overlay.Families[family.ID], &names); err != nil {
-					t.Fatalf("family %s: %v", family.ID, err)
-				}
-				want[family.ID] = names
-			}
-			if got := d.Overlay.Families.Calls(); !reflect.DeepEqual(got, want) {
-				t.Errorf("Calls() = %v, want %v", got, want)
-			}
-		})
-	})
+}
+
+// strict decodes the file name of this package's directory into v, and
+// stops the test when the file has a field that v's type lacks.
+func strict(t *testing.T, name string, v any) {
+	t.Helper()
+	data, err := os.ReadFile(name)
+	assert.NoError(t, err, "the file reads")
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	assert.NoError(t, dec.Decode(v), name+" decodes into its type with no field left over")
+}
+
+// declared returns the value of every constant of the type named typeName
+// that this package declares, as the type checker reads the package's
+// source files.
+func declared(t *testing.T, typeName string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(".")
+	assert.NoError(t, err, "the package directory reads")
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, goSuffix) || strings.HasSuffix(name, testSuffix) {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, name, nil, 0)
+		assert.NoError(t, parseErr, name+" parses")
+		files = append(files, file)
+	}
+	conf := types.Config{Importer: importer.ForCompiler(fset, compiler, nil)}
+	pkg, err := conf.Check("spec", fset, files, nil)
+	assert.NoError(t, err, "the package type-checks")
+	typ := pkg.Scope().Lookup(typeName).Type()
+	values := []string{}
+	for _, name := range pkg.Scope().Names() {
+		if c, ok := pkg.Scope().Lookup(name).(*types.Const); ok && types.Identical(c.Type(), typ) {
+			values = append(values, constant.StringVal(c.Val()))
+		}
+	}
+	return values
 }

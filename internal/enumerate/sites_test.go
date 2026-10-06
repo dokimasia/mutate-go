@@ -4,7 +4,6 @@
 package enumerate_test
 
 import (
-	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -13,7 +12,11 @@ import (
 	"strings"
 	"testing"
 
+	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/expect"
+
 	"go.dokimi.dev/mutate/internal/enumerate"
+	"go.dokimi.dev/mutate/internal/spec"
 )
 
 const kinds = `package fixture
@@ -71,37 +74,22 @@ func shift(d time.Duration, n uint) bool {
 }
 `
 
-// forms writes one line per site: its scope, its form, its operator, its
-// type argument and its zero values.
-func forms(r *enumerate.Result) string {
-	names := []string{
-		"Equality",
-		"Ordered",
-		"Arithmetic",
-		"Compound",
-		"Connector",
-		"IncDec",
-		"IncDecPost",
-		"Not",
-		"Minus",
-		"Delete",
-		"Zero",
-	}
-	var b strings.Builder
-	for _, s := range r.Sites {
-		fmt.Fprintf(&b, "%s %s %q %q %v\n", s.Scope, names[s.Form], s.Op, s.TypeArg, s.Zeros)
-	}
-	return b.String()
+// forms names each form of a site, by its value.
+var forms = []string{
+	"Equality", "Ordered", "Arithmetic", "Compound", "Connector", "IncDec",
+	"IncDecPost", "Not", "Minus", "Delete", "Zero",
 }
 
 func TestSites(t *testing.T) {
 	t.Parallel()
+
 	t.Run("Enumerate", func(t *testing.T) {
 		t.Parallel()
+
 		t.Run("makes every kind in source order", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"kinds.go": kinds})
-			want(t, listing(r, ""), `kinds aor 0: a + b -> "a - b"
+			r := all(t, map[string]string{"kinds.go": kinds})
+			assert.Equal(t, listing(r, ""), `kinds aor 0: a + b -> "a - b"
 kinds aor 1: total -= b -> "total += b"
 kinds sbr-delete 0: total -= b -> ""
 kinds sbr-delete 1: if a < b && ok { total++ } -> ""
@@ -124,20 +112,24 @@ kinds uoi-minus 0: -a -> "a"
 kinds sbr-delete 3: if !ok { return total } -> ""
 kinds uoi-not 0: !ok -> "ok"
 kinds sbr-zero 1: return total -> "return 0"
-`)
-			if len(r.Skipped) != 0 || len(r.Problems) != 0 || statuses(r) != "" {
-				t.Errorf("skipped %v, problems %v, statuses %q: want none", r.Skipped, r.Problems, statuses(r))
-			}
-			if s := r.Mutants[1].Site; s.File.Name != "kinds.go" ||
-				s.StartPos != (enumerate.Position{Line: 5, Column: 2}) ||
-				s.EndPos != (enumerate.Position{Line: 5, Column: 12}) {
-				t.Errorf("aor 1 is at %s %v-%v, want kinds.go 5:2-5:12", s.File.Name, s.StartPos, s.EndPos)
-			}
+`, "each kind's mutants are in source order")
+			expect.That(t, r.Skipped).Empty("no site is skipped")
+			expect.Empty(t, r.Problems, "no annotation fails")
+			expect.Empty(t, statuses(r), "every mutant runs")
+			s := r.Mutants[1].Site
+			expect.Equal(t, s.File.Name, "kinds.go", "the compound assignment is in kinds.go")
+			expect.Equal(t, s.StartPos, enumerate.Position{Line: 5, Column: 2}, "and starts at its target")
+			expect.Equal(t, s.EndPos, enumerate.Position{Line: 5, Column: 12}, "and ends after its value")
 		})
+
 		t.Run("states each site's form, operator, type argument and zero values", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"kinds.go": kinds})
-			want(t, forms(r), `kinds Arithmetic "+" "int" []
+			r := all(t, map[string]string{"kinds.go": kinds})
+			var b strings.Builder
+			for _, s := range r.Sites {
+				fmt.Fprintf(&b, "%s %s %q %q %v\n", s.Scope, forms[s.Form], s.Op, s.TypeArg, s.Zeros)
+			}
+			expect.Equal(t, b.String(), `kinds Arithmetic "+" "int" []
 kinds Compound "-" "int" []
 kinds Delete "ILLEGAL" "" []
 kinds Delete "ILLEGAL" "" []
@@ -153,18 +145,20 @@ kinds Minus "-" "int" []
 kinds Delete "ILLEGAL" "" []
 kinds Not "ILLEGAL" "" []
 kinds Zero "ILLEGAL" "" [0]
-`)
+`, "each site states the facts of its instrumented form")
 			var ops []string
 			for _, m := range r.Mutants {
 				if m.Op != token.ILLEGAL {
-					ops = append(ops, m.Kind+" "+m.Op.String())
+					ops = append(ops, string(m.Kind)+" "+m.Op.String())
 				}
 			}
-			want(t, strings.Join(ops, "\n"), "aor -\naor +\nror-boundary <=\nuoi-incdec --\nror-boundary >")
+			expect.Equal(t, ops, []string{"aor -", "aor +", "ror-boundary <=", "uoi-incdec --", "ror-boundary >"},
+				"and each mutant that writes an operator states it")
 		})
+
 		t.Run("names the operands' type only where the name denotes it at the site", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"names.go": `package fixture
+			r := all(t, map[string]string{"names.go": `package fixture
 
 import "time"
 
@@ -201,7 +195,7 @@ func local() bool {
 					fmt.Fprintf(&b, "%s %q\n", s.File.Text[s.Start:s.End], s.TypeArg)
 				}
 			}
-			want(t, b.String(), `x < y ""
+			assert.Equal(t, b.String(), `x < y ""
 a < b ""
 p < q ""
 i < 3 "int"
@@ -211,11 +205,12 @@ c < d "size"
 e < f ""
 g.n < h.n "int"
 x < y ""
-`)
+`, "a site names its operands' type where a local declaration does not hide the name")
 		})
+
 		t.Run("names a function F as F and a method M of T or *T as T.M", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"scopes.go": `package fixture
+			r := all(t, map[string]string{"scopes.go": `package fixture
 
 var limit = 1 + compute(3)
 
@@ -240,7 +235,7 @@ func (c (counter)) get() int { return c.n + 1 }
 
 func (c *(counter)) put(by int) { c.n += by }
 `})
-			want(t, listing(r, ""), `limit aor 0: 1 + compute(3) -> "1 - compute(3)"
+			assert.Equal(t, listing(r, ""), `limit aor 0: 1 + compute(3) -> "1 - compute(3)"
 compute sbr-zero 0: return n -> "return 0"
 box.grow sbr-zero 0: return b.n + by -> "return 0"
 box.grow aor 0: b.n + by -> "b.n - by"
@@ -253,12 +248,13 @@ counter.get sbr-zero 0: return c.n + 1 -> "return 0"
 counter.get aor 0: c.n + 1 -> "c.n - 1"
 counter.put aor 0: c.n += by -> "c.n -= by"
 counter.put sbr-delete 0: c.n += by -> ""
-`)
+`, "each site has the scope of its declaration")
 		})
+
 		t.Run("lists the sites that the overlay skips with their reasons", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"skips.go": skips})
-			want(t, skipped(r, skips), `4*1024 + 1: constant expression
+			r := all(t, map[string]string{"skips.go": skips})
+			expect.Equal(t, skipped(r, skips), `4*1024 + 1: constant expression
 2 * 8: constant expression
 a + b: operand of type-parameter type
 n < 4: named boolean result
@@ -267,12 +263,13 @@ n > 0: named boolean result
 n < 9: named boolean result
 xs[index()] += 1: assignment target with side effects
 d < 1<<n: untyped constant in a non-constant shift
-`)
-			want(t, listing(r, "lcr-"), `recovers lcr-left 0: len(xs) > 0 && recover() == nil -> "len(xs) > 0"
+`, "each skipped site states the overlay's reason")
+			expect.Equal(t, listing(r, "lcr-"), `recovers lcr-left 0: len(xs) > 0 && recover() == nil -> "len(xs) > 0"
 recovers lcr-right 0: len(xs) > 0 && recover() == nil -> "recover() == nil"
 recovers lcr-false 0: len(xs) > 0 && recover() == nil -> "false"
-`)
+`, "and a connector of plain booleans keeps its mutants")
 		})
+
 		t.Run("lists the outermost constant expression and makes no mutant of other values", func(t *testing.T) {
 			t.Parallel()
 			src := `package fixture
@@ -291,18 +288,20 @@ func f(s string, c complex128, x int) (string, complex128, int) {
 	return s + "y", c, x
 }
 `
-			r := enumerateFixture(t, map[string]string{"values.go": src})
-			want(t, skipped(r, src), "1 < 2 && true: constant expression\n")
-			want(t, listing(r, ""), `f sbr-delete 0: s += "x" -> ""
+			r := all(t, map[string]string{"values.go": src})
+			expect.Equal(t, skipped(r, src), "1 < 2 && true: constant expression\n",
+				"only the constant connector is a skipped site")
+			expect.Equal(t, listing(r, ""), `f sbr-delete 0: s += "x" -> ""
 f sbr-delete 1: c = -c -> ""
 f sbr-delete 2: x = -1 + x -> ""
 f aor 0: -1 + x -> "-1 - x"
 f sbr-zero 0: return s + "y", c, x -> "return \"\", 0, 0"
-`)
+`, "and strings and complex numbers have no arithmetic mutant")
 		})
+
 		t.Run("returns zero values only where a result is not zero already", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"results.go": `package fixture
+			r := all(t, map[string]string{"results.go": `package fixture
 
 func results(n int) (bool, string, error) {
 	if n > 0 {
@@ -314,17 +313,19 @@ func results(n int) (bool, string, error) {
 	return false, "", nil
 }
 `})
-			want(
+			assert.Equal(
 				t,
-				listing(r, "sbr-zero"),
+				listing(r, string(spec.SBRZero)),
 				`results sbr-zero 0: return true, "", nil -> "return false, \"\", nil"
 results sbr-zero 1: return false, "x", nil -> "return false, \"\", nil"
 `,
+				"the return of zero values has no mutant",
 			)
 		})
+
 		t.Run("makes no zero mutant of a return whose every result is a zero value", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"zero.go": `package fixture
+			r := all(t, map[string]string{"zero.go": `package fixture
 
 type point struct{ x, y int }
 
@@ -355,17 +356,32 @@ func deref(p *point) point { return *(p) }
 
 func call(p *point) point { return *p.self() }
 `})
-			want(t, listing(r, "sbr-zero"), `point.self sbr-zero 0: return p -> "return nil"
+			assert.Equal(t, listing(r, string(spec.SBRZero)), `point.self sbr-zero 0: return p -> "return nil"
 slice sbr-zero 0: return []int{} -> "return nil"
 table sbr-zero 0: return map[int]int{} -> "return nil"
 one sbr-zero 0: return point{x: 1} -> "return point{}"
 deref sbr-zero 0: return *(p) -> "return point{}"
 call sbr-zero 0: return *p.self() -> "return point{}"
-`)
+`, "only the return of a value that is no zero value has the mutant")
 		})
+
+		t.Run("makes a zero mutant of a return of the value that new of an expression points to", func(t *testing.T) {
+			t.Parallel()
+			r := all(t, map[string]string{
+				goMod:    "module fixture\n\ngo 1.26\n",
+				"new.go": "package fixture\n\nfunc pointed(x int) (int, int) {\n\treturn *new(x), *new(int)\n}\n",
+			})
+			assert.Equal(
+				t,
+				listing(r, string(spec.SBRZero)),
+				"pointed sbr-zero 0: return *new(x), *new(int) -> \"return 0, 0\"\n",
+				"*new(x) of an expression is the value of x, which is no zero value",
+			)
+		})
+
 		t.Run("writes each zero value as Go code writes it", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"spell.go": `package fixture
+			r := all(t, map[string]string{"spell.go": `package fixture
 
 import (
 	"time"
@@ -392,19 +408,17 @@ func generic[T any](v T) (T, []T) {
 	return v, nil
 }
 `})
-			want(
-				t,
-				listing(r, "sbr-zero"),
+			assert.Equal(t, listing(r, string(spec.SBRZero)),
 				`all sbr-zero 0: return n, f, c, s, ok, d, nm -> "return 0, 0, 0, \"\", false, 0, \"\""
 refs sbr-zero 0: return p, xs, m, ch, fn, e, u -> "return nil, nil, nil, nil, nil, nil, nil"
 composites sbr-zero 0: return p, a, s -> "return pair{}, [3]int{}, struct{ x int }{}"
 generic sbr-zero 0: return v, nil -> "return *new(T), nil"
-`,
-			)
+`, "each zero value reads as Go code")
 		})
+
 		t.Run("makes no increment mutant of an increment in a statement's initializer", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"inits.go": `package fixture
+			r := all(t, map[string]string{"inits.go": `package fixture
 
 func inits(n int) int {
 	for n++; n < 3; {
@@ -416,8 +430,9 @@ func inits(n int) int {
 	return 0
 }
 `})
-			want(t, listing(r, "uoi-incdec"), "")
+			assert.Empty(t, listing(r, string(spec.UOIIncDec)), "an increment in an initializer has no mutant")
 		})
+
 		t.Run("skips an equality whose result has a named boolean type", func(t *testing.T) {
 			t.Parallel()
 			src := `package fixture
@@ -428,9 +443,10 @@ func same(a, b int) flag {
 	return a == b
 }
 `
-			r := enumerateFixture(t, map[string]string{"same.go": src})
-			want(t, skipped(r, src), "a == b: named boolean result\n")
+			r := all(t, map[string]string{"same.go": src})
+			assert.Equal(t, skipped(r, src), "a == b: named boolean result\n", "the equality is skipped")
 		})
+
 		t.Run(
 			"skips arithmetic on a shifted untyped constant whose type has no name in the package",
 			func(t *testing.T) {
@@ -449,44 +465,73 @@ func shifts(d time.Duration, n uint, f func() int) bool {
 	_ = d + math.MaxInt8<<n
 	_ = d + -1<<n
 	_ = d + (1+1)<<n
+	_ = d + min(1, 2)<<n
 	_ = d + time.Duration(f())<<n
 	return d < d<<n
 }
 `
-				r := enumerateFixture(t, map[string]string{"shifts.go": src})
-				want(t, skipped(r, src), `d + one<<n: untyped constant in a non-constant shift
+				r := all(t, map[string]string{"shifts.go": src})
+				expect.Equal(t, skipped(r, src), `d + one<<n: untyped constant in a non-constant shift
 d + math.MaxInt8<<n: untyped constant in a non-constant shift
 d + -1<<n: untyped constant in a non-constant shift
 d + (1+1)<<n: untyped constant in a non-constant shift
 1+1: constant expression
-`)
-				want(t, listing(r, "aor"), `shifts aor 0: d + time.Duration(f())<<n -> "d - time.Duration(f())<<n"
-`)
-				want(t, listing(r, "ror-boundary"), `shifts ror-boundary 0: d < d<<n -> "d <= d<<n"
-`)
+d + min(1, 2)<<n: untyped constant in a non-constant shift
+`, "each shift of an untyped constant skips its arithmetic")
+				expect.Equal(
+					t,
+					listing(r, string(spec.AOR)),
+					"shifts aor 0: d + time.Duration(f())<<n -> \"d - time.Duration(f())<<n\"\n",
+					"and a shift of a typed operand keeps it",
+				)
+				expect.Equal(
+					t,
+					listing(r, string(spec.RORBoundary)),
+					"shifts ror-boundary 0: d < d<<n -> \"d <= d<<n\"\n",
+					"as does a comparison with a shift of a variable",
+				)
 			},
 		)
-		t.Run("makes no mutant of arithmetic on a type parameter that is not a union of numbers", func(t *testing.T) {
+
+		t.Run("skips arithmetic on a type parameter whose every type is a number", func(t *testing.T) {
 			t.Parallel()
 			src := `package fixture
 
 type exact interface{ int }
 
-type mixed interface{ ~int | ~string }
+type integer interface{ ~int | ~int64 }
 
-func tps[T exact, U mixed](a, b T, c, d U) (T, U) {
-	c += d
-	return a + b, c
+type number interface{ integer | ~float64 }
+
+func tps[T exact, N number](a, b T, c, d N) (T, N) {
+	return a + b, c - d
 }
 `
-			r := enumerateFixture(t, map[string]string{"tps.go": src})
-			want(t, listing(r, ""), `tps sbr-delete 0: c += d -> ""
-tps sbr-zero 0: return a + b, c -> "return *new(T), *new(U)"
-`)
-			if len(r.Skipped) != 0 {
-				t.Errorf("skipped %v, want none", r.Skipped)
-			}
+			r := all(t, map[string]string{"tps.go": src})
+			expect.Equal(t, skipped(r, src), `a + b: operand of type-parameter type
+c - d: operand of type-parameter type
+`, "the type set of a single type and of an embedded constraint are numbers")
+			expect.Equal(t, listing(r, ""), "tps sbr-zero 0: return a + b, c - d -> \"return *new(T), *new(N)\"\n",
+				"and the return keeps its mutant")
 		})
+
+		t.Run("makes no mutant of arithmetic on a type parameter whose type set has a string", func(t *testing.T) {
+			t.Parallel()
+			r := all(t, map[string]string{"mixed.go": `package fixture
+
+type mixed interface{ ~int | ~string }
+
+func mix[U mixed](c, d U) U {
+	c += d
+	return c
+}
+`})
+			expect.Equal(t, listing(r, ""), `mix sbr-delete 0: c += d -> ""
+mix sbr-zero 0: return c -> "return *new(U)"
+`, "the compound assignment has no aor mutant")
+			expect.Empty(t, r.Skipped, "and no skipped site")
+		})
+
 		t.Run("skips the sites of type-parameter operands and side-effect targets of every kind", func(t *testing.T) {
 			t.Parallel()
 			src := `package fixture
@@ -516,8 +561,8 @@ func shifted(n uint) uint {
 	return 1<<n + 1
 }
 `
-			r := enumerateFixture(t, map[string]string{"generic.go": src})
-			want(t, skipped(r, src), `a += b: operand of type-parameter type
+			r := all(t, map[string]string{"generic.go": src})
+			expect.Equal(t, skipped(r, src), `a += b: operand of type-parameter type
 i < b: operand of type-parameter type
 i++: operand of type-parameter type
 -i: operand of type-parameter type
@@ -525,13 +570,14 @@ ys[i]++: assignment target with side effects
 a < b: operand of type-parameter type
 *q++: assignment target with side effects
 a < b: operand of type-parameter type
-`)
-			want(t, listing(r, "aor"), `shifted aor 0: 1<<n + 1 -> "1<<n - 1"
-`)
+`, "each site of a type parameter or of a target with side effects is skipped")
+			expect.Equal(t, listing(r, string(spec.AOR)), "shifted aor 0: 1<<n + 1 -> \"1<<n - 1\"\n",
+				"and arithmetic of a predeclared type keeps its mutant")
 		})
+
 		t.Run("negates only boolean values in positions that take a value", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"positions.go": `package fixture
+			r := all(t, map[string]string{"positions.go": `package fixture
 
 type pair struct{ ok bool }
 
@@ -548,15 +594,16 @@ func positions(m map[string]bool, p *pair, ch chan bool, f func() bool) bool {
 	return !w
 }
 `})
-			want(t, listing(r, "uoi-not"), `positions uoi-not 0: v -> "!v"
+			assert.Equal(t, listing(r, string(spec.UOINot)), `positions uoi-not 0: v -> "!v"
 positions uoi-not 1: present -> "!present"
 positions uoi-not 2: *q -> "!*q"
 positions uoi-not 3: !w -> "w"
-`)
+`, "a value of bool is negated where the negation compiles and changes the program")
 		})
+
 		t.Run("keeps the statements that a deletion would break", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"ends.go": `package fixture
+			r := all(t, map[string]string{"ends.go": `package fixture
 
 func ends(n int) (int, error) {
 	if n > 0 {
@@ -572,19 +619,20 @@ func ends(n int) (int, error) {
 	panic("unreachable")
 }
 `})
-			want(t, listing(r, "sbr-"), `ends sbr-delete 0: if n > 0 { return 0, nil } -> ""
+			assert.Equal(t, listing(r, "sbr-"), `ends sbr-delete 0: if n > 0 { return 0, nil } -> ""
 ends sbr-delete 1: go func() {}() -> ""
-`)
+`, "a statement with a label and a terminating final statement are kept")
 		})
+
 		// The mutant's source keeps the code that it leaves out behind a
 		// constant that skips it, so the compiler still sees every use.
-		tests := []struct {
-			name, file, give, prefix, want string
+		leftOut := []struct {
+			name, file, src, prefix, want string
 		}{
 			{
-				"marks a deletion that leaves out the only use of a name runnable",
-				"unused.go",
-				`package fixture
+				name: "marks a deletion that leaves out the only use of a name runnable",
+				file: "unused.go",
+				src: `package fixture
 
 import (
 	"context"
@@ -620,8 +668,8 @@ func keep(s string, d time.Duration) (n int) {
 	return total + n
 }
 `,
-				"sbr-delete",
-				`keep sbr-delete 0: defer cancel() -> ""
+				prefix: string(spec.SBRDelete),
+				want: `keep sbr-delete 0: defer cancel() -> ""
 keep sbr-delete 1: os.Args = nil -> ""
 keep sbr-delete 2: total += len(s) -> ""
 keep sbr-delete 3: log = append(log, s) -> ""
@@ -636,9 +684,9 @@ keep sbr-delete 11: <-ctx.Done() -> ""
 `,
 			},
 			{
-				"marks a deletion that leaves out the only use of a type switch's symbol runnable",
-				"switch.go",
-				`package fixture
+				name: "marks a deletion that leaves out the only use of a type switch's symbol runnable",
+				file: "switch.go",
+				src: `package fixture
 
 func only(v any) int {
 	n := 0
@@ -651,16 +699,16 @@ func only(v any) int {
 	return n
 }
 `,
-				"sbr-delete",
-				`only sbr-delete 0: switch x := v.(type) { case string: n = len(x) case int: n = 1 } -> ""
+				prefix: string(spec.SBRDelete),
+				want: `only sbr-delete 0: switch x := v.(type) { case string: n = len(x) case int: n = 1 } -> ""
 only sbr-delete 1: n = len(x) -> ""
 only sbr-delete 2: n = 1 -> ""
 `,
 			},
 			{
-				"marks a deletion that leaves out the only use of a label runnable",
-				"labels.go",
-				`package fixture
+				name: "marks a deletion that leaves out the only use of a label runnable",
+				file: "labels.go",
+				src: `package fixture
 
 func first(xs []int) int {
 	i := 0
@@ -673,14 +721,13 @@ scan:
 	return i
 }
 `,
-				"sbr-delete",
-				`first sbr-delete 0: if xs[i] < 0 { break scan } -> ""
-`,
+				prefix: string(spec.SBRDelete),
+				want:   "first sbr-delete 0: if xs[i] < 0 { break scan } -> \"\"\n",
 			},
 			{
-				"marks a connector mutant that leaves out the only use of a name runnable",
-				"positive.go",
-				`package fixture
+				name: "marks a connector mutant that leaves out the only use of a name runnable",
+				file: "positive.go",
+				src: `package fixture
 
 func positive(m map[string]int, key string) bool {
 	if v, ok := m[key]; ok && v > 0 {
@@ -689,16 +736,16 @@ func positive(m map[string]int, key string) bool {
 	return false
 }
 `,
-				"lcr-",
-				`positive lcr-left 0: ok && v > 0 -> "ok"
+				prefix: "lcr-",
+				want: `positive lcr-left 0: ok && v > 0 -> "ok"
 positive lcr-right 0: ok && v > 0 -> "v > 0"
 positive lcr-false 0: ok && v > 0 -> "false"
 `,
 			},
 			{
-				"marks a return of zero values that leaves out the only use of a name runnable",
-				"results.go",
-				`package fixture
+				name: "marks a return of zero values that leaves out the only use of a name runnable",
+				file: "results.go",
+				src: `package fixture
 
 import "strings"
 
@@ -711,24 +758,24 @@ func upper(s string) string {
 	return strings.ToUpper(s)
 }
 `,
-				"sbr-zero",
-				`size sbr-zero 0: return n -> "return 0"
+				prefix: string(spec.SBRZero),
+				want: `size sbr-zero 0: return n -> "return 0"
 upper sbr-zero 0: return strings.ToUpper(s) -> "return \"\""
 `,
 			},
 		}
-		for _, tt := range tests {
-			tt := tt
+		for _, tt := range leftOut {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				r := enumerateFixture(t, map[string]string{tt.file: tt.give})
-				want(t, listing(r, tt.prefix), tt.want)
-				want(t, statuses(r), "")
+				r := all(t, map[string]string{tt.file: tt.src})
+				expect.Equal(t, listing(r, tt.prefix), tt.want, "every mutant of the left-out use is made")
+				expect.Empty(t, statuses(r), "and runs")
 			})
 		}
+
 		t.Run("marks a division of an integer by a constant 0 not viable", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"scale.go": `package fixture
+			r := all(t, map[string]string{"scale.go": `package fixture
 
 const off = 0
 
@@ -741,7 +788,7 @@ func scale(x, y int, f float64) (int, int, float64) {
 	return a + b + c, x, f * 0
 }
 `})
-			want(t, listing(r, "aor"), `scale aor 0: x * 0 -> "x / 0" not-viable
+			assert.Equal(t, listing(r, string(spec.AOR)), `scale aor 0: x * 0 -> "x / 0" not-viable
 scale aor 1: x * off -> "x / off" not-viable
 scale aor 2: x * y -> "x / y"
 scale aor 3: x *= 0 -> "x /= 0" not-viable
@@ -749,30 +796,29 @@ scale aor 4: f *= 0 -> "f /= 0"
 scale aor 5: a + b + c -> "a + b - c"
 scale aor 6: a + b -> "a - b"
 scale aor 7: f * 0 -> "f / 0"
-`)
-			// The type checker rejects each not-viable mutant with its reason
-			// and accepts each other mutant.
+`, "an integer division by a constant 0 is not viable")
 			for _, m := range r.Mutants {
-				if m.Kind != enumerate.AOR {
+				if m.Kind != spec.AOR {
 					continue
 				}
 				text := string(m.Site.File.Text)
 				mutated := text[:m.Site.Start] + m.Replacement + text[m.Site.End:]
 				fset := token.NewFileSet()
 				f, err := parser.ParseFile(fset, m.Site.File.Name, mutated, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
+				assert.NoError(t, err, "the mutated file parses")
 				_, err = new(types.Config).Check("fixture", fset, []*ast.File{f}, nil)
-				var e types.Error
-				if errors.As(err, &e) != (m.Status == enumerate.NotViable) || e.Msg != m.Reason {
-					t.Errorf("%s has the reason %q, and the type checker reports %v", m.Replacement, m.Reason, err)
+				if m.Status != enumerate.NotViable {
+					expect.NoError(t, err, "the type checker accepts "+m.Replacement)
+					continue
 				}
+				rejection := assert.ErrorAs[types.Error](t, err, "the type checker rejects "+m.Replacement)
+				expect.Equal(t, rejection.Msg, m.Reason, "and the mutant's reason is the type checker's message")
 			}
 		})
-		t.Run("keeps a last statement that terminates its list", func(t *testing.T) {
+
+		t.Run("keeps a final statement that terminates its list", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"terminating.go": `package fixture
+			r := all(t, map[string]string{"terminating.go": `package fixture
 
 func terminating(n int, ch chan int) int {
 	switch n {
@@ -850,15 +896,21 @@ func labelled() {
 	}
 }
 `})
-			want(t, listing(r, "sbr-delete"), `types sbr-delete 0: switch x.(type) { case int: return 1 } -> ""
+			assert.Equal(
+				t,
+				listing(r, string(spec.SBRDelete)),
+				`types sbr-delete 0: switch x.(type) { case int: return 1 } -> ""
 open sbr-delete 0: switch n { case 0: } -> ""
 calls sbr-delete 0: f() -> ""
 calls sbr-delete 1: (f)() -> ""
-`)
+`,
+				"only the statements that are not final or not terminating are deleted",
+			)
 		})
-		t.Run("deletes a last statement that does not terminate its list", func(t *testing.T) {
+
+		t.Run("deletes a final statement that the Go specification does not call terminating", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"open.go": `package fixture
+			r := all(t, map[string]string{"final.go": `package fixture
 
 import "fmt"
 
@@ -882,22 +934,75 @@ func cases(n int) {
 		n++
 	}
 }
+
+func loop(ch chan int) {
+	for {
+		if <-ch == 0 {
+			break
+		}
+	}
+}
+
+func classify(n int) {
+	switch {
+	case n > 0:
+		panic("positive")
+	}
+}
+
+func fail(err error) {
+	if err != nil {
+		(panic(err))
+	}
+}
+
+func drain(ch chan int) int {
+	for {
+		select {
+		case v := <-ch:
+			if v < 0 {
+				break
+			}
+			return v
+		}
+	}
+}
+
+func block() int {
+	{
+		return 1
+		;
+	}
+}
+
+func empty() {
+	{
+	}
+}
 `})
-			want(t, listing(r, "sbr-delete"), `receives sbr-delete 0: <-ch -> ""
+			assert.Equal(t, listing(r, string(spec.SBRDelete)), `receives sbr-delete 0: <-ch -> ""
 methods sbr-delete 0: s.String() -> ""
 typeswitch sbr-delete 0: switch x.(type) { case int: } -> ""
 cases sbr-delete 0: switch n { case 1: n++ } -> ""
-`)
+loop sbr-delete 0: for { if <-ch == 0 { break } } -> ""
+loop sbr-delete 1: if <-ch == 0 { break } -> ""
+classify sbr-delete 0: switch { case n > 0: panic("positive") } -> ""
+fail sbr-delete 0: if err != nil { (panic(err)) } -> ""
+drain sbr-delete 0: select { case v := <-ch: if v < 0 { break } return v } -> ""
+drain sbr-delete 1: if v < 0 { break } -> ""
+empty sbr-delete 0: { } -> ""
+`, "a final loop with a break, a switch without a default and a select with a break are deleted")
 		})
+
 		t.Run("compares values of every type for equality", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"eq.go": `package fixture
+			r := all(t, map[string]string{"eq.go": `package fixture
 
 func eq(i any, xs []int, p *int, f func()) bool {
 	return i == 3 && xs != nil && p == nil && f != nil
 }
 `})
-			want(t, listing(r, "ror-"), `eq ror-true 0: i == 3 -> "true"
+			expect.Equal(t, listing(r, "ror-"), `eq ror-true 0: i == 3 -> "true"
 eq ror-false 0: i == 3 -> "false"
 eq ror-true 1: xs != nil -> "true"
 eq ror-false 1: xs != nil -> "false"
@@ -905,11 +1010,10 @@ eq ror-true 2: p == nil -> "true"
 eq ror-false 2: p == nil -> "false"
 eq ror-true 3: f != nil -> "true"
 eq ror-false 3: f != nil -> "false"
-`)
-			if len(r.Skipped) != 0 {
-				t.Errorf("skipped %v, want none", r.Skipped)
-			}
+`, "every equality has its two mutants")
+			expect.Empty(t, r.Skipped, "and no equality is skipped")
 		})
+
 		t.Run("negates no operand of a connector that is a site", func(t *testing.T) {
 			t.Parallel()
 			src := `package fixture
@@ -924,16 +1028,22 @@ func operands(a, b, c bool, d flag) bool {
 
 func f(c bool) bool { return c }
 `
-			r := enumerateFixture(t, map[string]string{"operands.go": src})
-			want(t, listing(r, "uoi-not"), `operands uoi-not 0: c -> "!c"
+			r := all(t, map[string]string{"operands.go": src})
+			expect.Equal(t, listing(r, string(spec.UOINot)), `operands uoi-not 0: c -> "!c"
 operands uoi-not 1: c -> "!c"
 f uoi-not 0: c -> "!c"
-`)
-			want(t, skipped(r, src), "d && flag(c): named boolean result\n")
+`, "only the operands of a skipped connector and of calls are negated")
+			expect.Equal(
+				t,
+				skipped(r, src),
+				"d && flag(c): named boolean result\n",
+				"and the connector of a named boolean is skipped",
+			)
 		})
+
 		t.Run("treats an alias of bool as bool", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"alias.go": `package fixture
+			r := all(t, map[string]string{"alias.go": `package fixture
 
 type truth = bool
 
@@ -941,9 +1051,8 @@ func alias(a, b int) truth {
 	return a < b
 }
 `})
-			if len(r.Skipped) != 0 || !strings.Contains(listing(r, "ror-boundary"), "a < b") {
-				t.Errorf("skipped %v and listing:\n%s\nwant a < b mutated", r.Skipped, listing(r, ""))
-			}
+			expect.Empty(t, r.Skipped, "the comparison is not skipped")
+			expect.Contains(t, listing(r, string(spec.RORBoundary)), "a < b", "and has its boundary mutant")
 		})
 	})
 }

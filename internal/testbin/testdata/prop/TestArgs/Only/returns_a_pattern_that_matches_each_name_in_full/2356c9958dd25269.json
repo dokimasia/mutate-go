@@ -1,0 +1,25 @@
+{
+  "store": 1,
+  "definition": "5.0.0",
+  "property": "the pattern of Only matches each of its names in full",
+  "identity": {
+    "assertion": "false",
+    "file": "args_test.go",
+    "line": 86
+  },
+  "choices": "prop1:AAEDAgMFAAEDAQMAAA",
+  "counterexample": [
+    {
+      "label": "names",
+      "value": {
+        "type": "list",
+        "of": "string",
+        "value": [
+          "tx",
+          "t"
+        ]
+      }
+    }
+  ],
+  "found": "2026-10-06"
+}

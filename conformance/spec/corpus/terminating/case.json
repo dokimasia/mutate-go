@@ -1,0 +1,22 @@
+{
+  "case": "terminating",
+  "proves": "The final statement of a list is deleted unless the language's overlay calls it terminating. In Go, a loop without a condition that a break ends, and a switch without a default clause, are not terminating, even when every clause of the switch ends in a return.",
+  "fixture": "sum.prefix adds the values of a list before the first 0, in a loop without a condition that a break ends. grade sets a grade in a switch without a default clause, whose every clause ends in a return. Each is the final statement of its function.",
+  "mutants": [
+    { "scope": "sum.prefix", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "sum.prefix", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "sum.prefix", "kind": "ror-true", "nth": 0, "verdict": "killed" },
+    { "scope": "sum.prefix", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "sum.prefix", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "sum.prefix", "kind": "sbr-delete", "nth": 2, "verdict": "killed" },
+    { "scope": "sum.prefix", "kind": "uoi-incdec", "nth": 0, "verdict": "killed" },
+    { "scope": "grade", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "grade", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
+    { "scope": "grade", "kind": "ror-true", "nth": 0, "verdict": "killed" },
+    { "scope": "grade", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "grade", "kind": "ror-boundary", "nth": 1, "verdict": "killed" },
+    { "scope": "grade", "kind": "ror-true", "nth": 1, "verdict": "killed" },
+    { "scope": "grade", "kind": "sbr-delete", "nth": 2, "verdict": "killed" }
+  ],
+  "errors": []
+}

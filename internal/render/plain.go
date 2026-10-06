@@ -11,6 +11,7 @@ import (
 
 	"go.dokimi.dev/mutate/internal/enumerate"
 	"go.dokimi.dev/mutate/internal/load"
+	"go.dokimi.dev/mutate/internal/spec"
 )
 
 // Plain returns the program whose one file is the file of m's site, with m
@@ -51,7 +52,7 @@ func Plain(p *load.Package, m *enumerate.Mutant) *Program {
 	// The change is head, the line breaks that it removes, and body.
 	var head, body string
 	switch m.Kind {
-	case enumerate.AOR, enumerate.RORBoundary, enumerate.UOIIncDec:
+	case spec.AOR, spec.RORBoundary, spec.UOIIncDec:
 		var at token.Pos
 		var op string
 		head = m.Op.String()
@@ -65,33 +66,33 @@ func Plain(p *load.Package, m *enumerate.Mutant) *Program {
 		}
 		start = off(at)
 		end = start + len(op)
-	case enumerate.RORTrue:
+	case spec.RORTrue:
 		head = "(" + source(s.Node) + " || true)"
-	case enumerate.RORFalse:
+	case spec.RORFalse:
 		head = "(" + source(s.Node) + " && false)"
-	case enumerate.LCRLeft, enumerate.LCRRight, enumerate.LCRTrue, enumerate.LCRFalse:
+	case spec.LCRLeft, spec.LCRRight, spec.LCRTrue, spec.LCRFalse:
 		n := s.Node.(*ast.BinaryExpr)
 		x, y := "("+source(n.X)+")", "("+source(n.Y)+")"
 		switch m.Kind {
-		case enumerate.LCRLeft:
+		case spec.LCRLeft:
 			head, body = "("+x+" || false && ", y+")"
-		case enumerate.LCRRight:
+		case spec.LCRRight:
 			head, body = "(false && "+x+" || ", y+")"
-		case enumerate.LCRTrue:
+		case spec.LCRTrue:
 			head, body = "(true || "+x+" || ", y+")"
 		default:
 			head, body = "(false && ("+x+" && ", y+"))"
 		}
-	case enumerate.UOINot:
+	case spec.UOINot:
 		head = "!(" + source(s.Node) + ")"
 		if n, ok := s.Node.(*ast.UnaryExpr); ok && n.Op == token.NOT {
 			head, body = "(", source(n.X)+")"
 		}
-	case enumerate.UOIMinus:
+	case spec.UOIMinus:
 		head, body = "(", source(s.Node.(*ast.UnaryExpr).X)+")"
-	case enumerate.SBRDelete:
+	case spec.SBRDelete:
 		head = "if false { " + source(s.Node) + " }"
-	case enumerate.SBRZero:
+	case spec.SBRZero:
 		head = "if true { return " + strings.Join(s.Zeros, ", ") + " }; " + source(s.Node)
 	}
 	breaks := bytes.Count(text[start:end], []byte("\n")) - strings.Count(head+body, "\n")

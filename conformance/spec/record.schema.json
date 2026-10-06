@@ -133,15 +133,22 @@
       ]
     },
     "sample": {
-      "description": "The mutants that the score counts and whose keys sort before the first key of a mutant that did not run, when the caller's deadline or the caller ended the mutant runs, or null.",
+      "description": "The mutants that the score counts and whose keys sort before the first key of a mutant that did not run, when the caller's limit on the number of mutant runs, the caller's deadline or the caller ended the mutant runs, or null.",
       "oneOf": [
         { "type": "null" },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["before", "detected", "undetected", "score"],
+          "required": ["before", "limit", "detected", "undetected", "score"],
           "properties": {
             "before": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+            "limit": {
+              "description": "The number of mutant runs that the caller allowed, when that limit alone ended the mutant runs, or null when the caller's deadline or the caller ended them.",
+              "oneOf": [
+                { "type": "null" },
+                { "type": "integer", "minimum": 1 }
+              ]
+            },
             "detected": { "type": "integer", "minimum": 0 },
             "undetected": { "type": "integer", "minimum": 0 },
             "score": {
@@ -157,15 +164,19 @@
     "mutants": { "type": "array", "items": { "$ref": "#/$defs/mutant" } },
     "skipped": { "type": "array", "items": { "$ref": "#/$defs/skip" } },
     "generated": {
-      "description": "Each generated file of the target that the run leaves out, in the order of the target's files, with the number of mutants that the catalogue's kinds make at its sites. A generated file with the include directive is the target's own code and is not listed.",
+      "description": "Each generated file of the target without the include directive, in the order of the target's files, with the number of mutants that the catalogue's kinds make at its sites, and whether the run included it. A generated file with the include directive is the target's own code and is not listed.",
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["file", "mutants"],
+        "required": ["file", "mutants", "included"],
         "properties": {
           "file": { "$ref": "#/$defs/file" },
-          "mutants": { "type": "integer", "minimum": 0 }
+          "mutants": { "type": "integer", "minimum": 0 },
+          "included": {
+            "description": "True when the caller included generated files, so the record lists the file's mutants and the score counts them. False when the run left the file out.",
+            "type": "boolean"
+          }
         }
       }
     }

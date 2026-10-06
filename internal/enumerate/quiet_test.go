@@ -3,7 +3,11 @@
 
 package enumerate_test
 
-import "testing"
+import (
+	"testing"
+
+	"go.dokimi.dev/assert"
+)
 
 // quiet is a fixture of compound statements whose bodies log, with and
 // without other effects in their bodies and headers.
@@ -100,12 +104,17 @@ func nothing(ok bool) {
 
 func TestQuiet(t *testing.T) {
 	t.Parallel()
+
 	t.Run("Enumerate", func(t *testing.T) {
 		t.Parallel()
+
 		t.Run("suppresses each compound statement whose bodies only make calls of a family", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"quiet.go": quiet})
-			want(t, listing(r, ""), `warn sbr-delete 0: if err != nil { log.Printf("warning: %v", err) } -> "" [logging]
+			r := all(t, map[string]string{"quiet.go": quiet})
+			assert.Equal(
+				t,
+				listing(r, ""),
+				`warn sbr-delete 0: if err != nil { log.Printf("warning: %v", err) } -> "" [logging]
 warn ror-true 0: err != nil -> "true" [logging]
 warn ror-false 0: err != nil -> "false" [logging]
 warn sbr-delete 1: log.Printf("warning: %v", err) -> "" [logging]
@@ -161,12 +170,16 @@ count sbr-delete 3: log.Print(xs[n]) -> "" [logging]
 count sbr-zero 0: return n -> "return 0"
 nothing sbr-delete 0: if ok { } -> ""
 nothing uoi-not 0: ok -> "!ok"
-`)
+`,
+				"a family suppresses a statement whose header has no effect and whose bodies only call its APIs",
+			)
 		})
+
 		t.Run("suppresses only a compound statement whose every part has no effect", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"edges.go": edges})
-			want(t, listing(r, "sbr-delete"), edgeDeletions)
+			r := all(t, map[string]string{"edges.go": edges})
+			assert.Equal(t, listing(r, "sbr-delete"), edgeDeletions,
+				"a header with an effect, a body with another effect and a select keep their deletions")
 		})
 	})
 }
@@ -315,10 +328,12 @@ cases sbr-delete 2: switch { case f(): log.Print("f") } -> ""
 cases sbr-delete 3: log.Print("f") -> "" [logging]
 cases sbr-delete 4: switch f() { case true: log.Print("true") } -> ""
 cases sbr-delete 5: log.Print("true") -> "" [logging]
+cases sbr-delete 6: switch { case n > 1: return } -> ""
 types sbr-delete 0: switch v := x.(type) { case int: log.Print(v) } -> "" [logging]
 types sbr-delete 1: log.Print(v) -> "" [logging]
 types sbr-delete 2: switch v := g().(type) { case int: log.Print(v) } -> ""
 types sbr-delete 3: log.Print(v) -> "" [logging]
+types sbr-delete 4: switch x.(type) { case string: return } -> ""
 headers sbr-delete 0: if <-ch { log.Print("received") } -> ""
 headers sbr-delete 1: log.Print("received") -> "" [logging]
 headers sbr-delete 2: if copy(a, b) > 0 { log.Print("copied") } -> ""

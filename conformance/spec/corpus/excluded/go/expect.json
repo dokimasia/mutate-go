@@ -55,7 +55,8 @@
   "generated": [
     {
       "file": "generated.go",
-      "mutants": 2
+      "mutants": 2,
+      "included": false
     }
   ],
   "errors": []

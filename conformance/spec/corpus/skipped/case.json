@@ -1,0 +1,12 @@
+{
+  "case": "skipped",
+  "proves": "A site that a skip rule of the language's overlay names has no mutant, and the record lists it as skipped with the rule's reason. The other sites of the same statements keep their mutants.",
+  "fixture": "sum adds two values of a type parameter whose constraint embeds another. positive returns a comparison as a named boolean type. bump adds to an element of a list in place. later compares a duration with a shift of an untyped constant.",
+  "mutants": [
+    { "scope": "sum", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "positive", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "bump", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "later", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

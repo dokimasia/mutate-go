@@ -8,25 +8,26 @@ import (
 	"strings"
 	"testing"
 
+	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/expect"
+
 	"go.dokimi.dev/mutate/internal/enumerate"
+	"go.dokimi.dev/mutate/internal/spec"
 )
 
-// problems writes one line per problem: its code and its message.
-func problems(r *enumerate.Result) string {
-	var b strings.Builder
-	for _, p := range r.Problems {
-		fmt.Fprintf(&b, "%s %s\n", p.Code, p.Message)
-	}
-	return b.String()
-}
+// annotation is the comment marker and the name of an annotation, as an
+// annotation of a fixture writes them.
+var annotation = spec.Load().Overlay.Comment + spec.Load().Catalogue.Annotation
 
 func TestSuppress(t *testing.T) {
 	t.Parallel()
+
 	t.Run("Enumerate", func(t *testing.T) {
 		t.Parallel()
+
 		t.Run("suppresses the calls and arguments of the rule families", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"rules.go": `package fixture
+			r := all(t, map[string]string{"rules.go": `package fixture
 
 import (
 	"log"
@@ -52,8 +53,12 @@ func sizes(n int) ([]int, map[int]int, string) {
 	b.Grow(n * 3)
 	return s, m, b.String()
 }
+
+func pipe(n int) chan int {
+	return make(chan int, n+1)
+}
 `})
-			want(t, listing(r, ""), `logs sbr-delete 0: defer log.Println("done") -> "" [logging]
+			assert.Equal(t, listing(r, ""), `logs sbr-delete 0: defer log.Println("done") -> "" [logging]
 logs sbr-delete 1: log.Printf("n=%d", n+1) -> "" [logging]
 logs aor 0: n+1 -> "n-1" [logging]
 logs sbr-zero 0: return n -> "return 0"
@@ -67,11 +72,14 @@ sizes aor 2: n+1 -> "n-1" [capacity]
 sizes sbr-delete 0: b.Grow(n * 3) -> ""
 sizes aor 3: n * 3 -> "n / 3" [capacity]
 sizes sbr-zero 0: return s, m, b.String() -> "return nil, nil, \"\""
-`)
+pipe sbr-zero 0: return make(chan int, n+1) -> "return nil"
+pipe aor 0: n+1 -> "n-1"
+`, "each family suppresses what its rules name, and no rule names the buffer of a channel")
 		})
+
 		t.Run("suppresses the marks of test helpers by their APIs and by the method rule", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"helpers.go": `package fixture
+			r := all(t, map[string]string{"helpers.go": `package fixture
 
 import "testing"
 
@@ -115,20 +123,21 @@ func viaOther(m marker, c concrete) {
 	c.Helper()
 }
 `})
-			want(t, listing(r, "sbr-delete"), `viaTB sbr-delete 0: tb.Helper() -> "" [helper]
+			assert.Equal(t, listing(r, string(spec.SBRDelete)), `viaTB sbr-delete 0: tb.Helper() -> "" [helper]
 viaT sbr-delete 0: t.Helper() -> "" [helper]
 viaF sbr-delete 0: f.Helper() -> "" [helper]
 viaOwn sbr-delete 0: tb.Helper() -> "" [helper]
 viaConstraint sbr-delete 0: tb.Helper() -> "" [helper]
 viaOther sbr-delete 0: m.Helper(1) -> ""
 viaOther sbr-delete 1: c.Helper() -> ""
-`)
+`, "a mark through an API or an interface's method is suppressed, and another method is not")
 		})
+
 		t.Run(
 			"suppresses the calls of a variable whose every value is the cancel function of a deadline",
 			func(t *testing.T) {
 				t.Parallel()
-				r := enumerateFixture(t, map[string]string{"cancel.go": `package fixture
+				r := all(t, map[string]string{"cancel.go": `package fixture
 
 import (
 	"context"
@@ -219,7 +228,7 @@ func other(b *box, m map[string]int, xs []int) int {
 	return 0
 }
 `})
-				want(t, listing(r, "sbr-delete"), `stop sbr-delete 0: (*f)() -> ""
+				assert.Equal(t, listing(r, string(spec.SBRDelete)), `stop sbr-delete 0: (*f)() -> ""
 declared sbr-delete 0: defer cancel() -> "" [timing]
 valued sbr-delete 0: defer cancel() -> "" [timing]
 assigned sbr-delete 0: parent, cancel = context.WithDeadline(parent, d) -> ""
@@ -246,33 +255,33 @@ other sbr-delete 0: b.n = 1 -> ""
 other sbr-delete 1: for i := range xs { v += i } -> ""
 other sbr-delete 2: v += i -> ""
 other sbr-delete 3: if ok { return v } -> ""
-`)
+`, "the result rule suppresses a local variable's calls only where every value is a deadline's cancel function")
 			},
 		)
+
 		t.Run("states the rule and no reason of a not-viable mutant that a rule family suppresses", func(t *testing.T) {
 			t.Parallel()
 			// The aor mutant of n * 0 divides an integer by a constant 0, which
 			// the compiler rejects.
-			r := enumerateFixture(t, map[string]string{"logs.go": `package fixture
-
-import "log"
-
-func logs(n int) {
-	log.Println(n * 0)
-}
-`})
+			r := all(
+				t,
+				map[string]string{
+					"logs.go": "package fixture\n\nimport \"log\"\n\nfunc logs(n int) {\n\tlog.Println(n * 0)\n}\n",
+				},
+			)
 			for _, m := range r.Mutants {
-				if m.Kind == enumerate.AOR &&
-					(m.Status != enumerate.Suppressed || m.Rule != "logging" || m.Reason != "") {
-					t.Errorf(
-						"aor has status %d, rule %q and reason %q, want suppressed by logging",
-						m.Status,
-						m.Rule,
-						m.Reason,
+				if m.Kind == spec.AOR {
+					expect.Equal(t, m.Status, enumerate.Suppressed, "the suppression ranks before the rejection")
+					expect.Equal(
+						t,
+						string(m.Rule)+" "+m.Reason,
+						"logging ",
+						"and the mutant states its family and no reason",
 					)
 				}
 			}
 		})
+
 		t.Run("resolves the API of a call through embedding, instantiation and go statements", func(t *testing.T) {
 			t.Parallel()
 			calls := `package fixture
@@ -297,30 +306,31 @@ func calls(s service, xs []int, n int) []int {
 }
 `
 			other := "package fixture\n\nconst b = 2 * 2\n\nfunc other(n int) int { return n - 1 }\n"
-			r := enumerateFixture(t, map[string]string{"calls.go": calls, "other.go": other})
-			want(t, listing(r, "aor"), `calls aor 0: n+1 -> "n-1" [logging]
+			r := all(t, map[string]string{"calls.go": calls, "other.go": other})
+			expect.Equal(t, listing(r, string(spec.AOR)), `calls aor 0: n+1 -> "n-1" [logging]
 calls aor 1: n - 1 -> "n + 1" [logging]
 calls aor 2: n+2 -> "n-2"
 calls aor 3: n * 2 -> "n / 2"
 calls aor 4: n*3 -> "n/3" [capacity]
 calls aor 5: n*2 -> "n/2" [capacity]
 other aor 0: n - 1 -> "n + 1"
-`)
-			want(t, listing(r, "sbr-delete"), `calls sbr-delete 0: s.Printf("%d", n+1) -> "" [logging]
+`, "an embedded method and an instantiated function resolve to their APIs")
+			expect.Equal(t, listing(r, string(spec.SBRDelete)), `calls sbr-delete 0: s.Printf("%d", n+1) -> "" [logging]
 calls sbr-delete 1: go log.Println(n - 1) -> "" [logging]
 calls sbr-delete 2: close(ch) -> ""
 calls sbr-delete 3: n = n * 2 -> ""
 calls sbr-delete 4: xs = slices.Grow[[]int, int](xs, n*3) -> ""
-`)
+`, "and a go statement of a family's call is suppressed")
 			var files []string
 			for _, s := range r.Skipped {
 				files = append(files, s.File)
 			}
-			want(t, strings.Join(files, " "), "calls.go other.go")
+			expect.Equal(t, files, []string{"calls.go", "other.go"}, "the skipped constants are in file order")
 		})
+
 		t.Run("suppresses the annotated kinds on one line", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"notes.go": `package fixture
+			r := all(t, map[string]string{"notes.go": `package fixture
 
 func best(xs []int) int {
 	top := 0
@@ -347,52 +357,75 @@ func clamp(x int) int {
 					fmt.Fprintf(&b, "%s %s %d: %s\n", m.Site.Scope, m.Kind, n[m], m.Reason)
 				}
 			}
-			want(t, b.String(), `best ror-boundary 0: an equal value leaves top unchanged
+			expect.Equal(t, b.String(), `best ror-boundary 0: an equal value leaves top unchanged
 clamp ror-boundary 0: the caller checks the bound
 clamp ror-false 0: the caller checks the bound
-`)
-			if len(r.Problems) != 0 {
-				t.Errorf("problems %v, want none", r.Problems)
-			}
+`, "an annotation suppresses its kinds and its classes on its line")
+			expect.Empty(t, r.Problems, "and no annotation fails")
 		})
-		t.Run("reports an annotation without a reason or without a mutant", func(t *testing.T) {
-			t.Parallel()
-			tests := []struct {
-				name, give, want string
-			}{
-				{"no reason", "if x > 1 { //dokimi:mutate-skip ror-boundary", "annotation-without-reason"},
-				{"empty reason", "if x > 1 { //dokimi:mutate-skip ror-boundary:  ", "annotation-without-reason"},
-				{"stale", "if x > 1 { //dokimi:mutate-skip aor: no arithmetic here", "stale-annotation"},
-				{"unknown kind", "if x > 1 { //dokimi:mutate-skip ror-bound: a misspelt kind", "stale-annotation"},
-				{"another directive", "if x > 1 { //dokimi:mutate-skipped ror-boundary: another directive", ""},
-				{"two kinds", "if x > 1 { //dokimi:mutate-skip ror-boundary, sbr: two kinds", ""},
-				{"every kind", "if x > 1 { //dokimi:mutate-skip all: every kind", ""},
-				{"next line", "//dokimi:mutate-skip ror-boundary: on the line below\n\tif x > 1 {", ""},
-				{
-					"two lines above",
-					"//dokimi:mutate-skip ror-boundary: two lines below\n\n\tif x > 1 {",
-					"stale-annotation",
-				},
-			}
-			for _, tt := range tests {
-				tt := tt
-				t.Run(tt.name, func(t *testing.T) {
-					t.Parallel()
-					src := "package fixture\n\nfunc f(x int) int {\n\t" + tt.give + "\n\t\treturn 1\n\t}\n\treturn x\n}\n"
-					r := enumerateFixture(t, map[string]string{"f.go": src})
-					var codes []string
-					for _, p := range r.Problems {
-						codes = append(codes, p.Code)
-					}
-					if got := strings.Join(codes, " "); got != tt.want {
-						t.Errorf("problem codes %q, want %q", got, tt.want)
-					}
-				})
-			}
-		})
+
+		annotations := []struct {
+			name, line string
+			want       []spec.ErrorCode
+		}{
+			{
+				name: "returns annotation-without-reason for an annotation without a reason",
+				line: "if x > 1 { " + annotation + " ror-boundary",
+				want: []spec.ErrorCode{spec.ErrorWithoutReason},
+			},
+			{
+				name: "returns annotation-without-reason for an annotation with an empty reason",
+				line: "if x > 1 { " + annotation + " ror-boundary:  ",
+				want: []spec.ErrorCode{spec.ErrorWithoutReason},
+			},
+			{
+				name: "returns stale-annotation for an annotation that suppresses no mutant",
+				line: "if x > 1 { " + annotation + " aor: no arithmetic here",
+				want: []spec.ErrorCode{spec.ErrorStale},
+			},
+			{
+				name: "returns stale-annotation for an annotation of an unknown kind",
+				line: "if x > 1 { " + annotation + " ror-bound: a misspelt kind",
+				want: []spec.ErrorCode{spec.ErrorStale},
+			},
+			{
+				name: "returns no problem for another directive",
+				line: "if x > 1 { " + annotation + "ped ror-boundary: another directive",
+			},
+			{
+				name: "returns no problem for an annotation of two kinds",
+				line: "if x > 1 { " + annotation + " ror-boundary, sbr: two kinds",
+			},
+			{
+				name: "returns no problem for an annotation of every kind",
+				line: "if x > 1 { " + annotation + " " + spec.Load().Catalogue.Every + ": every kind",
+			},
+			{
+				name: "returns no problem for an annotation on the line before its site",
+				line: annotation + " ror-boundary: on the line below\n\tif x > 1 {",
+			},
+			{
+				name: "returns stale-annotation for an annotation two lines before its site",
+				line: annotation + " ror-boundary: two lines below\n\n\tif x > 1 {",
+				want: []spec.ErrorCode{spec.ErrorStale},
+			},
+		}
+		for _, tt := range annotations {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				src := "package fixture\n\nfunc f(x int) int {\n\t" + tt.line + "\n\t\treturn 1\n\t}\n\treturn x\n}\n"
+				r := all(t, map[string]string{"f.go": src})
+				var codes []spec.ErrorCode
+				for _, p := range r.Problems {
+					codes = append(codes, p.Code)
+				}
+				assert.Equal(t, codes, tt.want, "the enumeration states the annotation's run errors")
+			})
+		}
+
 		t.Run("names the annotation's file and line in a problem", func(t *testing.T) {
 			t.Parallel()
-			r := enumerateFixture(t, map[string]string{"f.go": `package fixture
+			r := all(t, map[string]string{"f.go": `package fixture
 
 func f(x int) int {
 	if x > 1 { //dokimi:mutate-skip ror-boundary
@@ -402,9 +435,28 @@ func f(x int) int {
 	return x
 }
 `})
-			want(t, problems(r), `annotation-without-reason f.go:4: the annotation states no reason
+			assert.Equal(t, problems(r), `annotation-without-reason f.go:4: the annotation states no reason
 stale-annotation f.go:7: the annotation suppresses no mutant
-`)
+`, "each problem names the comment's file and line")
+		})
+
+		t.Run("names each kind of a stale annotation that the catalogue does not define", func(t *testing.T) {
+			t.Parallel()
+			r := all(t, map[string]string{"f.go": `package fixture
+
+func f(x int) int {
+	if x > 1 { //dokimi:mutate-skip ror-bound, sbr-zeros: two misspelt kinds
+		return 1
+	}
+	return x
+}
+`})
+			assert.Equal(
+				t,
+				problems(r),
+				"stale-annotation f.go:4: the annotation suppresses no mutant, and the catalogue does not define ror-bound or sbr-zeros\n",
+				"the message names the misspelt kinds",
+			)
 		})
 	})
 }

@@ -1,6 +1,7 @@
 {
   "key": "dokimi-mutate-key/1",
   "annotation": "dokimi:mutate-skip",
+  "every": "all",
   "include": "dokimi:mutate-include",
   "classes": [
     {

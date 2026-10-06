@@ -8,10 +8,8 @@
 // Render replaces each site that has a runnable mutant with a form that
 // switches on the active mutant, and adds a helper file that declares the
 // switch. The test binary reads the active mutant's ordinal from the
-// protocol's variable, DOKIMI_MUTATE_MUTANT, when the package initializes.
-// When DOKIMI_MUTATE_TRACE names a file, the binary appends the line start
-// to it when the package initializes, and the first ordinal of each site
-// the first time that the site executes.
+// variable that the caller passes, the protocol's DOKIMI_MUTATE_MUTANT,
+// when the package initializes.
 //
 // A form writes each operand once, evaluates it as the active mutant's
 // expression does, and adds no line, so every line of an instrumented file
@@ -25,6 +23,14 @@
 // out behind a constant that skips it, so a name that only that code uses
 // remains in use. A test of a property of the build, such as an
 // allocation count, runs against that build as against the package's own.
+//
+// # Trace
+//
+// When the variable [TraceVar] names a file, the instrumented package
+// appends the line start to it when it initializes, and the first ordinal
+// of each site, one line each, the first time that the site executes.
+// [ParseTrace] reads that file, so the writer and the reader of the format
+// are in this package.
 //
 // # Dependency position
 //

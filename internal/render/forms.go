@@ -15,6 +15,7 @@ import (
 
 	"go.dokimi.dev/mutate/internal/enumerate"
 	"go.dokimi.dev/mutate/internal/load"
+	"go.dokimi.dev/mutate/internal/spec"
 )
 
 // span is the range of one site's form in an instrumented text.
@@ -152,9 +153,9 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		var left, right, always int
 		for i, m := range s.Mutants {
 			switch m.Kind {
-			case enumerate.LCRLeft:
+			case spec.LCRLeft:
 				left = o + i
-			case enumerate.LCRRight:
+			case spec.LCRRight:
 				right = o + i
 			default:
 				always = o + i
@@ -233,15 +234,23 @@ func typeArgs(s *enumerate.Site) string {
 	return "[" + s.TypeArg + "]"
 }
 
+// languagePrefix starts every Go language version after Go 1, such as
+// go1.21.
+const languagePrefix = "go1."
+
+// buildConstraint is the build constraint line that requires the language
+// version go1.N, where N is its verb.
+const buildConstraint = "//go:build " + languagePrefix + "%d\n"
+
 // liftVersion returns the prefix of f's instrumented text, and f's text
 // with each build constraint line before the package clause blanked. The
 // prefix is a build constraint that requires go1.18 or the version that
 // f's own constraint requires, whichever is later, and a line directive
-// that numbers the line after it 1. The file is in the build, so its own
-// constraint holds for the build, and only the version it implies is kept.
+// that numbers the line after it 1. The file is in the build, so the build
+// satisfies its own constraint, and only the version that it implies stays.
 func liftVersion(fset *token.FileSet, f *load.File) (string, []byte) {
 	text := append([]byte(nil), f.Text...)
-	minor := 18
+	minor := generics
 	for _, group := range f.Syntax.Comments {
 		if group.Pos() >= f.Syntax.Package {
 			break
@@ -257,11 +266,11 @@ func liftVersion(fset *token.FileSet, f *load.File) (string, []byte) {
 			copy(text[start:end], bytes.Repeat([]byte(" "), end-start))
 		}
 	}
-	return fmt.Sprintf("//go:build go1.%d\n//line %s:1:1\n", minor, f.Path), text
+	return fmt.Sprintf(buildConstraint+"//line %s:1:1\n", minor, f.Path), text
 }
 
 // goMinor returns N of the version go1.N, and 0 for no version.
 func goMinor(version string) int {
-	n, _ := strconv.Atoi(strings.TrimPrefix(version, "go1."))
+	n, _ := strconv.Atoi(strings.TrimPrefix(version, languagePrefix))
 	return n
 }

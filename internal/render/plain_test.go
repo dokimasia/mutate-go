@@ -7,14 +7,19 @@ import (
 	"path/filepath"
 	"testing"
 
+	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/expect"
+
 	"go.dokimi.dev/mutate/internal/enumerate"
 	"go.dokimi.dev/mutate/internal/render"
 )
 
 func TestPlain(t *testing.T) {
 	t.Parallel()
+
 	t.Run("Plain", func(t *testing.T) {
 		t.Parallel()
+
 		t.Run("writes each mutant's source on the lines of the original", func(t *testing.T) {
 			t.Parallel()
 			head := "package fixture\n\nfunc f(a, b int, ok bool) int {\n"
@@ -34,56 +39,43 @@ func TestPlain(t *testing.T) {
 			}
 			names := ids(r)
 			path := filepath.Join(p.Dir, "f.go")
+			got := map[string]string{}
 			for _, m := range r.Mutants {
-				got := string(render.Plain(p, m).Files[path])
-				if got != want[names[m]] {
-					t.Errorf("%s:\n%s\nwant:\n%s", names[m], got, want[names[m]])
-				}
-				delete(want, names[m])
+				got[names[m]] = string(render.Plain(p, m).Files[path])
 			}
-			for name := range want {
-				t.Errorf("the enumeration has no mutant %s", name)
-			}
+			assert.Equal(t, got, want, "each mutant's source keeps the lines of the original")
 		})
+
 		t.Run("writes the operator of a compound assignment and the negation of an operand", func(t *testing.T) {
 			t.Parallel()
 			head := "package fixture\n\nfunc g(n int, ok bool) bool {\n"
 			p, r := fixture(t, map[string]string{"f.go": head + "\tn %= 3\n\treturn !ok == (n > 0)\n}\n"})
 			names := ids(r)
 			path := filepath.Join(p.Dir, "f.go")
-			found := map[string]string{}
+			got := map[string]string{}
 			for _, m := range r.Mutants {
-				found[names[m]] = string(render.Plain(p, m).Files[path])
+				got[names[m]] = string(render.Plain(p, m).Files[path])
 			}
-			want := map[string]string{
-				"g aor 0":     head + "\tn *= 3\n\treturn !ok == (n > 0)\n}\n",
-				"g uoi-not 0": head + "\tn %= 3\n\treturn (ok) == (n > 0)\n}\n",
-			}
-			for name, text := range want {
-				if found[name] != text {
-					t.Errorf("%s:\n%s\nwant:\n%s", name, found[name], text)
-				}
-			}
+			expect.Equal(t, got["g aor 0"], head+"\tn *= 3\n\treturn !ok == (n > 0)\n}\n",
+				"aor writes the compound operator")
+			expect.Equal(t, got["g uoi-not 0"], head+"\tn %= 3\n\treturn (ok) == (n > 0)\n}\n",
+				"uoi-not of a negation drops the negation")
 		})
+
 		t.Run("builds each mutant to compute what its instrumented form computes", func(t *testing.T) {
 			t.Parallel()
 			p, r := fixture(t, semanticsFiles())
-			if _, err := render.Render(p, r); err != nil {
-				t.Fatal(err)
-			}
+			instrument(t, p, r)
 			names := ids(r)
 			for _, m := range r.Mutants {
 				if m.Status != enumerate.Runnable {
 					continue
 				}
-				m := m
 				t.Run(names[m], func(t *testing.T) {
 					t.Parallel()
 					bin := buildProgram(t, p, render.Plain(p, m))
-					got := lines(run(t, bin, p.Dir))
-					if want := expected(names, m); describe(got) != describe(want) {
-						t.Errorf("%s\nwant: %s", describe(got), describe(want))
-					}
+					assert.Equal(t, describe(lines(run(t, bin, p.Dir))), describe(expected(names, m)),
+						"the ordinary build of the mutant computes what the catalogue states")
 				})
 			}
 		})

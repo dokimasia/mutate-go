@@ -14,38 +14,9 @@ import (
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
-// The kinds, as the catalogue spells them.
-const (
-	AOR         = "aor"
-	RORBoundary = "ror-boundary"
-	RORTrue     = "ror-true"
-	RORFalse    = "ror-false"
-	LCRLeft     = "lcr-left"
-	LCRRight    = "lcr-right"
-	LCRTrue     = "lcr-true"
-	LCRFalse    = "lcr-false"
-	UOIIncDec   = "uoi-incdec"
-	UOINot      = "uoi-not"
-	UOIMinus    = "uoi-minus"
-	SBRDelete   = "sbr-delete"
-	SBRZero     = "sbr-zero"
-)
-
-// The reasons of skipped sites, as the overlay spells them.
-const (
-	SkipConstant      = "constant expression"
-	SkipTypeParameter = "operand of type-parameter type"
-	SkipContextShift  = "untyped constant in a non-constant shift"
-	SkipNamedBool     = "named boolean result"
-	SkipSideEffects   = "assignment target with side effects"
-	SkipCgo           = "file imports C"
-)
-
-// The run errors that the enumeration finds, as the protocol spells them.
-const (
-	ErrorWithoutReason = "annotation-without-reason"
-	ErrorStale         = "stale-annotation"
-)
+// keySeparator separates the fields of a key's digest, and of the group
+// that counts a key's occurrences.
+const keySeparator = "\x00"
 
 // Form is the shape of a site, which decides its instrumented form.
 type Form int
@@ -106,6 +77,17 @@ type Range struct {
 	First, Last int
 }
 
+// Options are the settings of one enumeration.
+type Options struct {
+	// Lines is the run's selection. A nil selection selects every line, and
+	// an empty one selects none.
+	Lines []Range
+	// IncludeGenerated makes every generated file of the package a target,
+	// as if the comments before its package clause contained the include
+	// directive.
+	IncludeGenerated bool
+}
+
 // Site is one place in a source file that one or more mutants change.
 type Site struct {
 	File  *load.File
@@ -133,7 +115,7 @@ type Site struct {
 // Mutant is one mutant of a site.
 type Mutant struct {
 	Site *Site
-	Kind string
+	Kind spec.Kind
 	// Op is the operator that the mutant writes in place of the site's,
 	// or token.ILLEGAL for a kind that writes no operator.
 	Op token.Token
@@ -145,7 +127,7 @@ type Mutant struct {
 	Original, Replacement string
 	Status                Status
 	// Rule is the rule family that suppresses the mutant.
-	Rule string
+	Rule spec.Family
 	// Reason is the reason of the annotation that suppresses the mutant,
 	// or why the toolchain rejects it.
 	Reason string
@@ -155,12 +137,12 @@ type Mutant struct {
 type Skip struct {
 	File       string
 	Start, End Position
-	Reason     string
+	Reason     spec.SkipReason
 }
 
 // Problem is a run error that the enumeration finds.
 type Problem struct {
-	Code    string
+	Code    spec.ErrorCode
 	Message string
 }
 
@@ -174,64 +156,75 @@ type Result struct {
 	Mutants []*Mutant
 	// Skipped lists every skipped site by file and start.
 	Skipped []Skip
-	// Generated lists each generated file that the enumeration leaves out,
-	// in file order.
+	// Generated lists each generated file of the package in file order.
 	Generated []Generated
 	Problems  []Problem
 }
 
-// Generated is a generated file that the enumeration leaves out, and the
-// number of mutants that the kinds make at its sites, before any exclusion.
+// Generated is a generated file of the package, the number of mutants that
+// the kinds make at its sites before any exclusion, and whether the
+// enumeration includes it.
 type Generated struct {
-	File    string
-	Mutants int
+	File     string
+	Mutants  int
+	Included bool
 }
 
 // Enumerate lists the mutants of p's source files under the definition d,
-// with lines as the run's selection. A nil selection selects every line,
-// and an empty one selects none.
-func Enumerate(p *load.Package, d spec.Definition, lines []Range) *Result {
+// with the selection and the generated files that opts states.
+func Enumerate(p *load.Package, d spec.Definition, opts Options) *Result {
 	e := &enumerator{
 		pkg:      p,
 		def:      d,
-		families: map[string]string{},
-		classes:  map[string]string{},
-		rank:     map[string]int{},
-		calls:    map[*ast.CallExpr]string{},
+		include:  opts.IncludeGenerated,
+		families: map[string]spec.Family{},
+		classes:  map[spec.Kind]spec.Class{},
+		rank:     map[spec.Kind]int{},
+		names:    map[string]bool{d.Catalogue.Every: true},
+		calls:    map[*ast.CallExpr]spec.Family{},
 		operands: map[ast.Expr]bool{},
 	}
-	for family, names := range d.Overlay.Families.Calls() {
-		for _, name := range names {
-			e.families[name] = family
+	for family, rules := range d.Overlay.Families {
+		for _, api := range rules.APIs {
+			e.families[api] = family
 		}
 	}
 	for i, k := range d.Catalogue.Kinds {
 		e.classes[k.ID] = k.Class
 		e.rank[k.ID] = i
+		e.names[string(k.ID)], e.names[string(k.Class)] = true, true
 	}
 	e.results = e.resultVariables()
 	for _, f := range p.Files {
-		if f.Role == load.Source || f.Role == load.Cgo {
+		if e.target(f) {
 			e.file(f)
 		}
 	}
-	r := e.result(lines)
+	r := e.result(opts.Lines)
 	r.Generated = e.generated()
 	return r
 }
 
+// target reports whether the enumeration walks f: a Source or a Cgo file
+// that is not generated, or that is generated in an enumeration that
+// includes generated files.
+func (e *enumerator) target(f *load.File) bool {
+	return f.Role != load.Support && (!f.Generated || e.include)
+}
+
 // generated returns each generated file of the package in file order, with
-// the number of mutants that the kinds make at its sites. A second
-// enumerator walks the files, so the result contains none of their sites,
-// annotations and suppressions.
+// the number of mutants that the kinds make at its sites, and whether the
+// enumeration includes it. A second enumerator walks the files, so its
+// count does not depend on the inclusion, and the result contains none of
+// the sites, annotations and suppressions of a file that it leaves out.
 func (e *enumerator) generated() []Generated {
 	g := &enumerator{
-		pkg: e.pkg, def: e.def, families: e.families, classes: e.classes, rank: e.rank,
-		calls: map[*ast.CallExpr]string{}, operands: map[ast.Expr]bool{}, results: e.results,
+		pkg: e.pkg, def: e.def, include: e.include, families: e.families, classes: e.classes, rank: e.rank,
+		names: e.names, calls: map[*ast.CallExpr]spec.Family{}, operands: map[ast.Expr]bool{}, results: e.results,
 	}
 	out := []Generated{}
 	for _, f := range e.pkg.Files {
-		if f.Role != load.Generated {
+		if f.Role == load.Support || !f.Generated {
 			continue
 		}
 		before := len(g.sites)
@@ -240,35 +233,40 @@ func (e *enumerator) generated() []Generated {
 		for _, s := range g.sites[before:] {
 			mutants += len(s.Mutants)
 		}
-		out = append(out, Generated{File: f.Name, Mutants: mutants})
+		out = append(out, Generated{File: f.Name, Mutants: mutants, Included: e.include})
 	}
 	return out
 }
 
 type enumerator struct {
-	pkg          *load.Package
-	def          spec.Definition
-	families     map[string]string
-	classes      map[string]string
-	rank         map[string]int
+	pkg *load.Package
+	def spec.Definition
+	// include reports whether the enumeration includes generated files.
+	include      bool
+	families     map[string]spec.Family
+	classes      map[spec.Kind]spec.Class
+	rank         map[spec.Kind]int
 	sites        []*Site
 	skips        []skip
 	annotations  []*annotation
 	suppressions []suppression
 	problems     []Problem
-	// calls maps each call that a call family suppresses to the family.
-	// operands contains each operand, without its parentheses, of a
-	// connector that is a site. results maps each variable whose calls a
-	// result rule puts into a family to the family.
-	calls    map[*ast.CallExpr]string
+	// names contains each name that an annotation can list: a kind, a
+	// class, and the keyword of every kind.
+	names map[string]bool
+	// calls maps each call that a family which lists calls suppresses to
+	// the family. operands contains each operand, without its parentheses,
+	// of a connector that is a site. results maps each variable whose calls
+	// a result rule puts into a family to the family.
+	calls    map[*ast.CallExpr]spec.Family
 	operands map[ast.Expr]bool
-	results  map[*types.Var]string
+	results  map[*types.Var]spec.Family
 }
 
 type skip struct {
 	f          *load.File
 	start, end int
-	reason     string
+	reason     spec.SkipReason
 }
 
 func (e *enumerator) off(pos token.Pos) int { return e.pkg.Fset.File(pos).Offset(pos) }
@@ -286,7 +284,7 @@ func (e *enumerator) position(f *load.File, offset int) Position {
 }
 
 // file walks the declarations of f, and then suppresses the compound
-// statements that a call family suppresses as a whole.
+// statements that a family which lists calls suppresses as a whole.
 func (e *enumerator) file(f *load.File) {
 	e.parseAnnotations(f)
 	for _, decl := range f.Syntax.Decls {
@@ -319,9 +317,9 @@ func scopeOf(d *ast.FuncDecl) string {
 	if d.Recv == nil {
 		return d.Name.Name
 	}
-	t := unparen(d.Recv.List[0].Type)
+	t := ast.Unparen(d.Recv.List[0].Type)
 	if star, ok := t.(*ast.StarExpr); ok {
-		t = unparen(star.X)
+		t = ast.Unparen(star.X)
 	}
 	switch x := t.(type) {
 	case *ast.IndexExpr:
@@ -342,7 +340,7 @@ func (e *enumerator) result(lines []Range) *Result {
 	sites := e.sites[:0]
 	for _, s := range e.sites {
 		if s.File.Role == load.Cgo {
-			e.skips = append(e.skips, skip{f: s.File, start: s.Start, end: s.End, reason: SkipCgo})
+			e.skips = append(e.skips, skip{f: s.File, start: s.Start, end: s.End, reason: spec.SkipCgo})
 			continue
 		}
 		sites = append(sites, s)
@@ -368,7 +366,7 @@ func (e *enumerator) result(lines []Range) *Result {
 		s.StartPos, s.EndPos = e.position(s.File, s.Start), e.position(s.File, s.End)
 		tokens := Tokens(s.File.Text[s.Start:s.End])
 		for _, m := range s.Mutants {
-			group := strings.Join([]string{s.File.Name, s.Scope, m.Kind, tokens}, "\x00")
+			group := strings.Join([]string{s.File.Name, s.Scope, string(m.Kind), tokens}, keySeparator)
 			m.Occurrence = occurrences[group]
 			occurrences[group]++
 			m.Key = Key(e.def.Catalogue.Key, s.File.Name, s.Scope, m.Kind, tokens, m.Occurrence)
@@ -386,10 +384,7 @@ func (e *enumerator) result(lines []Range) *Result {
 	}
 	for _, a := range e.annotations {
 		if !a.used {
-			e.problems = append(
-				e.problems,
-				Problem{Code: ErrorStale, Message: a.where + ": the annotation suppresses no mutant"},
-			)
+			e.problems = append(e.problems, Problem{Code: spec.ErrorStale, Message: a.stale()})
 		}
 	}
 	sort.SliceStable(e.skips, func(i, j int) bool {
@@ -433,7 +428,7 @@ func selected(lines []Range, file string, line int) bool {
 // gives every operand of a site's arithmetic or comparison a type, so a
 // basic type is a predeclared number or string.
 func (e *enumerator) typeName(t types.Type) (string, bool) {
-	switch x := unalias(t).(type) {
+	switch x := types.Unalias(t).(type) {
 	case *types.Basic:
 		return x.Name(), true
 	case *types.Named:

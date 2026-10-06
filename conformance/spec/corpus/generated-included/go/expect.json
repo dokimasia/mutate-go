@@ -1,0 +1,86 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "blocks",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4ca86d91896ba054",
+      "file": "blocks.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 17
+      },
+      "original": "return n * 4096",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "blocks",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d6a922147f2d714d",
+      "file": "blocks.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 17
+      },
+      "original": "n * 4096",
+      "replacement": "n / 4096"
+    },
+    {
+      "scope": "next",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "824a9767928f4f42",
+      "file": "generated.go",
+      "start": {
+        "line": 7,
+        "column": 2
+      },
+      "end": {
+        "line": 7,
+        "column": 14
+      },
+      "original": "return x + 1",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "next",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "6245c82c1e8e2eff",
+      "file": "generated.go",
+      "start": {
+        "line": 7,
+        "column": 9
+      },
+      "end": {
+        "line": 7,
+        "column": 14
+      },
+      "original": "x + 1",
+      "replacement": "x - 1"
+    }
+  ],
+  "skipped": [],
+  "generated": [
+    {
+      "file": "generated.go",
+      "mutants": 2,
+      "included": true
+    }
+  ],
+  "errors": []
+}

@@ -21,9 +21,11 @@
 // a deadline from those tests' own times. The record lists those tests in
 // each mutant's coveredBy.
 //
-// ParseLines reads one range of a selection, and ParseDiff the selection
-// of the lines that a unified diff changes. The record states the ranges of
-// the selection in the package's files.
+// The record states the ranges of the caller's selection that lie in the
+// package's files, and each generated file of the package that the run
+// leaves out or, at the caller's request, includes. A caller's limit on the
+// number of mutant runs ends the runs without failing the run, and the
+// run's score is then the score of that sample.
 //
 // When the caller asks for confirmation, Run also builds the binaries from
 // the package's unchanged source and runs them once, and then builds and
@@ -32,8 +34,9 @@
 //
 // # Dependency position
 //
-// Imports bufio, context, fmt, io, os, os/exec, path/filepath, regexp,
-// runtime, runtime/debug, slices, sort, strconv, strings, sync, syscall and
-// time from the standard library, and internal/enumerate, internal/load,
-// internal/record, internal/render and internal/spec from this module.
+// Imports context, crypto/sha256, encoding/hex, fmt, io/fs, os,
+// path/filepath, runtime, runtime/debug, slices, strconv, strings, sync,
+// syscall and time from the standard library, and internal/enumerate,
+// internal/load, internal/memory, internal/record, internal/render,
+// internal/selection, internal/spec and internal/testbin from this module.
 package run

@@ -1,116 +1,121 @@
 // Copyright ThesmOS B.V. 2026
 // SPDX-License-Identifier: MIT
 
-// Command dokimi-mutate-go runs mutation testing on Go packages without a
-// change to their module. Its name follows the rule for every language's
-// engine: dokimi-mutate and the language.
+// TestHelp writes this file from the help with -update. Edit the help in help.go.
+
+// Command dokimi-mutate-go measures how well the tests of Go packages detect faults.
 //
-//	go run go.dokimi.dev/mutate/cmd/dokimi-mutate-go@latest [flags] [packages]
+// The command changes each package's code in small, defined ways, such as
+// a + b to a - b. Each change is a mutant. The command runs the package's
+// tests against each mutant, one at a time. A mutant that no test detects is a
+// gap in the tests. The command prints each such mutant at its file and line,
+// and a mutation score for each package.
 //
-// go run with a version suffix ignores the go.mod of the working
-// directory, so the module under test keeps its go.mod and its files as
-// they are. The packages are patterns, as go list resolves them, and . by
-// default.
+// Usage:
 //
-//   - -p n checks n packages at once, 1 by default.
-//   - -workers n runs n mutants of one package at once, 1 by default. Tests
-//     that share a resource outside their temporary directory, such as a
-//     fixed port, then fail each other, and the failures count as kills.
-//   - -lines file:first-last restricts the run to these lines of the file,
-//     relative to the working directory. The flag repeats.
-//   - -diff file restricts the run to the lines that the unified diff in
-//     file adds, and to the lines on either side of each run of lines that
-//     it removes, as git diff base...HEAD writes them for a pull request.
-//     The path of each new version, after its b/ prefix, is relative to the
-//     working directory, and - reads the diff from standard input. A diff
-//     that the files do not match fails the command, and a diff that changes
-//     no line of a package selects none of its mutants. The lines of -diff
-//     and of -lines together are the selection.
-//   - -suite pattern adds the tests of the packages that pattern names to
-//     the tests that count for each package's mutants, where their test
-//     binaries link the package. The command resolves the pattern in the
-//     working directory, as it resolves the packages. A pattern that go list
-//     cannot resolve, such as a directory that does not exist, or a package
-//     that does not load, fails the command. A test of such a package reads
-//     as its import path, a colon and the test's name. The flag repeats.
-//   - -record dir writes the record of each package to dir.
-//   - -json writes the record of each package to standard output as one
-//     line of JSON, in place of the text.
-//   - -timeout d starts no package after d, and no mutant whose run and the
-//     closing control run would not end before then. 0, the default, sets
-//     no limit.
-//   - -sample n starts the runs of the first n mutants of each package in
-//     the order of their keys, and of no other. Each later mutant does not
-//     run, so the package's run fails as a run that -timeout ends does, and
-//     its summary states the score of the sample. The same code gives the
-//     same sample on every machine. 0, the default, runs every mutant.
-//   - -memory bytes admits the runs of a package after its opening control
-//     run while the runs of every admitted package fit in bytes, each
-//     package's workers times the largest memory ceiling of its test
-//     binaries. A package whose runs need more on their own starts when no
-//     other package runs. K, M, G and T after the number state powers of
-//     1024, and 0 sets no limit. The default is three quarters of the memory
-//     that the process may use: the machine's memory, or the least
-//     memory.max of the process's cgroup v2 and its ancestors when that is
-//     less. The engine applies memory ceilings on Linux only.
-//   - -confirm runs each survivor, and each mutant that is not covered, once
-//     more in an ordinary build of that mutant alone, without
-//     DOKIMI_MUTATE_INSTRUMENTED, so a test that skips a check of the build
-//     in the instrumented binary, such as an allocation count, runs against
-//     it. The verdict of that run is the mutant's verdict, and a mutant that
-//     is not covered keeps that verdict when the run passes.
+//	dokimi-mutate-go [flags] [packages]
 //
-// The packages together use GOMAXPROCS threads. Every go command of a
-// package runs with GOMAXPROCS divided by -p, and every run of a test
-// binary with that number divided by -workers, and at least 1.
+// The packages are patterns, as go list resolves them. The default is the
+// package in the current directory. The module under test needs no change:
 //
-// The command prints the line of each undetected mutant, and of each mutant
-// whose run ended in an error, when the mutant's verdict is final. A mutant
-// that is not covered gets its verdict when the opening control run ends,
-// or under -confirm when its confirmation ends, and any other mutant when
-// its own run ends. When the run of a package ends, the command prints the
-// package's summary:
+//	go run go.dokimi.dev/mutate/cmd/dokimi-mutate-go@latest ./...
 //
-//	arith.go:7:33: not covered: x * 2 became x / 2 (aor)
-//	arith.go:5:33: survived: a - b became a + b (aor)
-//	fixture: 2 of 6 mutants detected (33%): 2 killed, 2 survived, 2 not covered
+// Selection:
 //
-// The tests ran a survivor and passed. No test executes the code of a
-// mutant that is not covered. The line of a deleted statement reads
-// removed in place of became. When the run leaves out generated files, the
-// summary ends with their number and their mutants, such as 3 generated
-// files with 120 mutants left out.
+//	-lines file:first-last
+//		Test only the mutants on lines first to last of file. The path
+//		is relative to the current directory. The flag repeats.
+//	-diff file
+//		Test only the mutants on the lines that the unified diff in file
+//		adds, and on the lines on either side of each run of removed
+//		lines. A path after its b/ prefix is relative to the current
+//		directory. The file - reads standard input.
+//	-sample n
+//		Test only the first n mutants of each package, in the order of
+//		their keys. The same code gives the same sample on every
+//		machine, and the score is the score of the sample.
+//	-include-generated
+//		Also mutate generated files. A generated file has a comment line
+//		such as "// Code generated by stringer. DO NOT EDIT." before its
+//		package clause. Without the flag, the command mutates such a
+//		file only when the comments before its package clause contain
+//		the line //dokimi:mutate-include.
 //
-// The mutants run in the order of their keys, a pseudo-random order that
-// every run of the same code repeats. When -timeout or a signal ends a run
-// early, the mutants that ran are a uniform sample of the package's
-// mutants, and the summary of the failed run states the sample's score:
+// Tests:
 //
-//	fixture: the run failed, 40 of a sample of 52 mutants detected (76%): ...
+//	-suite pattern
+//		Also run the tests of the packages that pattern names against
+//		each package's mutants, where those tests import the package.
+//		The flag repeats.
+//	-confirm
+//		Test each mutant that survived or that no test covers once more,
+//		in a normal build that contains this mutant alone. Tests that
+//		skip in the instrumented build, such as allocation checks, then
+//		run against it. Each such mutant costs one more build.
 //
-// The command writes the run errors, the number of mutants that did not
-// run, and a progress line for each package that runs every 10 seconds to
-// standard error, each after the command's name:
+// Execution:
 //
-//	dokimi-mutate-go: fixture: 120 of 410 mutants done, 7 undetected, 3.2 mutants a second, about 1m31s left
+//	-C dir
+//		Change to dir before the command resolves packages and paths.
+//	-p n
+//		The number of packages to test at once. The default is 1.
+//	-workers n
+//		The number of mutants of one package to test at once. The
+//		default is 1. Above 1, tests that share a resource, such as a
+//		fixed port, can fail each other, and each such failure counts as
+//		a detection.
+//	-timeout d
+//		The time limit of the command, such as 30m. A mutant starts only
+//		when it can finish before the limit. The mutants that do not
+//		start fail the run, and the summary states the score of those
+//		that ran. The default, 0, sets no limit.
+//	-memory-budget size
+//		The memory that the packages tested at once may use, such as
+//		16G, with K, M, G or T for powers of 1024. A package starts its
+//		mutants when its workers' memory ceilings fit in the budget
+//		beside those of the running packages. The default is three
+//		quarters of the memory that the process may use, by its cgroup
+//		or by the machine. 0 sets no budget.
 //
-// A mutant is done when it has a verdict other than not-run. Once -timeout
-// keeps the remaining mutants from starting, the line states how many will
-// not run, and that the run waits for the mutants that still run and the
-// closing control run:
+// Output:
 //
-//	dokimi-mutate-go: fixture: 121 of 410 mutants done, 7 undetected, 288 not run, waiting for 1 mutant run and the closing control run
+//	-json
+//		Write each package's record to standard output as one line of
+//		JSON, in place of the text.
+//	-record dir
+//		Write each package's record to a file in dir.
+//	-list
+//		Print the mutants of each package, and run no test.
+//	-version
+//		Print the versions of the engine, the operator catalogue, the Go
+//		overlay and the Go toolchain that built the engine.
 //
-// # Signals
+// The command prints each mutant that survived or that no test covers when its
+// verdict is final, and a summary when a package's run ends:
 //
-// SIGINT and SIGTERM stop the runs. Every mutant without a verdict is then
-// not-run, the runs fail, and no further package starts.
+//	wire/codec.go:41:9: survived: n + 1 became n - 1 (aor)
+//	wire/codec.go:52:2: not covered: buf.Reset() removed (sbr-delete)
+//	example.com/wire: 410 of 432 mutants detected (94%): 405 killed, 5 timed out, 20 survived, 2 not covered
 //
-// # Exit status
+// Progress lines and errors go to standard error.
 //
-//   - 0 when no package has an undetected mutant and no run fails
-//   - 1 when a package has an undetected mutant
-//   - 2 when a run fails, a package does not list or does not start, a
-//     package of -suite does not resolve or load, the diff of -diff does
-//     not read or does not match the files, or the command line is wrong
+// Exit status:
+//
+//	0  Every counted mutant was detected, and every run completed.
+//	1  A package has a mutant that survived or that no test covers.
+//	2  The command line or an input is invalid.
+//	3  A run failed, such as a package that does not build, tests that
+//	   fail without a mutant, or a run that -timeout ended.
+//
+// A test can read two variables. DOKIMI_MUTATE_MUTANT is 0 in the control runs
+// and the active mutant's number in a mutant's run. DOKIMI_MUTATE_INSTRUMENTED
+// is 1 in every run of the instrumented build. Skip an allocation or timing
+// assertion while DOKIMI_MUTATE_INSTRUMENTED is set, and use -confirm.
+//
+// Examples:
+//
+//	dokimi-mutate-go ./...
+//	git diff origin/main...HEAD | dokimi-mutate-go -diff - ./...
+//	dokimi-mutate-go -workers 4 -timeout 30m -record out ./...
+//	dokimi-mutate-go -list ./wire
 package main

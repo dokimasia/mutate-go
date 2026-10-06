@@ -14,28 +14,55 @@ import (
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
+// The text of an annotation: the separator of its kinds from its reason,
+// and of one kind from the next.
+const (
+	reasonSeparator = ":"
+	kindSeparator   = ","
+)
+
 // annotation is one annotation comment and the line that it covers.
 type annotation struct {
-	f      *load.File
-	line   int
-	kinds  map[string]bool
-	reason string
+	f    *load.File
+	line int
+	// kinds contains each name that the annotation lists, and unknown the
+	// names that are no kind, class or keyword of the catalogue.
+	kinds   map[string]bool
+	unknown []string
+	reason  string
 	// where is the comment's file and line, as a message states them.
 	where string
 	used  bool
 }
 
+// stale returns the message of an annotation that suppresses no mutant,
+// with the names that it lists and the catalogue does not define.
+func (a *annotation) stale() string {
+	message := a.where + ": the annotation suppresses no mutant"
+	if len(a.unknown) > 0 {
+		message += ", and the catalogue does not define " + strings.Join(a.unknown, " or ")
+	}
+	return message
+}
+
 // suppression is the code that a rule family suppresses. For a call of a
-// call family, call is the call: the call itself, a statement that makes
-// it, and every site inside its parentheses are suppressed. For capacity,
-// call is nil and the range is the argument. For a compound statement that
-// a call family suppresses as a whole, call is nil and the range is the
-// statement.
+// family that lists calls, call is the call: the call itself, a statement
+// that makes it, and every site inside its parentheses are suppressed. For
+// an argument rule, call is nil and the range is the argument. For a
+// compound statement that a family suppresses as a whole, call is nil and
+// the range is the statement.
 type suppression struct {
 	f          *load.File
 	start, end int
-	family     string
+	family     spec.Family
 	call       *ast.CallExpr
+}
+
+// resultRule is a result rule of a family: the family, and the type of the
+// result that the rule names.
+type resultRule struct {
+	family spec.Family
+	typ    string
 }
 
 // callee returns the object that call calls, as the type checker resolves
@@ -43,7 +70,7 @@ type suppression struct {
 // function, a method, a builtin or a variable. It returns nil for a function
 // that is no name, such as a function literal.
 func (e *enumerator) callee(call *ast.CallExpr) types.Object {
-	fun := unparen(call.Fun)
+	fun := ast.Unparen(call.Fun)
 	switch x := fun.(type) {
 	case *ast.IndexExpr:
 		fun = x.X
@@ -96,26 +123,31 @@ func (e *enumerator) family(f *load.File, call *ast.CallExpr) {
 		)
 		return
 	}
-	for _, c := range e.def.Overlay.Families.Capacity {
-		if c.Func != name || c.Argument >= len(call.Args) {
-			continue
+	// The overlay states each argument rule in one family, so one family at
+	// most suppresses an argument, whatever the order of the map.
+	for family, rules := range e.def.Overlay.Families {
+		for _, a := range rules.Arguments {
+			if a.Func != name || a.Argument >= len(call.Args) {
+				continue
+			}
+			if name == spec.Make && allocated(info.TypeOf(call.Args[0])) != a.Of {
+				continue
+			}
+			arg := call.Args[a.Argument]
+			e.suppressions = append(
+				e.suppressions,
+				suppression{f: f, start: e.off(arg.Pos()), end: e.off(arg.End()), family: family},
+			)
 		}
-		if name == "make" && allocated(info.TypeOf(call.Args[0])) != c.Of {
-			continue
-		}
-		arg := call.Args[c.Argument]
-		e.suppressions = append(
-			e.suppressions,
-			suppression{f: f, start: e.off(arg.Pos()), end: e.off(arg.End()), family: "capacity"},
-		)
 	}
 }
 
 // method returns the family of the overlay's method rule that fn matches:
 // a method of an interface with the rule's name and signature. The
 // signature is the method's type as go/types writes it, without the
-// receiver and without parameter names.
-func (e *enumerator) method(fn *types.Func) (string, bool) {
+// receiver and without parameter names. The overlay states each method rule
+// in one family.
+func (e *enumerator) method(fn *types.Func) (spec.Family, bool) {
 	sig := fn.Type().(*types.Signature)
 	if sig.Recv() == nil {
 		return "", false
@@ -124,9 +156,11 @@ func (e *enumerator) method(fn *types.Func) (string, bool) {
 		return "", false
 	}
 	bare := types.NewSignatureType(nil, nil, nil, unnamed(sig.Params()), unnamed(sig.Results()), sig.Variadic())
-	for _, m := range e.def.Overlay.Families.Methods {
-		if m.On == "interface" && m.Name == fn.Name() && m.Signature == bare.String() {
-			return m.Family, true
+	for family, rules := range e.def.Overlay.Families {
+		for _, m := range rules.Methods {
+			if m.On == spec.OnInterface && m.Name == fn.Name() && m.Signature == bare.String() {
+				return family, true
+			}
 		}
 	}
 	return "", false
@@ -139,17 +173,19 @@ func (e *enumerator) method(fn *types.Func) (string, bool) {
 // API, that every other assignment gives such a result of the same family,
 // and whose address no expression takes. A declaration without values
 // assigns nothing.
-func (e *enumerator) resultVariables() map[*types.Var]string {
+func (e *enumerator) resultVariables() map[*types.Var]spec.Family {
 	info := e.pkg.Info
-	rules := map[spec.Result]bool{}
-	for _, r := range e.def.Overlay.Families.Results {
-		rules[r] = true
+	rules := map[resultRule]bool{}
+	for family, r := range e.def.Overlay.Families {
+		for _, result := range r.Results {
+			rules[resultRule{family: family, typ: result.Type}] = true
+		}
 	}
 	// result returns the family of a rule that the result at index k of
 	// call matches, or "". The package type-checks, so the called function
 	// of a listed API has a signature with a result at index k.
-	result := func(call *ast.CallExpr, k int) string {
-		family := ""
+	result := func(call *ast.CallExpr, k int) spec.Family {
+		var family spec.Family
 		if fn, isFunc := e.callee(call).(*types.Func); isFunc {
 			family = e.families[fn.FullName()]
 		}
@@ -157,17 +193,17 @@ func (e *enumerator) resultVariables() map[*types.Var]string {
 			return ""
 		}
 		results := info.TypeOf(call.Fun).(*types.Signature).Results()
-		if rules[spec.Result{Family: family, Type: types.TypeString(results.At(k).Type(), nil)}] {
+		if rules[resultRule{family: family, typ: types.TypeString(results.At(k).Type(), nil)}] {
 			return family
 		}
 		return ""
 	}
-	families := map[*types.Var]string{}
+	families := map[*types.Var]spec.Family{}
 	other := map[*types.Var]bool{}
 	// assign notes that x, when it is a variable, gets a value: a result of
 	// family, or any other value when family is "".
-	assign := func(x ast.Expr, family string) {
-		id, ok := unparen(x).(*ast.Ident)
+	assign := func(x ast.Expr, family spec.Family) {
+		id, ok := ast.Unparen(x).(*ast.Ident)
 		if !ok {
 			return
 		}
@@ -188,8 +224,8 @@ func (e *enumerator) resultVariables() map[*types.Var]string {
 			if len(values) == len(targets) {
 				value, at = values[k], 0
 			}
-			family := ""
-			if call, ok := unparen(value).(*ast.CallExpr); ok {
+			var family spec.Family
+			if call, ok := ast.Unparen(value).(*ast.CallExpr); ok {
 				family = result(call, at)
 			}
 			assign(x, family)
@@ -207,7 +243,7 @@ func (e *enumerator) resultVariables() map[*types.Var]string {
 		}
 	}
 	for _, f := range e.pkg.Files {
-		if f.Role != load.Source && f.Role != load.Cgo {
+		if !e.target(f) {
 			continue
 		}
 		ast.Inspect(f.Syntax, func(n ast.Node) bool {
@@ -262,13 +298,14 @@ func unnamed(t *types.Tuple) *types.Tuple {
 	return types.NewTuple(vars...)
 }
 
-// allocated names the kind of collection that make allocates for t.
+// allocated names the kind of collection that make allocates for t, as an
+// argument rule names it, or "" for a channel, which no rule names.
 func allocated(t types.Type) string {
 	switch t.Underlying().(type) {
 	case *types.Slice:
-		return "slice"
+		return spec.OfSlice
 	case *types.Map:
-		return "map"
+		return spec.OfMap
 	}
 	return ""
 }
@@ -291,23 +328,24 @@ func (e *enumerator) parseAnnotations(f *load.File) {
 			if strings.TrimSpace(string(f.Text[raw.Offset-(raw.Column-1):raw.Offset])) == "" {
 				line++
 			}
-			list, reason, ok := strings.Cut(rest, ":")
+			list, reason, ok := strings.Cut(rest, reasonSeparator)
 			reason = strings.TrimSpace(reason)
 			if !ok || reason == "" {
 				e.problems = append(
 					e.problems,
-					Problem{Code: ErrorWithoutReason, Message: where + ": the annotation states no reason"},
+					Problem{Code: spec.ErrorWithoutReason, Message: where + ": the annotation states no reason"},
 				)
 				continue
 			}
-			kinds := map[string]bool{}
-			for _, k := range strings.Split(list, ",") {
-				kinds[strings.TrimSpace(k)] = true
+			a := &annotation{f: f, line: line, kinds: map[string]bool{}, reason: reason, where: where}
+			for k := range strings.SplitSeq(list, kindSeparator) {
+				name := strings.TrimSpace(k)
+				a.kinds[name] = true
+				if !e.names[name] {
+					a.unknown = append(a.unknown, name)
+				}
 			}
-			e.annotations = append(
-				e.annotations,
-				&annotation{f: f, line: line, kinds: kinds, reason: reason, where: where},
-			)
+			e.annotations = append(e.annotations, a)
 		}
 	}
 }
@@ -332,7 +370,7 @@ func (e *enumerator) suppress(m *Mutant) {
 	}
 	for _, a := range e.annotations {
 		if a.f == s.File && a.line == s.StartPos.Line &&
-			(a.kinds[m.Kind] || a.kinds[e.classes[m.Kind]] || a.kinds["all"]) {
+			(a.kinds[string(m.Kind)] || a.kinds[string(e.classes[m.Kind])] || a.kinds[e.def.Catalogue.Every]) {
 			m.Status, m.Reason = Suppressed, a.reason
 			a.used = true
 			return
@@ -345,7 +383,7 @@ func (e *enumerator) suppress(m *Mutant) {
 func callOf(st ast.Stmt) *ast.CallExpr {
 	switch s := st.(type) {
 	case *ast.ExprStmt:
-		call, _ := unparen(s.X).(*ast.CallExpr)
+		call, _ := ast.Unparen(s.X).(*ast.CallExpr)
 		return call
 	case *ast.DeferStmt:
 		return s.Call

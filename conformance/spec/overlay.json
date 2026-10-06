@@ -1,11 +1,11 @@
 {
   "language": "go",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "comment": "//",
   "generated": "^// Code generated .* DO NOT EDIT\\.$",
   "files": [
     "The files the go command compiles for the target platform under the build's constraints, as go list reports them in GoFiles and CgoFiles.",
-    "Not test files, and not files that go/ast.IsGenerated reports, unless the comments before such a file's package clause contain a line that is exactly the comment marker followed by the catalogue's include directive, //dokimi:mutate-include. A generator writes that line to make its output a target."
+    "Not test files, and not files that go/ast.IsGenerated reports, unless the comments before such a file's package clause contain a line that is exactly the comment marker followed by the catalogue's include directive, //dokimi:mutate-include, or the run includes generated files. A generator writes that line to make its output a target."
   ],
   "scopes": [
     "A function F has the scope F.",
@@ -61,7 +61,7 @@
     "sbr-delete": [
       "An expression, send, if, for, range, switch, type switch, select, block, defer or go statement, or an assignment that is not a short variable declaration and does not assign only to the blank identifier.",
       "Only in a block, or in the body of a case or a communication clause.",
-      "Not a statement that contains a label, and not the last statement of its list when that statement is terminating in the sense of the Go specification.",
+      "Not a statement that contains a label, and not the final non-empty statement of its list when that statement is terminating in the sense of the Go specification.",
       "An increment or decrement statement is not deleted. uoi-incdec mutates it.",
       "The mutant's source writes the statement behind a constant that skips it, as if false { statement }, so a variable, an imported package or a label that only the statement uses remains in use."
     ],
@@ -78,7 +78,7 @@
     },
     {
       "reason": "operand of type-parameter type",
-      "where": "Arithmetic, an ordered comparison, a compound assignment, a unary minus, or an increment or decrement in a for loop's post statement, whose operand has a type-parameter type."
+      "where": "Arithmetic, an ordered comparison, a compound assignment, a unary minus, or an increment or decrement in a for loop's post statement, whose operand has a type-parameter type. A type parameter's type is an integer or floating-point type when every type of its constraint's type set is one. The type set is the one that go/types computes, through embedded constraints, unions and intersections."
     },
     {
       "reason": "untyped constant in a non-constant shift",
@@ -98,110 +98,120 @@
     }
   ],
   "families": {
-    "logging": [
-      "log.Output",
-      "log.Print",
-      "log.Printf",
-      "log.Println",
-      "(*log.Logger).Output",
-      "(*log.Logger).Print",
-      "(*log.Logger).Printf",
-      "(*log.Logger).Println",
-      "log/slog.Debug",
-      "log/slog.DebugContext",
-      "log/slog.Error",
-      "log/slog.ErrorContext",
-      "log/slog.Info",
-      "log/slog.InfoContext",
-      "log/slog.Log",
-      "log/slog.LogAttrs",
-      "log/slog.Warn",
-      "log/slog.WarnContext",
-      "(*log/slog.Logger).Debug",
-      "(*log/slog.Logger).DebugContext",
-      "(*log/slog.Logger).Error",
-      "(*log/slog.Logger).ErrorContext",
-      "(*log/slog.Logger).Info",
-      "(*log/slog.Logger).InfoContext",
-      "(*log/slog.Logger).Log",
-      "(*log/slog.Logger).LogAttrs",
-      "(*log/slog.Logger).Warn",
-      "(*log/slog.Logger).WarnContext"
-    ],
-    "timing": [
-      "context.WithDeadline",
-      "context.WithDeadlineCause",
-      "context.WithTimeout",
-      "context.WithTimeoutCause",
-      "time.After",
-      "time.AfterFunc",
-      "time.NewTicker",
-      "time.NewTimer",
-      "time.Sleep",
-      "time.Tick",
-      "(*time.Ticker).Reset",
-      "(*time.Timer).Reset"
-    ],
-    "flags": [
-      "flag.Bool",
-      "flag.BoolFunc",
-      "flag.BoolVar",
-      "flag.Duration",
-      "flag.DurationVar",
-      "flag.Float64",
-      "flag.Float64Var",
-      "flag.Func",
-      "flag.Int",
-      "flag.Int64",
-      "flag.Int64Var",
-      "flag.IntVar",
-      "flag.String",
-      "flag.StringVar",
-      "flag.TextVar",
-      "flag.Uint",
-      "flag.Uint64",
-      "flag.Uint64Var",
-      "flag.UintVar",
-      "flag.Var",
-      "(*flag.FlagSet).Bool",
-      "(*flag.FlagSet).BoolFunc",
-      "(*flag.FlagSet).BoolVar",
-      "(*flag.FlagSet).Duration",
-      "(*flag.FlagSet).DurationVar",
-      "(*flag.FlagSet).Float64",
-      "(*flag.FlagSet).Float64Var",
-      "(*flag.FlagSet).Func",
-      "(*flag.FlagSet).Int",
-      "(*flag.FlagSet).Int64",
-      "(*flag.FlagSet).Int64Var",
-      "(*flag.FlagSet).IntVar",
-      "(*flag.FlagSet).String",
-      "(*flag.FlagSet).StringVar",
-      "(*flag.FlagSet).TextVar",
-      "(*flag.FlagSet).Uint",
-      "(*flag.FlagSet).Uint64",
-      "(*flag.FlagSet).Uint64Var",
-      "(*flag.FlagSet).UintVar",
-      "(*flag.FlagSet).Var"
-    ],
-    "capacity": [
-      { "func": "make", "of": "slice", "argument": 2 },
-      { "func": "make", "of": "map", "argument": 1 },
-      { "func": "(*bytes.Buffer).Grow", "argument": 0 },
-      { "func": "(*strings.Builder).Grow", "argument": 0 },
-      { "func": "slices.Grow", "argument": 1 }
-    ],
-    "helper": [
-      "(*testing.common).Helper",
-      "(*testing.F).Helper",
-      "(testing.TB).Helper"
-    ],
-    "methods": [
-      { "family": "helper", "name": "Helper", "signature": "func()", "on": "interface" }
-    ],
-    "results": [
-      { "family": "timing", "type": "context.CancelFunc" }
-    ]
+    "logging": {
+      "apis": [
+        "log.Output",
+        "log.Print",
+        "log.Printf",
+        "log.Println",
+        "(*log.Logger).Output",
+        "(*log.Logger).Print",
+        "(*log.Logger).Printf",
+        "(*log.Logger).Println",
+        "log/slog.Debug",
+        "log/slog.DebugContext",
+        "log/slog.Error",
+        "log/slog.ErrorContext",
+        "log/slog.Info",
+        "log/slog.InfoContext",
+        "log/slog.Log",
+        "log/slog.LogAttrs",
+        "log/slog.Warn",
+        "log/slog.WarnContext",
+        "(*log/slog.Logger).Debug",
+        "(*log/slog.Logger).DebugContext",
+        "(*log/slog.Logger).Error",
+        "(*log/slog.Logger).ErrorContext",
+        "(*log/slog.Logger).Info",
+        "(*log/slog.Logger).InfoContext",
+        "(*log/slog.Logger).Log",
+        "(*log/slog.Logger).LogAttrs",
+        "(*log/slog.Logger).Warn",
+        "(*log/slog.Logger).WarnContext"
+      ]
+    },
+    "timing": {
+      "apis": [
+        "context.WithDeadline",
+        "context.WithDeadlineCause",
+        "context.WithTimeout",
+        "context.WithTimeoutCause",
+        "time.After",
+        "time.AfterFunc",
+        "time.NewTicker",
+        "time.NewTimer",
+        "time.Sleep",
+        "time.Tick",
+        "(*time.Ticker).Reset",
+        "(*time.Timer).Reset"
+      ],
+      "results": [
+        { "type": "context.CancelFunc" }
+      ]
+    },
+    "flags": {
+      "apis": [
+        "flag.Bool",
+        "flag.BoolFunc",
+        "flag.BoolVar",
+        "flag.Duration",
+        "flag.DurationVar",
+        "flag.Float64",
+        "flag.Float64Var",
+        "flag.Func",
+        "flag.Int",
+        "flag.Int64",
+        "flag.Int64Var",
+        "flag.IntVar",
+        "flag.String",
+        "flag.StringVar",
+        "flag.TextVar",
+        "flag.Uint",
+        "flag.Uint64",
+        "flag.Uint64Var",
+        "flag.UintVar",
+        "flag.Var",
+        "(*flag.FlagSet).Bool",
+        "(*flag.FlagSet).BoolFunc",
+        "(*flag.FlagSet).BoolVar",
+        "(*flag.FlagSet).Duration",
+        "(*flag.FlagSet).DurationVar",
+        "(*flag.FlagSet).Float64",
+        "(*flag.FlagSet).Float64Var",
+        "(*flag.FlagSet).Func",
+        "(*flag.FlagSet).Int",
+        "(*flag.FlagSet).Int64",
+        "(*flag.FlagSet).Int64Var",
+        "(*flag.FlagSet).IntVar",
+        "(*flag.FlagSet).String",
+        "(*flag.FlagSet).StringVar",
+        "(*flag.FlagSet).TextVar",
+        "(*flag.FlagSet).Uint",
+        "(*flag.FlagSet).Uint64",
+        "(*flag.FlagSet).Uint64Var",
+        "(*flag.FlagSet).UintVar",
+        "(*flag.FlagSet).Var"
+      ]
+    },
+    "capacity": {
+      "arguments": [
+        { "func": "make", "of": "slice", "argument": 2 },
+        { "func": "make", "of": "map", "argument": 1 },
+        { "func": "(*bytes.Buffer).Grow", "argument": 0 },
+        { "func": "(*strings.Builder).Grow", "argument": 0 },
+        { "func": "slices.Grow", "argument": 1 }
+      ]
+    },
+    "helper": {
+      "apis": [
+        "(*testing.common).Helper",
+        "(*testing.F).Helper",
+        "(testing.TB).Helper"
+      ],
+      "methods": [
+        { "name": "Helper", "signature": "func()", "on": "interface" }
+      ]
+    }
   },
   "variables": [
     "A result rule puts a call of a variable into its family when the variable is declared inside a function's body, an assignment gives it the result of the rule's type of a call of a function or method that the family lists, every other assignment to it does the same, and no expression takes its address.",

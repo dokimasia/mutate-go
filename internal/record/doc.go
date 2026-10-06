@@ -7,7 +7,7 @@
 //
 // # Dependency position
 //
-// Imports crypto/sha256, encoding/hex, encoding/json, fmt, hash, io/fs,
-// net/url, os, path/filepath, runtime/debug, sort, strconv and strings from
-// the standard library, and internal/spec from this module.
+// Imports crypto/sha256, encoding/hex, encoding/json, fmt, hash, maps,
+// net/url, os, path/filepath, runtime/debug, slices, strconv and strings
+// from the standard library, and internal/spec from this module.
 package record

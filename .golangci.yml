@@ -23,9 +23,8 @@ output:
 linters:
   default: none
   enable:
-    # Correctness. copyloopvar is not enabled: the module's go line is
-    # 1.21, where the iterations of a loop share its variable, and the copy
-    # that copyloopvar reports is required.
+    # Correctness
+    - copyloopvar
     - errcheck
     - errorlint
     - govet

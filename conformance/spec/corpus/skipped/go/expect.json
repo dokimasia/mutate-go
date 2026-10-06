@@ -1,0 +1,129 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "sum",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "920666c1c8c460c8",
+      "file": "skips.go",
+      "start": {
+        "line": 17,
+        "column": 2
+      },
+      "end": {
+        "line": 17,
+        "column": 14
+      },
+      "original": "return a + b",
+      "replacement": "return *new(T)"
+    },
+    {
+      "scope": "positive",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "790392bf697027e4",
+      "file": "skips.go",
+      "start": {
+        "line": 22,
+        "column": 2
+      },
+      "end": {
+        "line": 22,
+        "column": 14
+      },
+      "original": "return n > 0",
+      "replacement": "return false"
+    },
+    {
+      "scope": "bump",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "80d5ef317a2c839a",
+      "file": "skips.go",
+      "start": {
+        "line": 27,
+        "column": 2
+      },
+      "end": {
+        "line": 27,
+        "column": 12
+      },
+      "original": "xs[0] += n",
+      "replacement": ""
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "bbca36151aec6d89",
+      "file": "skips.go",
+      "start": {
+        "line": 32,
+        "column": 2
+      },
+      "end": {
+        "line": 32,
+        "column": 18
+      },
+      "original": "return d >= 1<<n",
+      "replacement": "return false"
+    }
+  ],
+  "skipped": [
+    {
+      "file": "skips.go",
+      "start": {
+        "line": 17,
+        "column": 9
+      },
+      "end": {
+        "line": 17,
+        "column": 14
+      },
+      "reason": "operand of type-parameter type"
+    },
+    {
+      "file": "skips.go",
+      "start": {
+        "line": 22,
+        "column": 9
+      },
+      "end": {
+        "line": 22,
+        "column": 14
+      },
+      "reason": "named boolean result"
+    },
+    {
+      "file": "skips.go",
+      "start": {
+        "line": 27,
+        "column": 2
+      },
+      "end": {
+        "line": 27,
+        "column": 12
+      },
+      "reason": "assignment target with side effects"
+    },
+    {
+      "file": "skips.go",
+      "start": {
+        "line": 32,
+        "column": 9
+      },
+      "end": {
+        "line": 32,
+        "column": 18
+      },
+      "reason": "untyped constant in a non-constant shift"
+    }
+  ],
+  "generated": [],
+  "errors": []
+}

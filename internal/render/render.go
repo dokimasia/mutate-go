@@ -10,15 +10,48 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/scanner"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
 	"go.dokimi.dev/mutate/internal/enumerate"
 	"go.dokimi.dev/mutate/internal/load"
 )
+
+// generics is the minor version of Go 1.18, the first release with the
+// generic functions that the helper file declares.
+const generics = 18
+
+// The names of the helper file, which the package directory does not
+// contain: helperBase and goSuffix, or helperBase, an underscore, a number
+// and goSuffix when that name is in use.
+const (
+	helperBase = "zz_mutate"
+	goSuffix   = ".go"
+)
+
+// overlayFile is the name of the overlay that Write writes.
+const overlayFile = "overlay.json"
+
+// continuation starts a line of a type checker's error that continues the
+// error before it.
+const continuation = "\t"
+
+// The modes of the directories and the files that Write writes.
+const (
+	dirMode  = 0o755
+	fileMode = 0o644
+)
+
+// overlay is the overlay that the go command's -overlay flag reads: the
+// path of each file of the build, and the path of the file that the build
+// reads in its place.
+type overlay struct {
+	Replace map[string]string
+}
 
 // Program is the files that a build reads in place of a package's own: the
 // instrumented package that Render returns, or the ordinary build of one
@@ -35,7 +68,10 @@ type Program struct {
 	Sites []*enumerate.Site
 }
 
-// Render instruments every site of r that has a runnable mutant.
+// Render instruments every site of r that has a runnable mutant. The
+// instrumented package reads the active mutant's ordinal from the variable
+// of the environment that variable names, the protocol's variable, when it
+// initializes, and writes its trace to the file that TraceVar names.
 //
 // Render type-checks the instrumented package. When the type checker
 // rejects a site's form, Render marks each runnable mutant of the site
@@ -47,14 +83,14 @@ type Program struct {
 // Render returns an error when the type checker rejects the instrumented
 // package outside every form, or when a file name for the helper file is
 // in use.
-func Render(p *load.Package, r *enumerate.Result) (*Program, error) {
+func Render(p *load.Package, r *enumerate.Result, variable string) (*Program, error) {
 	name, err := helperName(p.Dir)
 	if err != nil {
 		return nil, err
 	}
-	lift := p.Language > 0 && p.Language < 18
+	lift := p.Language > 0 && p.Language < generics
 	for {
-		prog, spans := build(p, r, filepath.Join(p.Dir, name), lift)
+		prog, spans := build(p, r, filepath.Join(p.Dir, name), variable, lift)
 		problems := check(p, prog, lift)
 		if len(problems) == 0 {
 			return prog, nil
@@ -85,9 +121,9 @@ func Render(p *load.Package, r *enumerate.Result) (*Program, error) {
 // that dir does not contain.
 func helperName(dir string) (string, error) {
 	for i := 0; ; i++ {
-		name := "zz_mutate.go"
+		name := helperBase + goSuffix
 		if i > 0 {
-			name = "zz_mutate_" + strconv.Itoa(i) + ".go"
+			name = helperBase + "_" + strconv.Itoa(i) + goSuffix
 		}
 		_, err := os.Lstat(filepath.Join(dir, name))
 		if errors.Is(err, os.ErrNotExist) {
@@ -99,15 +135,16 @@ func helperName(dir string) (string, error) {
 	}
 }
 
-// build instruments the sites of r that have a runnable mutant, and
+// build instruments the sites of r that have a runnable mutant, with the
+// helper file at helperPath reading the protocol's variable variable, and
 // returns the program and the ranges of its forms by file path.
-func build(p *load.Package, r *enumerate.Result, helperPath string, lift bool) (*Program, map[string][]span) {
+func build(p *load.Package, r *enumerate.Result, helperPath, variable string, lift bool) (*Program, map[string][]span) {
 	prog := &Program{Files: map[string][]byte{}, Ordinals: map[*enumerate.Mutant]int{}}
 	first := map[*enumerate.Site]int{}
 	byFile := map[*load.File][]*enumerate.Site{}
 	ordinal := 0
 	for _, s := range r.Sites {
-		if !runnable(s) {
+		if !slices.ContainsFunc(s.Mutants, func(m *enumerate.Mutant) bool { return m.Status == enumerate.Runnable }) {
 			continue
 		}
 		prog.Sites = append(prog.Sites, s)
@@ -122,17 +159,8 @@ func build(p *load.Package, r *enumerate.Result, helperPath string, lift bool) (
 	for f, sites := range byFile {
 		prog.Files[f.Path], spans[f.Path] = renderFile(p.Fset, f, sites, first, lift)
 	}
-	prog.Files[helperPath], spans[helperPath] = helper(p.Name, prog.Sites, first, ordinal, lift)
+	prog.Files[helperPath], spans[helperPath] = helper(p.Name, variable, prog.Sites, first, ordinal, lift)
 	return prog, spans
-}
-
-func runnable(s *enumerate.Site) bool {
-	for _, m := range s.Mutants {
-		if m.Status == enumerate.Runnable {
-			return true
-		}
-	}
-	return false
 }
 
 // problem is one error of the parser or the type checker, at an offset of
@@ -153,15 +181,9 @@ func check(p *load.Package, prog *Program, lift bool) []problem {
 			files = append(files, f.Syntax)
 		}
 	}
-	paths := make([]string, 0, len(prog.Files))
-	for path := range prog.Files {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-	for _, path := range paths {
+	for _, path := range slices.Sorted(maps.Keys(prog.Files)) {
 		f, err := parser.ParseFile(p.Fset, path, prog.Files[path], parser.ParseComments|parser.SkipObjectResolution)
-		var list scanner.ErrorList
-		if errors.As(err, &list) {
+		if list, ok := errors.AsType[scanner.ErrorList](err); ok {
 			for _, e := range list {
 				problems = append(problems, problem{file: path, offset: e.Pos.Offset, message: e.Msg})
 			}
@@ -174,10 +196,10 @@ func check(p *load.Package, prog *Program, lift bool) []problem {
 	}
 	language := p.Language
 	if lift {
-		language = 18
+		language = generics
 	}
 	for _, e := range p.Check(files, language) {
-		if strings.HasPrefix(e.Msg, "\t") {
+		if strings.HasPrefix(e.Msg, continuation) {
 			continue
 		}
 		pos := p.Fset.PositionFor(e.Pos, false)
@@ -202,29 +224,30 @@ func innermost(spans []span, offset int) *enumerate.Site {
 	return best.site
 }
 
-// Write writes each file of the program into its own directory under dir,
-// and an overlay that maps each file's path to its copy. It returns the
-// overlay's path.
+// Write writes each file of the program into a directory of its own under
+// dir, numbered in the order of the files' paths, and the overlay that maps
+// each file's path to its copy. It returns the overlay's path.
+//
+// # Errors
+//
+// Write returns an error when a directory or a file does not write.
 func (prog *Program) Write(dir string) (string, error) {
-	paths := make([]string, 0, len(prog.Files))
-	for path := range prog.Files {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
 	replace := map[string]string{}
-	for i, path := range paths {
+	for i, path := range slices.Sorted(maps.Keys(prog.Files)) {
 		copyPath := filepath.Join(dir, strconv.Itoa(i), filepath.Base(path))
-		if err := os.MkdirAll(filepath.Dir(copyPath), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(copyPath), dirMode); err != nil {
 			return "", fmt.Errorf("render: %w", err)
 		}
-		if err := os.WriteFile(copyPath, prog.Files[path], 0o644); err != nil {
+		if err := os.WriteFile(copyPath, prog.Files[path], fileMode); err != nil {
 			return "", fmt.Errorf("render: %w", err)
 		}
 		replace[path] = copyPath
 	}
-	overlay, _ := json.Marshal(map[string]map[string]string{"Replace": replace})
-	path := filepath.Join(dir, "overlay.json")
-	if err := os.WriteFile(path, overlay, 0o644); err != nil {
+	// An overlay contains strings alone, which encoding/json encodes without
+	// an error.
+	data, _ := json.Marshal(&overlay{Replace: replace})
+	path := filepath.Join(dir, overlayFile)
+	if err := os.WriteFile(path, data, fileMode); err != nil {
 		return "", fmt.Errorf("render: %w", err)
 	}
 	return path, nil

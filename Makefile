@@ -1,14 +1,11 @@
 # The gate of mutate-go. CI runs the same targets, and `make check` runs
 # them all. `make help` lists every target with its `## ` annotation.
 
-.PHONY: help fmt build lint lint-go lint-md test test-min race cover check spec-sync spec-check
+.PHONY: help fmt build lint lint-go lint-md test race cover check spec-sync spec-check
 
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
 MARKDOWNLINT ?= markdownlint-cli2
-
-# The oldest toolchain that the module's go line admits.
-MIN_GO := go1.21.0
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "; printf "Targets:\n"} \
@@ -32,9 +29,6 @@ lint-md: ## Run markdownlint on every Markdown file
 test: ## Run every test
 	$(GO) test -count=1 ./...
 
-test-min: ## Run `make cover` with the oldest toolchain that the module admits
-	GOTOOLCHAIN=$(MIN_GO) $(MAKE) cover
-
 race: ## Run every test under the race detector, one package at a time
 	$(GO) test -race -count=1 -p 1 ./...
 
@@ -42,7 +36,7 @@ cover: ## Run every test, and fail unless the tests cover every statement
 	$(GO) test -count=1 -coverprofile=cover.out ./...
 	@awk 'NR > 1 && $$NF == 0 { print "not covered: " $$1; missed = 1 } END { exit missed }' cover.out
 
-check: lint cover test-min race spec-check ## Run the gate that CI runs
+check: lint cover race spec-check ## Run the gate that CI runs
 
 spec-sync: ## Refresh the vendored definition from mutate-spec, and the files that the engine embeds
 	./tools/spec-sync.sh conformance/spec go

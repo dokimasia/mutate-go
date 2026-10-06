@@ -14,6 +14,21 @@ import (
 	"strings"
 )
 
+// The variables of the environment that Go reads and writes.
+const (
+	// pathVar lists the directories where Go looks for the go command.
+	pathVar = "PATH"
+	// pwdVar names the working directory of the go command.
+	pwdVar = "PWD"
+)
+
+// windows is the GOOS of Windows, whose variable names ignore case and
+// whose files have no execute bit.
+const windows = "windows"
+
+// executable is the mode of a file that a user may execute.
+const executable = 0o111
+
 // Go runs the go command with args in dir and returns its standard output.
 //
 // The go command is the first one that env's PATH names. It runs with env
@@ -27,7 +42,7 @@ func Go(ctx context.Context, dir string, env []string, args ...string) ([]byte, 
 	}
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Dir = dir
-	cmd.Env = append(append([]string{}, env...), "PWD="+dir)
+	cmd.Env = append(append([]string{}, env...), pwdVar+"="+dir)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -43,7 +58,7 @@ func lookGo(env []string) (string, error) {
 	var path string
 	for _, kv := range env {
 		key, value, _ := strings.Cut(kv, "=")
-		if key == "PATH" || runtime.GOOS == "windows" && strings.EqualFold(key, "PATH") {
+		if key == pathVar || runtime.GOOS == windows && strings.EqualFold(key, pathVar) {
 			path = value
 		}
 	}
@@ -53,7 +68,7 @@ func lookGo(env []string) (string, error) {
 		}
 		candidate := filepath.Join(dir, goName)
 		info, err := os.Stat(candidate)
-		if err == nil && !info.IsDir() && (runtime.GOOS == "windows" || info.Mode()&0o111 != 0) {
+		if err == nil && !info.IsDir() && (runtime.GOOS == windows || info.Mode()&executable != 0) {
 			return candidate, nil
 		}
 	}

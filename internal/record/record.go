@@ -10,27 +10,30 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
-	"strings"
 
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
-// The verdicts, as the protocol spells them.
-const (
-	Killed      = "killed"
-	TimedOut    = "timed-out"
-	Exhausted   = "exhausted"
-	Survived    = "survived"
-	NoCoverage  = "no-coverage"
-	NotViable   = "not-viable"
-	Suppressed  = "suppressed"
-	NotSelected = "not-selected"
-	NotRun      = "not-run"
-	Error       = "error"
-)
-
 // Module is the module path of the engine.
 const Module = "go.dokimi.dev/mutate"
+
+// fileSuffix ends the name of a record file.
+const fileSuffix = ".mutate.json"
+
+// The modes of the directory of the record files that Write makes, and of
+// a record file.
+const (
+	dirMode  = 0o755
+	fileMode = 0o644
+)
+
+// indent is the indentation of each level of a record file's JSON.
+const indent = "  "
+
+// develVersion is the version that the go command states for a module
+// whose version it does not know, such as a main module built outside a
+// version control checkout or a module replaced by a directory.
+const develVersion = "(devel)"
 
 // Record is one run of one target. Catalogue and Overlay are the versions
 // of the catalogue and of the Go overlay that the run applied, and two
@@ -68,8 +71,9 @@ type Record struct {
 	Sample  *Sample  `json:"sample"`
 	Mutants []Mutant `json:"mutants"`
 	Skipped []Skip   `json:"skipped"`
-	// Generated lists each generated file of the package that the run
-	// leaves out, with the mutants that the kinds make in it.
+	// Generated lists each generated file of the package without the
+	// include directive, with the mutants that the kinds make in it, and
+	// whether the run included it.
 	Generated []Generated `json:"generated"`
 }
 
@@ -135,9 +139,13 @@ type Closing struct {
 // Sample states the mutants that the score counts and whose keys sort
 // before Before, the first key of a mutant that did not run. A run starts
 // the mutants in the order of their keys, so the sample is a uniform
-// sample of the target's mutants. Score is nil for an empty sample.
+// sample of the target's mutants. Limit is the number of mutant runs that
+// the caller allowed, when that limit alone ended the runs, and nil when
+// the caller's deadline or the caller ended them. Score is nil for an empty
+// sample.
 type Sample struct {
 	Before     string   `json:"before"`
+	Limit      *int     `json:"limit"`
 	Detected   int      `json:"detected"`
 	Undetected int      `json:"undetected"`
 	Score      *float64 `json:"score"`
@@ -145,8 +153,8 @@ type Sample struct {
 
 // RunError is one run error, with a code that the protocol defines.
 type RunError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    spec.ErrorCode `json:"code"`
+	Message string         `json:"message"`
 }
 
 // Position is a 1-based line and a 1-based column that counts bytes of
@@ -163,46 +171,52 @@ type Position struct {
 // for a mutant whose Verdict, Tests and Seconds come from the run of its
 // ordinary build: a survivor of its run, or a mutant without coverage.
 type Mutant struct {
-	Key         string   `json:"key"`
-	Kind        string   `json:"kind"`
-	File        string   `json:"file"`
-	Scope       string   `json:"scope"`
-	Start       Position `json:"start"`
-	End         Position `json:"end"`
-	Original    string   `json:"original"`
-	Replacement string   `json:"replacement"`
-	Verdict     string   `json:"verdict"`
-	Tests       []string `json:"tests,omitempty"`
-	CoveredBy   []string `json:"coveredBy,omitempty"`
-	Seconds     *float64 `json:"seconds,omitempty"`
-	Confirmed   bool     `json:"confirmed,omitempty"`
-	Rule        string   `json:"rule,omitempty"`
-	Reason      string   `json:"reason,omitempty"`
+	Key         string       `json:"key"`
+	Kind        spec.Kind    `json:"kind"`
+	File        string       `json:"file"`
+	Scope       string       `json:"scope"`
+	Start       Position     `json:"start"`
+	End         Position     `json:"end"`
+	Original    string       `json:"original"`
+	Replacement string       `json:"replacement"`
+	Verdict     spec.Verdict `json:"verdict"`
+	Tests       []string     `json:"tests,omitempty"`
+	CoveredBy   []string     `json:"coveredBy,omitempty"`
+	Seconds     *float64     `json:"seconds,omitempty"`
+	Confirmed   bool         `json:"confirmed,omitempty"`
+	Rule        spec.Family  `json:"rule,omitempty"`
+	Reason      string       `json:"reason,omitempty"`
 }
 
 // Skip is one site of a catalogue class without a mutant, and the reason.
 type Skip struct {
-	File   string   `json:"file"`
-	Start  Position `json:"start"`
-	End    Position `json:"end"`
-	Reason string   `json:"reason"`
+	File   string          `json:"file"`
+	Start  Position        `json:"start"`
+	End    Position        `json:"end"`
+	Reason spec.SkipReason `json:"reason"`
 }
 
-// Generated is a generated file of the package that the run leaves out,
-// and the number of mutants that the catalogue's kinds make at its sites.
+// Generated is a generated file of the package without the include
+// directive, the number of mutants that the catalogue's kinds make at its
+// sites, and whether the run included the file, so that its mutants are
+// among the record's mutants and the score counts them.
 type Generated struct {
-	File    string `json:"file"`
-	Mutants int    `json:"mutants"`
+	File     string `json:"file"`
+	Mutants  int    `json:"mutants"`
+	Included bool   `json:"included"`
 }
 
-// Failed reports whether the run fails: it has a run error, or a mutant
-// whose verdict is not-run or error.
+// Failed reports whether the run fails: it has a run error, a mutant whose
+// verdict is error, or a mutant whose verdict is not-run for another reason
+// than the caller's limit on the number of mutant runs, which the sample's
+// Limit states.
 func (r *Record) Failed() bool {
 	if len(r.Errors) > 0 {
 		return true
 	}
+	limited := r.Sample != nil && r.Sample.Limit != nil
 	for _, m := range r.Mutants {
-		if m.Verdict == NotRun || m.Verdict == Error {
+		if m.Verdict == spec.Error || m.Verdict == spec.NotRun && !limited {
 			return true
 		}
 	}
@@ -217,25 +231,34 @@ func (r *Record) Failed() bool {
 // SetScore also sets Sample for a run without a run error in which a
 // mutant is not-run: the mutants whose keys sort before the least key of a
 // not-run mutant, counted as the score counts them. Sample is nil for any
-// other run.
-func (r *Record) SetScore(protocol spec.Protocol) {
-	detected, undetected := r.tally(protocol, "")
+// other run. limit is the number of mutant runs that the caller allowed,
+// when that limit alone ended the runs, or 0. The sample then states it,
+// and the run's score is the sample's.
+func (r *Record) SetScore(protocol spec.Protocol, limit int) {
+	detected, undetected := r.Tally(protocol, "")
 	r.Score = ratio(detected, undetected)
-	if r.Failed() {
-		r.Score = nil
-	}
 	r.Sample = nil
 	before := ""
 	for _, m := range r.Mutants {
-		if m.Verdict == NotRun && (before == "" || m.Key < before) {
+		if m.Verdict == spec.NotRun && (before == "" || m.Key < before) {
 			before = m.Key
 		}
 	}
-	if before == "" || len(r.Errors) > 0 {
-		return
+	if before != "" && len(r.Errors) == 0 {
+		detected, undetected = r.Tally(protocol, before)
+		r.Sample = &Sample{
+			Before:     before,
+			Detected:   detected,
+			Undetected: undetected,
+			Score:      ratio(detected, undetected),
+		}
+		if limit > 0 {
+			r.Sample.Limit, r.Score = &limit, r.Sample.Score
+		}
 	}
-	detected, undetected = r.tally(protocol, before)
-	r.Sample = &Sample{Before: before, Detected: detected, Undetected: undetected, Score: ratio(detected, undetected)}
+	if r.Failed() {
+		r.Score = nil
+	}
 }
 
 // ratio returns detected over detected plus undetected, or nil when both
@@ -248,51 +271,27 @@ func ratio(detected, undetected int) *float64 {
 	return &score
 }
 
-// tally returns the number of detected and of undetected mutants, as
-// protocol classifies each verdict, among the mutants whose keys sort
-// before before, or among every mutant when before is empty.
-func (r *Record) tally(protocol spec.Protocol, before string) (detected, undetected int) {
-	class := map[string]string{}
+// Tally returns the number of the detected and of the undetected mutants,
+// as protocol classifies each verdict, among the mutants whose keys sort
+// before bound, or among every mutant when bound is empty.
+func (r *Record) Tally(protocol spec.Protocol, bound string) (detected, undetected int) {
+	class := map[spec.Verdict]spec.ScoreClass{}
 	for _, v := range protocol.Verdicts {
 		class[v.ID] = v.Score
 	}
 	for _, m := range r.Mutants {
-		if before != "" && m.Key >= before {
+		if bound != "" && m.Key >= bound {
 			continue
 		}
 		switch class[m.Verdict] {
-		case "detected":
+		case spec.Detected:
 			detected++
-		case "undetected":
+		case spec.Undetected:
 			undetected++
+		case spec.Excluded:
 		}
 	}
 	return detected, undetected
-}
-
-// Line returns the line that reports m at its position in the file at
-// path: path:line:column: verdict: original became replacement (kind). A
-// mutant with an empty replacement reads original removed, and the line of
-// a mutant whose run ended in an error ends with the reason.
-func (m Mutant) Line(path string) string {
-	change := m.Original + " became " + m.Replacement
-	if m.Replacement == "" {
-		change = m.Original + " removed"
-	}
-	line := fmt.Sprintf("%s:%d:%d: %s: %s (%s)", path, m.Start.Line, m.Start.Column, phrase(m.Verdict), change, m.Kind)
-	if m.Verdict == Error && m.Reason != "" {
-		line += ": " + m.Reason
-	}
-	return line
-}
-
-// phrase returns a verdict as text writes it: not covered for no-coverage,
-// and the verdict with spaces in place of its hyphens for any other.
-func phrase(verdict string) string {
-	if verdict == NoCoverage {
-		return "not covered"
-	}
-	return strings.ReplaceAll(verdict, "-", " ")
 }
 
 // Path returns the path of file, a file of the record, relative to dir,
@@ -307,88 +306,30 @@ func (r *Record) Path(file, dir string) string {
 	return rel
 }
 
-// Summary returns one line that states the run:
-//
-//   - the target
-//   - how many of the mutants that the score counts the tests detected, as
-//     a count and as a percentage rounded down, or that the run failed, with
-//     the detected mutants of a sample that is not empty
-//   - the count of each verdict, in protocol's order
-//   - the number of generated files that the run leaves out, and of their
-//     mutants, when it leaves one out
-func (r *Record) Summary(protocol spec.Protocol) string {
-	counts := map[string]int{}
-	for _, m := range r.Mutants {
-		counts[m.Verdict]++
-	}
-	var parts []string
-	for _, v := range protocol.Verdicts {
-		if counts[v.ID] > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", counts[v.ID], phrase(v.ID)))
-		}
-	}
-	if len(r.Generated) > 0 {
-		mutants := 0
-		for _, g := range r.Generated {
-			mutants += g.Mutants
-		}
-		files, noun := "files", "mutants"
-		if len(r.Generated) == 1 {
-			files = "file"
-		}
-		if mutants == 1 {
-			noun = "mutant"
-		}
-		part := fmt.Sprintf("%d generated %s with %d %s left out", len(r.Generated), files, mutants, noun)
-		parts = append(parts, part)
-	}
-	detected, undetected := r.tally(protocol, "")
-	head := "no mutant to detect"
-	switch {
-	case r.Failed() && r.Sample != nil && r.Sample.Score != nil:
-		head = "the run failed, " + detection(r.Sample.Detected, r.Sample.Undetected, "of a sample of ")
-	case r.Failed():
-		head = "the run failed"
-	case detected+undetected > 0:
-		head = detection(detected, undetected, "of ")
-	}
-	text := r.Target.Name + ": " + head
-	if len(parts) > 0 {
-		text += ": " + strings.Join(parts, ", ")
-	}
-	return text
-}
-
-// detection states the detected mutants among the detected and the
-// undetected ones, and the percentage rounded down, as in "12 of 13 mutants
-// detected (92%)". of is the words before the count of mutants. The count
-// is at least 1.
-func detection(detected, undetected int, of string) string {
-	counted := detected + undetected
-	noun := "mutants"
-	if counted == 1 {
-		noun = "mutant"
-	}
-	return fmt.Sprintf("%d %s%d %s detected (%d%%)", detected, of, counted, noun, detected*100/counted)
-}
-
 // FileName returns the name of the record file of the target importPath:
 // the import path escaped as a path segment, and .mutate.json.
 func FileName(importPath string) string {
-	return url.PathEscape(importPath) + ".mutate.json"
+	return url.PathEscape(importPath) + fileSuffix
 }
 
 // Write writes r into dir, which Write creates when it does not exist, as
-// the file that FileName names, and returns the file's path.
+// the file that FileName names, and returns the file's path. The file is
+// the record's JSON, indented by two spaces a level, and a newline.
+//
+// Error modes:
+//   - the error of a directory that does not exist and cannot be made
+//   - the error of a file that cannot be written
+//
+// Each starts with the package's name.
 func (r *Record) Write(dir string) (string, error) {
 	// A record contains strings, integers and finite numbers, which
 	// encoding/json encodes without an error.
-	data, _ := json.MarshalIndent(r, "", "  ")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	data, _ := json.MarshalIndent(r, "", indent)
+	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return "", fmt.Errorf("record: %w", err)
 	}
 	path := filepath.Join(dir, FileName(r.Target.Name))
-	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(path, append(data, '\n'), fileMode); err != nil {
 		return "", fmt.Errorf("record: %w", err)
 	}
 	return path, nil
@@ -400,7 +341,7 @@ func (r *Record) Write(dir string) (string, error) {
 // directory, and for a binary that does not contain the module.
 func EngineVersion(info *debug.BuildInfo) string {
 	if info == nil {
-		return "(devel)"
+		return develVersion
 	}
 	if info.Main.Path == Module {
 		return info.Main.Version
@@ -411,11 +352,11 @@ func EngineVersion(info *debug.BuildInfo) string {
 		}
 		if d.Replace != nil {
 			if d.Replace.Version == "" {
-				return "(devel)"
+				return develVersion
 			}
 			return d.Replace.Version
 		}
 		return d.Version
 	}
-	return "(devel)"
+	return develVersion
 }

@@ -27,18 +27,6 @@ jobs:
           go-version: stable
           cache: false
       - run: make cover
-  # The module's go line is 1.21, so every test also runs on Go 1.21.0, the
-  # oldest toolchain that the line admits. Some files compile only for
-  # toolchains before Go 1.25, so their coverage counts here.
-  cover-min:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version: 1.21.0
-          cache: false
-      - run: make cover
   # The workers, the limits of each run and the progress lines run on
   # goroutines of their own.
   race:

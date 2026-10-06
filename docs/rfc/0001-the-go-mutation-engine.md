@@ -79,13 +79,12 @@ leaves the module under test unchanged.
 | Renderer | The instrumented files, the helper file and the overlay | `internal/render` |
 | Runner | The build, the control runs, the mutant runs, the limits and the verdicts | `internal/run` |
 | Recorder | The record and its `inputs` digest | `internal/record` |
-| Catalogue | The vendored catalogue, Go's overlay and the corpus from mutate-spec | `internal/spec` |
+| Definition | The vendored catalogue, run protocol and Go overlay from mutate-spec, decoded once, with their vocabularies as Go types | `internal/spec` |
 
-The module's go line is 1.21, the last release before per-iteration loop
-variables. A module that adds the engine as a dependency gets its go line
-raised to at least 1.21, which keeps the semantics of every loop. The
-module imports only the standard library. CI builds and tests it with Go
-1.21.0 and with the latest release.
+The module's go line is 1.27.0. A module that adds the engine as a
+dependency gets its go line raised to at least 1.27.0. The module's
+packages import only the standard library, and its tests also import
+`go.dokimi.dev/assert`. CI builds and tests it with the latest release.
 
 ### The test entry point
 
@@ -99,8 +98,8 @@ package mutate
 // directory, and fails tb with one line for each undetected mutant: a
 // survivor, or a mutant whose site the tests never execute. Each line
 // starts with the mutant's position, which go test does not precede with
-// the position of the call to Check when the toolchain is Go 1.25 or later.
-// When DOKIMI_MUTATE_RECORD_DIR is set, Check writes the run's record there.
+// the position of the call to Check. When DOKIMI_MUTATE_RECORD_DIR is set,
+// Check writes the run's record there.
 //
 // Check builds the package's test binary once, with every mutant behind a
 // runtime switch, and runs it in a fresh process per mutant. That binary
@@ -215,7 +214,7 @@ beside the engines of other languages.
 | `-record dir` | Write one record per package to `dir` |
 | `-json` | Write each package's record to standard output as one line of JSON, in place of the lines and the summary |
 | `-timeout d` | Start no package after `d`, and no mutant whose run and the closing control run would not end before then. 0, the default, sets no limit |
-| `-sample n` | Start the runs of the first n mutants of each package in key order, and of no other. 0, the default, runs every mutant |
+| `-sample n` | Start the runs of the first n mutants of each package in key order, and of no other. A run that this limit alone ends does not fail. 0, the default, runs every mutant |
 | `-memory bytes` | Admit the runs of a package after its opening control run while the memory ceilings of every admitted package's runs fit in `bytes`. `K`, `M`, `G` and `T` state powers of 1024, and 0 sets no limit. By default three quarters of the memory that the process may use |
 | `-confirm` | Run each survivor, and each mutant that is not covered, once more in an ordinary build of that mutant alone, as `Confirm` does |
 
@@ -229,12 +228,14 @@ When a package's run ends, the command writes the package's summary:
 
 ```text
 <import path>: <detected> of <counted> mutants detected (<percent>%): <count> <verdict>, ...
+<import path>: <detected> of a sample of <counted> mutants detected (<percent>%): <count> <verdict>, ...
 <import path>: the run failed: <count> <verdict>, ...
 <import path>: the run failed, <detected> of a sample of <counted> mutants detected (<percent>%): <count> <verdict>, ...
 ```
 
-The percentage is rounded down. The third form states the record's
-`sample`, which a run has when a deadline or an interrupt ended it.
+The percentage is rounded down. The second form states the record's
+`sample` of a run that `-sample` alone ended. The fourth form states the
+`sample` of a run that a deadline or an interrupt ended.
 
 To standard error, the command writes each run error, the number of
 mutants that did not run with the reason, and a progress line for each
@@ -530,7 +531,8 @@ whose keys sort before the least key of a `not-run` mutant. Those mutants
 are a uniform sample of the package's mutants. Under `-sample n`, the
 engine starts the runs of the first n mutants in key order, and every later
 mutant is `not-run`, so the same code gives the same sample on every
-machine.
+machine. When that limit alone ends the runs, the record's `sample` states
+the limit, the run does not fail, and its `score` is the sample's score.
 
 ### Confirmation
 
@@ -602,7 +604,7 @@ in the order of the binaries and of their tests, where every binary that
 executed the site ran each of its tests alone. `generated` lists each file
 that `go/ast.IsGenerated` reports and that lacks the include directive,
 with the number of mutants that a separate walk of the file makes at its
-sites.
+sites, and whether the run included the file.
 The `inputs` digest is the SHA-256 of these fields:
 
 - The engine's version. A `(devel)` version, or one that ends in `+dirty`,
@@ -633,10 +635,9 @@ alternating rounds.
 
 ### Load with golang.org/x/tools/go/packages
 
-**Why not:** the module would require golang.org/x/tools, whose go line at
-v0.50.0 is 1.26.0, and every module that adds the engine would get at least
-that line. The standard library's importer loads the same packages with no
-error.
+**Why not:** the engine's packages would require golang.org/x/tools, and
+every module that adds the engine would require it too. The standard
+library's importer loads the same packages with no error.
 
 ### A build per mutant
 
@@ -684,10 +685,13 @@ verdict.
 ## Drawbacks
 
 - **The test entry point changes the module under test.** A module below
-  go 1.21 gets its go line raised to 1.21, and each package that opts in
-  gets a test file.
-- **The engine's go line is fixed at 1.21.** Code that needs a newer
-  standard library API needs a build constraint and a fallback.
+  go 1.27.0 gets its go line raised to 1.27.0, and each package that opts in
+  gets a test file. A module below go 1.22 then gets a variable per loop
+  iteration, which changes a loop whose closures capture its variable.
+- **The engine needs a Go 1.27 toolchain.** It refuses a go command of
+  another toolchain than the one that built it. A module that selects an
+  older toolchain runs the engine with `GOTOOLCHAIN` set to a Go 1.27
+  release, so the engine and its go commands use one toolchain.
 - **Instrumented suites run slower.** 1.9% and 12.6% on two packages, with
   no mutant active.
 - **An instrumented build changes allocation counts.** The forms make a
@@ -732,7 +736,6 @@ verdict.
 | `go help build`, Go 1.27.1: `-overlay`, and that files beneath GOMODCACHE may not be replaced | https://pkg.go.dev/cmd/go#hdr-Compile_packages_and_dependencies |
 | `go help run`, Go 1.27.1: a version suffix ignores the current `go.mod` | https://pkg.go.dev/cmd/go#hdr-Compile_and_run_Go_program |
 | `cmd/go/internal/test/test.go`, Go 1.27.1, line 1596: `-test.paniconexit0` passed to every test binary | https://github.com/golang/go/blob/go1.27.1/src/cmd/go/internal/test/test.go |
-| golang.org/x/tools v0.50.0's `go.mod`: go 1.26.0 | https://proxy.golang.org/golang.org/x/tools/@v/v0.50.0.mod |
 | `go/importer.ForCompiler` and its `lookup` function | https://pkg.go.dev/go/importer#ForCompiler |
 | `go/ast.IsGenerated` | https://pkg.go.dev/go/ast#IsGenerated |
 | `testing.T.Deadline` | https://pkg.go.dev/testing#T.Deadline |

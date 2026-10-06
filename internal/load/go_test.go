@@ -11,61 +11,68 @@ import (
 	"strings"
 	"testing"
 
+	"go.dokimi.dev/assert"
+
 	"go.dokimi.dev/mutate/internal/load"
 )
 
 func TestGo(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
+
 	t.Run("Go", func(t *testing.T) {
 		t.Parallel()
+
 		t.Run("returns the go command's standard output", func(t *testing.T) {
 			t.Parallel()
 			out, err := load.Go(ctx, t.TempDir(), os.Environ(), "env", "GOVERSION")
-			if err != nil || string(out) != runtime.Version()+"\n" {
-				t.Errorf("Go(env GOVERSION) = %q, %v, want %q", out, err, runtime.Version()+"\n")
-			}
+			assert.NoError(t, err, "go env runs")
+			assert.Equal(t, string(out), runtime.Version()+"\n", "the output is the toolchain's version")
 		})
-		t.Run("returns an error with the standard error of a failing command", func(t *testing.T) {
-			t.Parallel()
-			_, err := load.Go(ctx, t.TempDir(), os.Environ(), "nonexistent-command")
-			if err == nil || !strings.Contains(err.Error(), "go nonexistent-command: exit status 2") ||
-				!strings.Contains(err.Error(), "unknown command") {
-				t.Errorf("Go(nonexistent-command) error = %v, want the exit status and the go command's message", err)
-			}
-		})
+
 		t.Run("runs the go command in the directory with PWD set to it", func(t *testing.T) {
 			t.Parallel()
 			env, _ := fakeGo(t)
 			dir := t.TempDir()
 			out, err := load.Go(ctx, dir, append(env, "PWD=/elsewhere"), "pwd")
-			if err != nil || string(out) != dir+"\n" {
-				t.Errorf("Go(pwd) = %q, %v, want %q", out, err, dir+"\n")
-			}
+			assert.NoError(t, err, "the fake go command runs")
+			assert.Equal(t, string(out), dir+"\n", "PWD is the directory and not the caller's")
 		})
+
 		t.Run("runs the first go command of the absolute directories in PATH", func(t *testing.T) {
 			t.Parallel()
+			// The path lists an empty directory, a relative one, a directory
+			// whose go is a directory, and one whose go is no command, before
+			// the fake go command.
 			dir := t.TempDir()
-			if err := os.Mkdir(filepath.Join(dir, "go"), 0o755); err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, os.Mkdir(filepath.Join(dir, "go"), dirMode), "a directory named go is created")
 			notExecutable := t.TempDir()
 			write(t, notExecutable, "go", "#!/bin/sh\necho wrong\n")
 			path := strings.Join(
 				[]string{"", "relative", dir, notExecutable, fakeGoDir},
 				string(filepath.ListSeparator),
 			)
-			out, err := load.Go(ctx, t.TempDir(), withPath(os.Environ(), path), "pwd")
-			if err != nil || len(out) == 0 || string(out) == "wrong\n" {
-				t.Errorf("Go(pwd) = %q, %v, want the output of the fake go command", out, err)
-			}
+			wd := t.TempDir()
+			out, err := load.Go(ctx, wd, withPath(os.Environ(), path), "pwd")
+			assert.NoError(t, err, "the fake go command runs")
+			assert.Equal(t, string(out), wd+"\n", "the fake go command, the first one, runs")
 		})
+
+		t.Run("returns an error with the exit status and the go command's message", func(t *testing.T) {
+			t.Parallel()
+			_, err := load.Go(ctx, t.TempDir(), os.Environ(), "nonexistent-command")
+			assert.HasError(t, err, "an unknown go command fails")
+			assert.That(t, err.Error()).
+				HasPrefix("go nonexistent-command: exit status 2\n", "the error states the call and its status").
+				Contains("unknown command", "and the go command's message")
+		})
+
 		t.Run("returns an error when PATH names no go command", func(t *testing.T) {
 			t.Parallel()
 			_, err := load.Go(ctx, t.TempDir(), withPath(os.Environ(), t.TempDir()), "version")
-			if err == nil || !strings.Contains(err.Error(), "no go command in the directories of PATH") {
-				t.Errorf("Go() error = %v, want one that states that PATH names no go command", err)
-			}
+			assert.HasError(t, err, "a PATH without a go command fails")
+			assert.HasPrefix(t, err.Error(), "no go command in the directories of PATH",
+				"the error states that PATH names no go command")
 		})
 	})
 }

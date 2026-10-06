@@ -4,7 +4,6 @@
 package load
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +13,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"go/version"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,6 +22,28 @@ import (
 	"strconv"
 	"strings"
 )
+
+// The arguments of go env that Load passes: the subcommand, and the flag
+// that writes the variables that follow it as one JSON object.
+const (
+	envCommand = "env"
+	envJSON    = "-json"
+)
+
+// compiler is the toolchain whose export data and sizes the type checker
+// reads.
+const compiler = "gc"
+
+// The prefixes of a Go version as go/version and go/types spell it, such as
+// go1.21: the toolchain's name, and the name with the major version 1.
+const (
+	goPrefix       = "go"
+	languagePrefix = goPrefix + "1."
+)
+
+// moduleLanguage is the language version of a module without a go line,
+// which the go command compiles as go 1.16.
+const moduleLanguage = 16
 
 // Package is one type-checked package and the files that the compiler
 // compiles for it.
@@ -66,10 +88,6 @@ const (
 	// Source is a file of the package's own code, which the engine
 	// mutates.
 	Source Role = iota
-	// Generated is a file that [go/ast.IsGenerated] reports, unless a
-	// comment before its package clause is the line [Config.Include]. The
-	// engine neither mutates it nor lists its sites.
-	Generated
 	// Cgo is cgo's rewrite of a file that imports C. Its line directives
 	// map its positions to the file that imports C, and the engine lists
 	// its sites as skipped.
@@ -82,6 +100,12 @@ const (
 // File is one compiled file.
 type File struct {
 	Role Role
+	// Generated reports whether [go/ast.IsGenerated] reports the file's
+	// source, and no comment before its package clause is the line
+	// [Config.Include]. The engine mutates a generated Source file, and
+	// lists the sites of a generated Cgo file, only in a run that includes
+	// generated files. A Support file is never Generated.
+	Generated bool
 	// Path is the absolute path of the file that the type checker read.
 	Path string
 	// Name is the path of the file's source, relative to the package's
@@ -110,11 +134,18 @@ type Config struct {
 	Include string
 }
 
-// listed is the part of a go list entry that Load reads.
-type listed struct {
-	ImportPath      string
+// goEnv is the part of go env's output that Load reads. Its field names are
+// the names of the variables that Load asks go env for.
+type goEnv struct {
+	GOVERSION  string
+	GOMODCACHE string
+	GOARCH     string
+}
+
+// listedPackage is the part of a go list entry that Load reads.
+type listedPackage struct {
+	Listed
 	Name            string
-	Dir             string
 	Export          string
 	GoFiles         []string
 	CgoFiles        []string
@@ -127,12 +158,7 @@ type listed struct {
 		Dir       string
 		GoVersion string
 	}
-	Error      *struct{ Err string }
-	DepsErrors []*struct{ Err string }
 }
-
-// listFields are the fields that Load asks go list for.
-const listFields = "ImportPath,Name,Dir,Export,GoFiles,CgoFiles,CompiledGoFiles,TestGoFiles,XTestGoFiles,ImportMap,DepOnly,Module,Error,DepsErrors"
 
 // Load lists the package in cfg.Dir with go list, and type-checks the
 // files that go list reports in CompiledGoFiles against the export data of
@@ -161,11 +187,11 @@ func Load(ctx context.Context, cfg Config) (*Package, error) {
 	if err != nil {
 		return nil, err
 	}
-	var env struct{ GOVERSION, GOMODCACHE, GOARCH string }
-	out, err := Go(ctx, dir, cfg.Env, "env", "-json", "GOVERSION", "GOMODCACHE", "GOARCH")
+	out, err := Go(ctx, dir, cfg.Env, append([]string{envCommand, envJSON}, fieldNames[goEnv]()...)...)
 	if err != nil {
 		return nil, err
 	}
+	var env goEnv
 	if err = json.Unmarshal(out, &env); err != nil {
 		return nil, fmt.Errorf("go env: %w", err)
 	}
@@ -180,12 +206,12 @@ func Load(ctx context.Context, cfg Config) (*Package, error) {
 	if err == nil && within(cache, dir) {
 		return nil, fmt.Errorf("%s is in the module cache, whose files the go command does not replace", dir)
 	}
-	args := append([]string{"list", "-e", "-json=" + listFields, "-export", "-deps", "-compiled", "."}, cfg.Imports...)
-	out, err = Go(ctx, dir, cfg.Env, args...)
+	args := append([]string{listExport, listDeps, listCompiled, workingPackage}, cfg.Imports...)
+	entries, err := list[listedPackage](ctx, dir, cfg.Env, args...)
 	if err != nil {
 		return nil, err
 	}
-	target, exports, err := decodeList(out, dir)
+	target, exports, err := find(entries, dir)
 	if target == nil {
 		return nil, err
 	}
@@ -209,36 +235,24 @@ func Load(ctx context.Context, cfg Config) (*Package, error) {
 	return p, nil
 }
 
-// decodeList reads go list's stream of entries. It returns the entry of
-// the package in dir, the export data of every entry by import path, and
-// the errors that go list reports, each once. The entry is nil when the
-// stream does not decode or lists no package in dir.
-func decodeList(out []byte, dir string) (*listed, map[string]string, error) {
-	var target *listed
+// find returns the entry of the package in dir, the export data of every
+// entry by import path, and the errors that go list states of the entries,
+// each once. The entry is nil, and the error states it, when go list lists
+// no package in dir.
+func find(entries []listedPackage, dir string) (*listedPackage, map[string]string, error) {
+	var target *listedPackage
 	exports := map[string]string{}
 	var problems []string
-	add := func(problem string) {
-		if problem = strings.TrimSpace(problem); !slices.Contains(problems, problem) {
-			problems = append(problems, problem)
+	for i := range entries {
+		e := &entries[i]
+		exports[e.ImportPath] = e.Export
+		for _, problem := range e.problems() {
+			if !slices.Contains(problems, problem) {
+				problems = append(problems, problem)
+			}
 		}
-	}
-	dec := json.NewDecoder(bytes.NewReader(out))
-	for {
-		var l listed
-		if err := dec.Decode(&l); errors.Is(err, io.EOF) {
-			break
-		} else if err != nil {
-			return nil, nil, fmt.Errorf("go list: %w", err)
-		}
-		exports[l.ImportPath] = l.Export
-		if l.Error != nil {
-			add(l.Error.Err)
-		}
-		for _, e := range l.DepsErrors {
-			add(e.Err)
-		}
-		if !l.DepOnly && resolves(l.Dir, dir) {
-			target = &l
+		if !e.DepOnly && resolves(e.Dir, dir) {
+			target = e
 		}
 	}
 	if len(problems) > 0 {
@@ -250,24 +264,19 @@ func decodeList(out []byte, dir string) (*listed, map[string]string, error) {
 	return target, exports, nil
 }
 
-// language returns N of the go line 1.N[.P], and 16 for a module without a
-// go line, which the go command compiles as go 1.16.
+// language returns N of the go line 1.N[.P], and moduleLanguage for a
+// module without a go line.
 func language(goLine string) int {
 	if goLine == "" {
-		return 16
+		return moduleLanguage
 	}
-	minor, _, _ := strings.Cut(strings.TrimPrefix(goLine, "1."), ".")
-	end := strings.IndexFunc(minor, func(r rune) bool { return r < '0' || r > '9' })
-	if end >= 0 {
-		minor = minor[:end]
-	}
-	n, _ := strconv.Atoi(minor)
+	n, _ := strconv.Atoi(strings.TrimPrefix(version.Lang(goPrefix+goLine), languagePrefix))
 	return n
 }
 
-// parse reads and parses every compiled file, and gives each its role. A
-// generated file whose header contains the line include is a source file.
-func (p *Package) parse(target *listed, include string) error {
+// parse reads and parses every compiled file, gives each its role, and
+// marks each generated file whose header does not contain the line include.
+func (p *Package) parse(target *listedPackage, include string) error {
 	sources := map[string]bool{}
 	for _, name := range target.GoFiles {
 		sources[name] = true
@@ -294,9 +303,7 @@ func (p *Package) parse(target *listed, include string) error {
 		switch {
 		case sources[name]:
 			f.Role = Source
-			if generated(syntax, include) {
-				f.Role = Generated
-			}
+			f.Generated = generated(syntax, include)
 		case cgo[p.Fset.Position(syntax.Package).Filename]:
 			// The line directives of cgo's rewrite name the file that
 			// imports C, whose header decides whether it is generated.
@@ -311,9 +318,7 @@ func (p *Package) parse(target *listed, include string) error {
 			if err != nil {
 				return err
 			}
-			if generated(header, include) {
-				f.Role = Generated
-			}
+			f.Generated = generated(header, include)
 		}
 		if f.Role != Support {
 			rel, err := filepath.Rel(p.Root, source)
@@ -348,7 +353,7 @@ func generated(f *ast.File, include string) bool {
 
 // check type-checks the parsed files against the export data of the
 // package's dependencies.
-func (p *Package) check(target *listed, exports map[string]string, arch string) error {
+func (p *Package) check(target *listedPackage, exports map[string]string, arch string) error {
 	lookup := func(path string) (io.ReadCloser, error) {
 		if mapped, ok := target.ImportMap[path]; ok {
 			path = mapped
@@ -359,8 +364,8 @@ func (p *Package) check(target *listed, exports map[string]string, arch string) 
 		}
 		return os.Open(export)
 	}
-	p.importer = importer.ForCompiler(p.Fset, "gc", lookup)
-	p.sizes = types.SizesFor("gc", arch)
+	p.importer = importer.ForCompiler(p.Fset, compiler, lookup)
+	p.sizes = types.SizesFor(compiler, arch)
 	p.Info = &types.Info{
 		Types:  map[ast.Expr]types.TypeAndValue{},
 		Defs:   map[*ast.Ident]types.Object{},
@@ -386,7 +391,7 @@ func (p *Package) check(target *listed, exports map[string]string, arch string) 
 func (p *Package) config(language int, report func(error)) *types.Config {
 	conf := &types.Config{Importer: p.importer, Sizes: p.sizes, Error: report}
 	if language > 0 {
-		conf.GoVersion = "go1." + strconv.Itoa(language)
+		conf.GoVersion = languagePrefix + strconv.Itoa(language)
 	}
 	return conf
 }
@@ -399,8 +404,7 @@ func (p *Package) Check(files []*ast.File, language int) []types.Error {
 	var errs []types.Error
 	conf := p.config(language, func(err error) {
 		// The type checker reports every error as a types.Error.
-		var e types.Error
-		if errors.As(err, &e) {
+		if e, ok := errors.AsType[types.Error](err); ok {
 			errs = append(errs, e)
 		}
 	})

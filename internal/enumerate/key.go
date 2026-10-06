@@ -10,16 +10,21 @@ import (
 	"go/token"
 	"strconv"
 	"strings"
+
+	"go.dokimi.dev/mutate/internal/spec"
 )
+
+// keyDigits is the number of the digest's hexadecimal digits that a key
+// keeps.
+const keyDigits = 16
 
 // Key returns a mutant's key: the first 16 hexadecimal digits of the
 // SHA-256 digest of the prefix, the file, the scope, the kind, the tokens
 // and the occurrence in decimal, separated by NUL bytes.
-func Key(prefix, file, scope, kind, tokens string, occurrence int) string {
-	sum := sha256.Sum256(
-		[]byte(strings.Join([]string{prefix, file, scope, kind, tokens, strconv.Itoa(occurrence)}, "\x00")),
-	)
-	return hex.EncodeToString(sum[:])[:16]
+func Key(prefix, file, scope string, kind spec.Kind, tokens string, occurrence int) string {
+	fields := []string{prefix, file, scope, string(kind), tokens, strconv.Itoa(occurrence)}
+	sum := sha256.Sum256([]byte(strings.Join(fields, keySeparator)))
+	return hex.EncodeToString(sum[:])[:keyDigits]
 }
 
 // Tokens returns the tokens of src joined by single spaces. It leaves out

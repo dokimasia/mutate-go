@@ -14,9 +14,9 @@ import (
 
 // helperHead declares the switch, the trace and the helpers that the forms
 // share. Its verbs are the build constraint, the package name, the
-// protocol's variable and the length of the table of executed sites. It
-// imports under names of its own, so no declaration of the package hides an
-// import.
+// protocol's variable, the trace's variable, the trace's first line and the
+// length of the table of executed sites. It imports under names of its own,
+// so no declaration of the package hides an import.
 //
 // Each helper first checks, in a few instructions that the compiler
 // inlines, whether the run traces or activates a mutant of its site, and
@@ -40,7 +40,7 @@ var _mutateTracing = _mutateTrace != nil
 
 func _mutateStart() (int, *_mutateos.File) {
 	n, _ := _mutatestrconv.Atoi(_mutateos.Getenv(%q))
-	path := _mutateos.Getenv("DOKIMI_MUTATE_TRACE")
+	path := _mutateos.Getenv(%q)
 	if path == "" {
 		return n, nil
 	}
@@ -48,7 +48,7 @@ func _mutateStart() (int, *_mutateos.File) {
 	if err != nil {
 		panic("mutate: " + err.Error())
 	}
-	_, _ = f.WriteString("start\n")
+	_, _ = f.WriteString(%q)
 	return n, f
 }
 
@@ -112,12 +112,13 @@ type _mutateOrdered interface {
 func Imports() []string { return []string{"os", "strconv", "sync/atomic"} }
 
 // helper returns the helper file of the package named name: the shared
-// declarations of helperHead, and the generic function of each site of
-// sites that calls one. It returns the range of each site's function too.
-// first maps each site to its first ordinal, and ordinals counts every
-// ordinal of the program. When lift is true, the file requires go1.18.
+// declarations of helperHead, which read the active mutant's ordinal from
+// the variable variable, and the generic function of each site of sites
+// that calls one. It returns the range of each site's function too. first
+// maps each site to its first ordinal, and ordinals counts every ordinal of
+// the program. When lift is true, the file requires go1.18.
 func helper(
-	name string,
+	name, variable string,
 	sites []*enumerate.Site,
 	first map[*enumerate.Site]int,
 	ordinals int,
@@ -126,9 +127,9 @@ func helper(
 	var b bytes.Buffer
 	constraint := ""
 	if lift {
-		constraint = "//go:build go1.18\n\n"
+		constraint = fmt.Sprintf(buildConstraint, generics) + "\n"
 	}
-	fmt.Fprintf(&b, helperHead, constraint, name, spec.Load().Protocol.Variable, ordinals+1)
+	fmt.Fprintf(&b, helperHead, constraint, name, variable, TraceVar, traceStart+"\n", ordinals+1)
 	var spans []span
 	for _, s := range sites {
 		begin := b.Len()
@@ -203,9 +204,9 @@ func perSite(b *bytes.Buffer, o int, signature, args string, n int, original str
 // comparison returns: its operator between the operands, or a constant.
 func comparison(m *enumerate.Mutant) string {
 	switch m.Kind {
-	case enumerate.RORTrue:
+	case spec.RORTrue:
 		return "true"
-	case enumerate.RORFalse:
+	case spec.RORFalse:
 		return "false"
 	}
 	return "x " + m.Op.String() + " y"

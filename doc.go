@@ -60,7 +60,7 @@
 //
 // # Dependency position
 //
-// Imports context, fmt, os, strings, testing and time from the standard
-// library, and internal/record, internal/run and internal/spec from this
-// module.
+// Imports context, fmt, os, testing and time from the standard library, and
+// internal/record, internal/report, internal/run, internal/selection and
+// internal/spec from this module.
 package mutate

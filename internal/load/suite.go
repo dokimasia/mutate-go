@@ -4,14 +4,21 @@
 package load
 
 import (
-	"bytes"
+	"cmp"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"sort"
+	"slices"
 	"strings"
+)
+
+// The names that go list -test gives the packages of a test binary.
+const (
+	// testBinary ends the import path of the main package of a test
+	// binary: go list -test names the binary of the package P P.test.
+	testBinary = ".test"
+	// variant starts the suffix of a package that a test binary
+	// recompiles, such as the package P in P [Q.test].
+	variant = " ["
 )
 
 // Linked is a package whose test binary links another package.
@@ -23,11 +30,8 @@ type Linked struct {
 
 // listedTest is the part of an entry of go list -test that Linking reads.
 type listedTest struct {
-	ImportPath string
-	Dir        string
-	Deps       []string
-	Error      *struct{ Err string }
-	DepsErrors []*struct{ Err string }
+	Listed
+	Deps []string
 }
 
 // Linking lists the packages that patterns name, as go list resolves them
@@ -38,42 +42,30 @@ type listedTest struct {
 // # Errors
 //
 // Linking returns an error when the go command fails, and when go list
-// reports an error of a package that patterns name or of one of its
-// dependencies. The error starts with the package's import path.
+// states an error of a package that patterns name or of one of its
+// dependencies. The error starts with the package's import path, and states
+// the first error that go list states of it, as Listed.Problem returns it.
 func Linking(ctx context.Context, cfg Config, importPath string, patterns []string) ([]Linked, error) {
-	args := append([]string{"list", "-e", "-test", "-json=ImportPath,Dir,Deps,Error,DepsErrors"}, patterns...)
-	out, err := Go(ctx, cfg.Dir, cfg.Env, args...)
+	entries, err := list[listedTest](ctx, cfg.Dir, cfg.Env, append([]string{listTests}, patterns...)...)
 	if err != nil {
 		return nil, err
 	}
 	listed := map[string]bool{}
 	var mains []listedTest
-	dec := json.NewDecoder(bytes.NewReader(out))
-	for {
-		var e listedTest
-		if err := dec.Decode(&e); errors.Is(err, io.EOF) {
-			break
-		} else if err != nil {
-			return nil, fmt.Errorf("go list: %w", err)
+	for _, e := range entries {
+		if problem := e.Problem(); problem != "" {
+			return nil, fmt.Errorf("%s: %s", e.ImportPath, problem)
 		}
-		problem := e.Error
-		if problem == nil && len(e.DepsErrors) > 0 {
-			problem = e.DepsErrors[0]
-		}
-		if problem != nil {
-			return nil, fmt.Errorf("%s: %s", e.ImportPath, strings.TrimSpace(problem.Err))
-		}
-		// go list -test names the main package of P's test binary P.test.
-		if strings.HasSuffix(e.ImportPath, ".test") {
+		if strings.HasSuffix(e.ImportPath, testBinary) {
 			mains = append(mains, e)
 		} else {
 			listed[e.ImportPath] = true
 		}
 	}
-	sort.Slice(mains, func(i, j int) bool { return mains[i].ImportPath < mains[j].ImportPath })
+	slices.SortFunc(mains, func(a, b listedTest) int { return cmp.Compare(a.ImportPath, b.ImportPath) })
 	var linked []Linked
 	for _, m := range mains {
-		p := strings.TrimSuffix(m.ImportPath, ".test")
+		p := strings.TrimSuffix(m.ImportPath, testBinary)
 		if p != importPath && listed[p] && links(m.Deps, importPath) {
 			linked = append(linked, Linked{ImportPath: p, Dir: m.Dir})
 		}
@@ -85,10 +77,7 @@ func Linking(ctx context.Context, cfg Config, importPath string, patterns []stri
 // states them, contain the package importPath, or a variant of it that the
 // binary's tests recompile.
 func links(deps []string, importPath string) bool {
-	for _, d := range deps {
-		if d == importPath || strings.HasPrefix(d, importPath+" [") {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(deps, func(d string) bool {
+		return d == importPath || strings.HasPrefix(d, importPath+variant)
+	})
 }

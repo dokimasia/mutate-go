@@ -1,0 +1,98 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "area",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "5302ea22530f1972",
+      "file": "rectangle.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return w * h",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "area",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "dc5e00553d6cba59",
+      "file": "rectangle.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "w * h",
+      "replacement": "w / h"
+    },
+    {
+      "scope": "perimeter",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "c4dd2997814536cf",
+      "file": "rectangle.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 20
+      },
+      "original": "return 2 * (w + h)",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "perimeter",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7c2d889dc71cb731",
+      "file": "rectangle.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 20
+      },
+      "original": "2 * (w + h)",
+      "replacement": "2 / (w + h)"
+    },
+    {
+      "scope": "perimeter",
+      "kind": "aor",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "ba82ad6a5b1638f2",
+      "file": "rectangle.go",
+      "start": {
+        "line": 10,
+        "column": 14
+      },
+      "end": {
+        "line": 10,
+        "column": 19
+      },
+      "original": "w + h",
+      "replacement": "w - h"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

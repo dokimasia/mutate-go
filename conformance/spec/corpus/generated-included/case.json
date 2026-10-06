@@ -1,0 +1,13 @@
+{
+  "case": "generated-included",
+  "includeGenerated": true,
+  "proves": "A run that includes generated files mutates a generated file without the include directive as the target's own code. The record lists the file in generated as included, with its mutants, and the score counts them.",
+  "fixture": "blocks multiplies by a literal. next is in a generated file without the include directive. TestBlocks and TestNext check both.",
+  "mutants": [
+    { "scope": "blocks", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "blocks", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "next", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "next", "kind": "aor", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

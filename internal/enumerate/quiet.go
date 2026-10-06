@@ -9,6 +9,7 @@ import (
 	"go/types"
 
 	"go.dokimi.dev/mutate/internal/load"
+	"go.dokimi.dev/mutate/internal/spec"
 )
 
 // quietStatements suppresses each compound statement of f that a call
@@ -167,22 +168,17 @@ func (e *enumerator) effectFree(n ast.Node) bool {
 // pure reports whether call is a conversion, a call of a builtin without an
 // effect, or a call that a call family suppresses.
 func (e *enumerator) pure(call *ast.CallExpr) bool {
-	info := e.pkg.Info
-	if e.calls[call] != "" || info.Types[call.Fun].IsType() {
+	if e.calls[call] != "" || e.pkg.Info.Types[call.Fun].IsType() {
 		return true
 	}
-	id, ok := unparen(call.Fun).(*ast.Ident)
-	if !ok {
-		return false
-	}
-	if _, builtin := info.Uses[id].(*types.Builtin); !builtin {
-		return false
-	}
-	switch id.Name {
-	case "len", "cap", "min", "max", "real", "imag", "complex":
-		return true
-	}
-	return false
+	b, ok := e.callee(call).(*types.Builtin)
+	return ok && effectFreeBuiltins[b.Name()]
+}
+
+// effectFreeBuiltins lists the builtins whose calls the overlay's compound
+// rule counts as calls without an effect.
+var effectFreeBuiltins = map[string]bool{
+	"len": true, "cap": true, "min": true, "max": true, "real": true, "imag": true, "complex": true,
 }
 
 // initFree reports whether an init statement has no effect: it is absent,
@@ -212,7 +208,7 @@ func (e *enumerator) postFree(post, init ast.Stmt) bool {
 		}
 	}
 	local := func(x ast.Expr) bool {
-		id, ok := unparen(x).(*ast.Ident)
+		id, ok := ast.Unparen(x).(*ast.Ident)
 		return ok && declared[e.pkg.Info.Uses[id]]
 	}
 	switch s := post.(type) {
@@ -268,7 +264,7 @@ func (e *enumerator) quietSelectors(f *load.File, st ast.Stmt) {
 			parts, bodies = append(parts, clause.List...), append(bodies, clause.Body...)
 		}
 	}
-	family := ""
+	var family spec.Family
 	for _, b := range bodies {
 		if !e.quiet(b) {
 			return
@@ -292,8 +288,8 @@ func (e *enumerator) quietSelectors(f *load.File, st ast.Stmt) {
 
 // firstFamily returns the family of the first call in st, in source order,
 // that a call family suppresses, or "" when st has none.
-func (e *enumerator) firstFamily(st ast.Stmt) string {
-	family := ""
+func (e *enumerator) firstFamily(st ast.Stmt) spec.Family {
+	var family spec.Family
 	ast.Inspect(st, func(n ast.Node) bool {
 		if call, ok := n.(*ast.CallExpr); ok && family == "" {
 			family = e.calls[call]
