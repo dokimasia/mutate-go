@@ -24,17 +24,14 @@ const minimumLeft = time.Millisecond
 // mutant the outcome. It runs the instrumented test binaries whose opening
 // control run executed the mutant's site, with the mutant active, as
 // runPrograms states, and under cfg.Confirm confirms a survivor in those
-// binaries. A mutant without coverage runs only under cfg.Confirm, in its
-// confirmation in every binary, and keeps no-coverage when every binary
-// passes. When ctx is done, the run ends at once and gives the mutant
-// not-run.
+// binaries. A survivor's confirmation starts only while the time left
+// covers it, as confirmable states, and a survivor whose confirmation does
+// not fit is not-run. A mutant without coverage runs only under
+// cfg.Confirm, in its confirmation in every binary, and keeps no-coverage
+// when every binary passes. When ctx is done, the run ends at once and
+// gives the mutant not-run.
 func (r *runner) mutant(ctx context.Context, i, ordinal int) {
-	var covering []*program
-	for _, p := range r.programs {
-		if p.executed[r.first(i)] {
-			covering = append(covering, p)
-		}
-	}
+	covering := r.covering(i)
 	if len(covering) == 0 {
 		o := r.confirm(ctx, i, ordinal, r.programs)
 		if o.verdict == spec.Survived {
@@ -47,9 +44,40 @@ func (r *runner) mutant(ctx context.Context, i, ordinal int) {
 		return p.bin, nil
 	})
 	if o.verdict == spec.Survived && r.cfg.Confirm {
-		o = r.confirm(ctx, i, ordinal, covering)
+		if r.confirmable(covering) {
+			o = r.confirm(ctx, i, ordinal, covering)
+		} else {
+			o = outcome{
+				verdict: spec.NotRun,
+				reason:  "the caller's deadline leaves too little time for the confirmation and the closing control run",
+			}
+		}
 	}
 	r.set(i, o)
+}
+
+// covering returns the programs whose opening control run executed the
+// site of the mutant at index i, in the order of the programs.
+func (r *runner) covering(i int) []*program {
+	var programs []*program
+	for _, p := range r.programs {
+		if p.executed[r.first(i)] {
+			programs = append(programs, p)
+		}
+	}
+	return programs
+}
+
+// confirmable reports whether the time left before the caller's deadline
+// covers a confirmation in programs: the programs' deadlines, the time of
+// the ordinary control run's builds and the closing control run's
+// deadline.
+func (r *runner) confirmable(programs []*program) bool {
+	need := r.ordinaryBuild + r.total
+	for _, p := range programs {
+		need += p.deadline
+	}
+	return r.fits(need)
 }
 
 // runPrograms runs each of programs in order, with the environment env,

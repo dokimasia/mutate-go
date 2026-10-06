@@ -679,10 +679,14 @@ build:
 - **Workers.** A mutant is confirmed on the worker that ran it. Each
   worker's go command gets the package's share and its part of the threads
   that the running packages leave free, divided by the workers.
-- **The caller's deadline.** Under confirmation, a mutant starts only while
-  the time left covers three times the sum of the binaries' deadlines, for
-  its run, its confirmation run and the closing control run, plus the time
-  that the ordinary control run's builds took.
+- **The caller's deadline.** Under confirmation, a mutant starts while the
+  time left covers its run and the closing control run, as without
+  confirmation. A survivor's confirmation starts only while the time left
+  covers the confirmation's deadlines, the time that the ordinary control
+  run's builds took and the closing control run's deadline. A survivor
+  whose confirmation does not fit is `not-run`, so the sample ends before
+  its key. A mutant without coverage runs in its confirmation alone, so it
+  starts only while the time left covers that confirmation.
 
 The tests of the renderer build each of the 127 runnable mutants of three
 fixtures both ways, and every mutant's ordinary build computes the value

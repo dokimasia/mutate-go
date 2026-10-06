@@ -72,10 +72,24 @@ func TestAdd(t *testing.T) {
 }
 `, render.TraceVar, protocol.Variable)
 
-// confirmTooLateReason is the pin of the reason of a mutant that does not
-// start under Confirm because the caller's deadline is too near.
-const confirmTooLateReason = "the caller's deadline leaves too little time for the mutant, its confirmation and the " +
-	"closing control run"
+// unconfirmedReason is the pin of the reason of a survivor whose
+// confirmation does not start because the caller's deadline is too near.
+const unconfirmedReason = "the caller's deadline leaves too little time for the confirmation and the closing " +
+	"control run"
+
+// survivors is a package whose test calls Sub without checking it, so both
+// of Sub's mutants survive.
+var survivors = map[string]string{
+	arithFile:     "package fixture\n\nfunc Sub(a, b int) int { return a - b }\n",
+	arithTestFile: "package fixture\n\nimport \"testing\"\n\nfunc TestSub(t *testing.T) {\n\tSub(1, 1)\n}\n",
+}
+
+// uncovered is a package whose test calls nothing, so neither of Add's
+// mutants has coverage.
+var uncovered = map[string]string{
+	addFile:     add,
+	addTestFile: "package fixture\n\nimport \"testing\"\n\nfunc TestNothing(t *testing.T) {}\n",
+}
 
 func TestSchedule(t *testing.T) {
 	t.Parallel()
@@ -224,18 +238,48 @@ func TestSchedule(t *testing.T) {
 			assert.Equal(t, second.Reason, tooLateReason, "the record states why it does not start")
 		})
 
-		t.Run("starts no mutant when the time left does not cover a confirmation's deadlines and builds",
+		t.Run("starts a mutant under Confirm while the time left covers its deadline and the closing run's",
 			func(t *testing.T) {
 				t.Parallel()
-				// A mutant's deadline is above 7 seconds, and less than 17 are
-				// left after the opening control run: twice the deadline, but not
-				// three times.
+				// A mutant's deadline is above 7 seconds, and about 19 seconds are
+				// left when the mutants start: twice the deadline, but less than
+				// three times the deadline and the ordinary control run's builds.
 				rec := runIn(t, module(t, map[string]string{addFile: add, addTestFile: slowOpening}),
-					run.Config{Confirm: true, Deadline: time.Now().Add(18 * time.Second)})
+					run.Config{Confirm: true, Deadline: time.Now().Add(22 * time.Second)})
+				assert.Equal(t, verdicts(rec), addKilled, "both mutants run, and no survivor needs a confirmation")
+				assert.Empty(t, rec.Errors, "the run states no run error")
+			},
+		)
+
+		t.Run("gives a survivor not-run when the time left does not cover its confirmation", func(t *testing.T) {
+			t.Parallel()
+			// The ordinary control run's build waits slowBuild, and about 9
+			// seconds are left when the mutants start. That time covers twice
+			// a mutant's deadline of about 2 seconds, and not a confirmation,
+			// which also needs the time of the builds.
+			rec := runIn(t, module(t, survivors), run.Config{
+				Env:      slowBuilds(t, ordinaryOutput),
+				Confirm:  true,
+				Deadline: time.Now().Add(22 * time.Second),
+			})
+			assert.Equal(t, verdicts(rec), "Sub sbr-zero 0: not-run\nSub aor 0: not-run\n",
+				"both mutants run and survive, and neither confirmation starts")
+			assert.Equal(t, rec.Mutants[0].Reason, unconfirmedReason, "the record states why the survivor is not-run")
+		})
+
+		t.Run("starts no mutant without coverage when the time left does not cover its confirmation",
+			func(t *testing.T) {
+				t.Parallel()
+				// As for the survivors, about 9 seconds are left when the mutants
+				// start, and a mutant without coverage runs in its confirmation
+				// alone, which needs the ordinary control run's builds too.
+				rec := runIn(t, module(t, uncovered), run.Config{
+					Env:      slowBuilds(t, ordinaryOutput),
+					Confirm:  true,
+					Deadline: time.Now().Add(22 * time.Second),
+				})
 				assert.Equal(t, verdicts(rec), addNotRun, "no mutant starts")
-				assert.Equal(t, rec.Mutants[0].Reason, confirmTooLateReason, "the record states why no mutant starts")
-				assert.NotNil(t, rec.Control.Ordinary, "the ordinary control run runs")
-				assert.Empty(t, rec.Errors, "the caller's deadline is no run error")
+				assert.Equal(t, rec.Mutants[0].Reason, tooLateReason, "the record states why no mutant starts")
 			},
 		)
 

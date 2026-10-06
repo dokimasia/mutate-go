@@ -74,10 +74,14 @@ type Config struct {
 	// without a deadline. The opening control run of each test binary gets
 	// at most half of the time left. Run does not start a mutant when the
 	// time left is shorter than the deadlines of the mutant's run and of
-	// the closing control run together. Under Confirm, the time left must
-	// also cover the deadline of a confirmation run and the time that the
-	// ordinary control run's builds took. A run of one test alone starts
-	// only while the time left also covers its test binary's deadline.
+	// the closing control run together. Under Confirm, a survivor's
+	// confirmation starts only while the time left covers its deadline, the
+	// time that the ordinary control run's builds took and the closing
+	// control run's deadline, and a survivor whose confirmation does not fit
+	// is not-run. A mutant without coverage, which runs in its confirmation
+	// alone, starts only while the time left covers that confirmation. A run
+	// of one test alone starts only while the time left also covers its test
+	// binary's deadline.
 	Deadline time.Time
 	// Sample is the number of mutants whose runs start, in the order of
 	// their keys, or 0 for every mutant. Every later mutant is not-run, so

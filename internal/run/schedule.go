@@ -15,14 +15,17 @@ import (
 )
 
 // reserve returns the time that one more mutant needs before the caller's
-// deadline: the deadlines of its run and of the closing control run, and
-// under cfg.Confirm also the deadline of its confirmation run and the time
-// of the ordinary control run's builds.
+// deadline when it starts: the deadlines of its run and of the closing
+// control run. A survivor's confirmation needs time of its own, which
+// confirmable checks when the survivor's run has ended.
 func (r *runner) reserve() time.Duration {
-	if r.cfg.Confirm {
-		return 3*r.total + r.ordinaryBuild
-	}
 	return 2 * r.total
+}
+
+// fits reports whether the time left before the caller's deadline covers
+// d. Without a deadline, every duration fits.
+func (r *runner) fits(d time.Duration) bool {
+	return r.cfg.Deadline.IsZero() || time.Until(r.cfg.Deadline) >= d
 }
 
 // dispatch starts the jobs 0 to n-1 in order on cfg.Workers workers, each by
@@ -87,7 +90,9 @@ func (r *runner) dispatch(
 // mutants' keys, and of the record for two equal keys, so a run that the
 // caller's deadline ends has run a uniform sample of the mutants. Under the
 // caller's deadline, a mutant starts only while the time left covers the
-// reserve of a mutant.
+// reserve of a mutant. Under cfg.Confirm, a mutant without coverage runs
+// in its confirmation alone, so it also needs the time of the ordinary
+// control run's builds.
 //
 // When ctx or the caller's deadline ends the starts, or cfg.Sample mutants
 // have started, each mutant that no worker took is not-run at once, while
@@ -103,14 +108,18 @@ func (r *runner) mutants(ctx context.Context) {
 	if r.cfg.Sample > 0 {
 		n = min(n, r.cfg.Sample)
 	}
-	started, late, wait := r.dispatch(ctx, n, func(int) time.Duration { return r.reserve() }, func(k int) {
+	need := func(k int) time.Duration {
+		if r.cfg.Confirm && len(r.covering(pending[k])) == 0 {
+			return r.reserve() + r.ordinaryBuild
+		}
+		return r.reserve()
+	}
+	started, late, wait := r.dispatch(ctx, n, need, func(k int) {
 		i := pending[k]
 		r.mutant(ctx, i, r.prog.Ordinals[r.order[i]])
 	})
 	var reason string
 	switch {
-	case late && r.cfg.Confirm:
-		reason = "the caller's deadline leaves too little time for the mutant, its confirmation and the closing control run"
 	case late:
 		reason = "the caller's deadline leaves too little time for the mutant and the closing control run"
 	case started < n:

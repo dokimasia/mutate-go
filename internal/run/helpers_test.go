@@ -50,6 +50,17 @@ const (
 	expectedProcsVar = "FIXTURE_PROCS"
 	// alwaysVar makes killer end its binary whatever Add returns.
 	alwaysVar = "FIXTURE_ALWAYS"
+	// slowBuildVar is the shell pattern of the argument that makes the
+	// wrapper in goSlow wait slowBuild before it runs the go command.
+	slowBuildVar = "FIXTURE_SLOW_BUILD"
+)
+
+// slowBuild is how long the wrapper in goSlow waits before a go command
+// whose argument matches slowBuildVar's pattern, and ordinaryOutput is the
+// pattern of the output of an ordinary control run's build.
+const (
+	slowBuild      = 10 * time.Second
+	ordinaryOutput = "*/ordinary/*"
 )
 
 // The runs that phaseVar names.
@@ -364,15 +375,17 @@ const (
 	conformanceMainFile = "conformance/main_test.go"
 )
 
-// goLog and goBlock are directories of a go command that wraps the one that
-// goVar names. The command in goLog appends its GOMAXPROCS to the file of
-// goLogVar and then runs the go command. The command in goBlock runs the go
-// command too, except for a command with an argument that matches the shell
-// pattern of blockVar, which creates the file of markerVar and then waits a
-// minute. TestMain writes both before any test starts, because a file that
-// is open for writing while another goroutine forks a process fails exec
-// with ETXTBSY.
-var goLog, goBlock string
+// goLog, goBlock and goSlow are directories of a go command that wraps the
+// one that goVar names. The command in goLog appends its GOMAXPROCS to the
+// file of goLogVar and then runs the go command. The command in goBlock
+// runs the go command too, except for a command with an argument that
+// matches the shell pattern of blockVar, which creates the file of
+// markerVar and then waits a minute. The command in goSlow waits slowBuild
+// before a command with an argument that matches the shell pattern of
+// slowBuildVar, and then runs the go command. TestMain writes them before
+// any test starts, because a file that is open for writing while another
+// goroutine forks a process fails exec with ETXTBSY.
+var goLog, goBlock, goSlow string
 
 // TestMain writes the go wrappers, runs the tests and removes the wrappers.
 func TestMain(m *testing.M) {
@@ -382,6 +395,11 @@ func TestMain(m *testing.M) {
 			"#!/bin/sh\nfor a in \"$@\"; do\n\tcase \"$a\" in\n\t$%s)\n\t\t: > \"$%s\"\n\t\texec sleep 60\n\t\t;;\n"+
 				"\tesac\ndone\nexec \"$%s\" \"$@\"\n",
 			blockVar, markerVar, goVar,
+		),
+		&goSlow: fmt.Sprintf(
+			"#!/bin/sh\nfor a in \"$@\"; do\n\tcase \"$a\" in\n\t$%s)\n\t\tsleep %d\n\t\t;;\n\tesac\ndone\n"+
+				"exec \"$%s\" \"$@\"\n",
+			slowBuildVar, int(slowBuild.Seconds()), goVar,
 		),
 	}
 	for dir, script := range scripts {
@@ -398,6 +416,7 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	_ = os.RemoveAll(goLog)
 	_ = os.RemoveAll(goBlock)
+	_ = os.RemoveAll(goSlow)
 	os.Exit(code)
 }
 
@@ -490,6 +509,25 @@ func blocking(t *testing.T, block string) (env []string, marker string) {
 		blockVar+"="+block,
 	)
 	return env, marker
+}
+
+// slowBuilds returns the environment of a run whose go command waits
+// slowBuild before each command with an argument that matches the shell
+// pattern pattern. It skips the test on Windows, which does not run the
+// wrapper's shell script.
+func slowBuilds(t *testing.T, pattern string) []string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the go wrapper is a shell script")
+	}
+	goCmd, err := exec.LookPath(goCommand)
+	assert.NoError(t, err, "the go command is on the PATH")
+	return testbin.Setenv(
+		os.Environ(),
+		pathVar+"="+goSlow+string(filepath.ListSeparator)+os.Getenv(pathVar),
+		goVar+"="+goCmd,
+		slowBuildVar+"="+pattern,
+	)
 }
 
 // verdicts writes one line per mutant: its scope, its kind, its position
