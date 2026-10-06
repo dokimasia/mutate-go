@@ -1,6 +1,6 @@
 {
   "language": "go",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "comment": "//",
   "generated": "^// Code generated .* DO NOT EDIT\\.$",
   "files": [
@@ -16,7 +16,7 @@
     "A function literal has the scope around it."
   ],
   "tokens": "The tokens that go/scanner returns for the site's source, without comments and without the semicolons the scanner inserts at line ends. An operator is written as Go spells it, and any other token as its text.",
-  "zero": "The zero value of each result type T, as Go code writes it: 0 when T's underlying type is a number, \"\" when it is a string, false when it is a boolean, nil when it is a pointer, a slice, a map, a channel, a function, an interface or unsafe.Pointer, T{} when it is a struct or an array, with T written as the result's type is written, and *new(T) when T is a type parameter.",
+  "zero": "The zero value of each result type T, as Go code writes it: 0 when T's underlying type is a number, \"\" when it is a string, false when it is a boolean, nil when it is a pointer, a slice, a map, a channel, a function, an interface or unsafe.Pointer, T{} when it is a struct or an array, with T written as the result's type is written, and *new(T) when T is a type parameter. A record writes the zero values this way. A mutant's source writes none of them, because a declaration at the site can hide a name that they contain, and returns variables that contain them, as sbr-zero states.",
   "kinds": {
     "aor": [
       "A binary expression with +, -, *, / or % whose operands and result are of the same integer or floating-point type, or untyped constants of it.",
@@ -34,19 +34,20 @@
     ],
     "lcr-left": [
       "A binary expression with && or || whose result is bool or an untyped boolean.",
-      "The mutant does not evaluate the right operand. Its source writes that operand behind a constant that skips it, as (a) || false && (b), so a name that only the right operand uses remains in use."
+      "The mutant does not evaluate the right operand. Its source writes that operand behind a constant that skips it, as (a) || (0 != 0) && (b), so a name that only the right operand uses remains in use.",
+      "A mutant's source writes the constants true and false as (0 == 0) and (0 != 0), which no declaration can hide."
     ],
     "lcr-right": [
       "The sites of lcr-left.",
-      "The mutant does not evaluate the left operand. Its source writes that operand behind a constant that skips it, as false && (a) || (b)."
+      "The mutant does not evaluate the left operand. Its source writes that operand behind a constant that skips it, as (0 != 0) && (a) || (b)."
     ],
     "lcr-true": [
       "The sites of lcr-left with ||.",
-      "The mutant evaluates neither operand. Its source writes both behind the constant, as true || (a) || (b)."
+      "The mutant evaluates neither operand. Its source writes both behind the constant, as (0 == 0) || (a) || (b)."
     ],
     "lcr-false": [
       "The sites of lcr-left with &&.",
-      "The mutant evaluates neither operand. Its source writes both behind the constant, as false && ((a) && (b))."
+      "The mutant evaluates neither operand. Its source writes both behind the constant, as (0 != 0) && ((a) && (b))."
     ],
     "uoi-incdec": [
       "An increment or decrement statement of an integer or floating-point operand, in a statement list or as the post statement of a for loop."
@@ -63,13 +64,14 @@
       "Only in a block, or in the body of a case or a communication clause.",
       "Not a statement that contains a label, and not the final non-empty statement of its list when that statement is terminating in the sense of the Go specification.",
       "An increment or decrement statement is not deleted. uoi-incdec mutates it.",
-      "The mutant's source writes the statement behind a constant that skips it, as if false { statement }, so a variable, an imported package or a label that only the statement uses remains in use."
+      "The mutant's source writes the statement behind a constant that skips it, as if (0 != 0) { statement }, so a variable, an imported package or a label that only the statement uses remains in use."
     ],
     "sbr-zero": [
       "A return statement with results, unless every result is already the zero value of its result type.",
       "A result is the zero value of its result type when it is nil, a constant whose value is 0, \"\" or false, *new(T) of a type T, an unwritten variable, or a composite literal of a struct or an array type whose every element is the zero value of the element's type. A result or an element of an interface type is the zero value only when it is nil, because any other value gives an interface that is not nil. A composite literal of a slice or a map type is not nil, so it is not a zero value, and *new(x) of an expression x is the value of x.",
       "An unwritten variable is a variable that a variable declaration without values declares inside a function's body, and that no use writes. A use writes the variable when the variable, alone or under selectors, indexes, dereferences and parentheses, is the target of an assignment, a short variable declaration, an increment, a decrement or a range clause, the operand of & or of a slice expression, or the receiver of a method with a pointer receiver, as x in x.M() and in the method value x.M. Every use in the variable's scope counts, in a function literal too and after the return, because a loop can run a later write before the return.",
-      "The mutant does not evaluate the results. Its source writes the return of the zero values before the original return, which then never runs, as if true { return 0, nil } followed by return f(x), err."
+      "The mutant does not evaluate the results. Its source writes a return of variables that contain the zero values before the original return, which then never runs, as if (0 == 0) { return _mutateZero0, _mutateZero1 } followed by return f(x), err.",
+      "Each such variable has a name that the program does not declare. Where the function's results have no names, the source names them, and it renames a result named _. The function copies each other named result into a variable before its first statement, while the result is still the zero value."
     ]
   },
   "skips": [

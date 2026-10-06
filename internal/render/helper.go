@@ -16,7 +16,9 @@ import (
 // share. Its verbs are the build constraint, the package name, the
 // protocol's variable, the trace's variable, the trace's first line and the
 // length of the table of executed sites. It imports under names of its own,
-// so no declaration of the package hides an import.
+// so no declaration of the package hides an import, and it writes the
+// constants true and false as comparisons of literals, which no declaration
+// of the package hides either.
 //
 // Each helper first checks, in a few instructions that the compiler
 // inlines, whether the run traces or activates a mutant of its site, and
@@ -79,9 +81,9 @@ func _mutateEqSite(o int, r bool) bool {
 	_mutateHit(o)
 	switch _mutateActive - o {
 	case 0:
-		return true
+		return 0 == 0
 	case 1:
-		return false
+		return 0 != 0
 	}
 	return r
 }
@@ -201,13 +203,14 @@ func perSite(b *bytes.Buffer, o int, signature, args string, n int, original str
 }
 
 // comparison returns the expression that the mutant m of an ordered
-// comparison returns: its operator between the operands, or a constant.
+// comparison returns: its operator between the operands, or a constant
+// that no declaration of the package can hide.
 func comparison(m *enumerate.Mutant) string {
 	switch m.Kind {
 	case spec.RORTrue:
-		return "true"
+		return trueExpr
 	case spec.RORFalse:
-		return "false"
+		return falseExpr
 	default:
 		return "x " + m.Op.String() + " y"
 	}

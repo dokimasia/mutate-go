@@ -5,11 +5,13 @@ package render
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/build/constraint"
 	"go/scanner"
 	"go/token"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,21 +27,30 @@ type span struct {
 	site       *enumerate.Site
 }
 
-// fileRenderer writes one instrumented file.
+// fileRenderer writes one instrumented file. edits lists the edits of the
+// text outside the forms in the order of their offsets, and next is the
+// first edit that the renderer has not written. zeros maps the function of
+// each Zero site to the variables that the site's form returns, separated
+// by commas.
 type fileRenderer struct {
 	fset     *token.FileSet
 	text     []byte
 	first    map[*enumerate.Site]int
 	children map[*enumerate.Site][]*enumerate.Site
+	edits    []edit
+	next     int
+	zeros    map[*enumerate.Function]string
 	buf      bytes.Buffer
 	spans    []span
 }
 
 // renderFile returns the text of f with each of sites replaced by its
 // form, and the range of each form in that text. first maps each site to
-// its first ordinal. When lift is true, the text starts with a build
-// constraint that raises the file's language version to at least go1.18,
-// and a line directive that keeps every line's number.
+// its first ordinal. The text binds the results of each function that a
+// Zero site of sites returns from, as zeroBindings states. When lift is
+// true, the text starts with a build constraint that raises the file's
+// language version to at least go1.18, and a line directive that keeps
+// every line's number.
 func renderFile(
 	fset *token.FileSet,
 	f *load.File,
@@ -47,7 +58,21 @@ func renderFile(
 	first map[*enumerate.Site]int,
 	lift bool,
 ) ([]byte, []span) {
-	r := &fileRenderer{fset: fset, text: f.Text, first: first, children: map[*enumerate.Site][]*enumerate.Site{}}
+	r := &fileRenderer{
+		fset:     fset,
+		text:     f.Text,
+		first:    first,
+		children: map[*enumerate.Site][]*enumerate.Site{},
+		zeros:    map[*enumerate.Function]string{},
+	}
+	for _, s := range sites {
+		if s.Form != enumerate.Zero || r.zeros[s.Func] != "" {
+			continue
+		}
+		edits, vars := zeroBindings(fset, s.Func)
+		r.edits, r.zeros[s.Func] = append(r.edits, edits...), strings.Join(vars, ", ")
+	}
+	slices.SortStableFunc(r.edits, func(a, b edit) int { return cmp.Compare(a.start, b.start) })
 	prefix := ""
 	if lift {
 		prefix, r.text = liftVersion(fset, f)
@@ -97,11 +122,29 @@ func (r *fileRenderer) writeRange(start, end int, sites []*enumerate.Site) {
 		if s.Start < start || s.End > end {
 			continue
 		}
-		r.buf.Write(r.text[at:s.Start])
+		r.writeText(at, s.Start)
 		r.writeSite(s)
 		at = s.End
 	}
-	r.buf.Write(r.text[at:end])
+	r.writeText(at, end)
+}
+
+// writeText writes the text from start to end, with each edit that starts
+// in that range or at its end applied. writeRange passes over the file's
+// text once, in the order of the offsets, so each edit applies once, and an
+// edit at a site's start precedes the site's form. No edit starts at the
+// end of a node's range, and no edit ends after the end of the range. A
+// form's own copy of an operand does not apply an edit. The forms copy an
+// assignment's target, which contains no function, and the mutant's
+// operand of an increment, whose other copy writeRange writes.
+func (r *fileRenderer) writeText(start, end int) {
+	for r.next < len(r.edits) && r.edits[r.next].start <= end {
+		e := r.edits[r.next]
+		r.buf.Write(r.text[start:e.start])
+		r.buf.WriteString(e.text)
+		start, r.next = e.end, r.next+1
+	}
+	r.buf.Write(r.text[start:end])
 }
 
 func (r *fileRenderer) off(pos token.Pos) int { return r.fset.File(pos).Offset(pos) }
@@ -170,10 +213,13 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		r.inner(s, b.Y)
 		r.writef(")))")
 	case enumerate.IncDec:
+		// The mutant's copy of the operand is on one line, so the form keeps
+		// the operand's lines once, in the original's copy. The mutant's copy
+		// runs only while the mutant is active, when no site in the operand
+		// is, so it contains no form.
 		st := s.Node.(*ast.IncDecStmt)
-		r.writef("if _mutateIs(%d) { ", o)
-		r.inner(s, st.X)
-		r.writef("%s } else { ", s.Mutants[0].Op)
+		source := r.text[r.off(st.X.Pos()):r.off(st.X.End())]
+		r.writef("if _mutateIs(%d) { %s%s } else { ", o, oneLine(source), s.Mutants[0].Op)
 		r.inner(s, st.X)
 		r.writef("%s }", st.Tok)
 	case enumerate.IncDecPost:
@@ -196,9 +242,7 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		r.writeRange(s.Start, s.End, r.children[s])
 		r.writef(" }")
 	case enumerate.Zero:
-		// A zero value writes its type, which can span lines, so the form
-		// writes it on one line.
-		r.writef("if _mutateIs(%d) { return %s }; ", o, oneLine([]byte(strings.Join(s.Zeros, ", "))))
+		r.writef("if _mutateIs(%d) { return %s }; ", o, r.zeros[s.Func])
 		r.writeRange(s.Start, s.End, r.children[s])
 	}
 	r.spans = append(r.spans, span{start: begin, end: r.buf.Len(), site: s})
@@ -207,7 +251,9 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 // oneLine returns the code of src on one line: its tokens separated by
 // spaces, without comments. It writes each semicolon that the scanner
 // inserts at a line break as ;, so the line is the same code as src, and
-// leaves out the semicolon that the scanner inserts at the end of src.
+// leaves out the semicolon that the scanner inserts at the end of src. It
+// writes a raw string literal that spans lines as the interpreted string
+// literal of the same value.
 func oneLine(src []byte) string {
 	fset := token.NewFileSet()
 	var s scanner.Scanner
@@ -219,10 +265,16 @@ func oneLine(src []byte) string {
 		if tok == token.EOF {
 			break
 		}
-		// The scanner gives an inserted semicolon the literal "\n".
+		// The scanner gives an inserted semicolon the literal "\n". Only a
+		// raw string literal contains a line break, and src is code that
+		// parses, so the literal unquotes.
 		inserted = tok == token.SEMICOLON && lit == "\n"
-		if lit == "" || inserted {
+		switch {
+		case lit == "" || inserted:
 			lit = tok.String()
+		case tok == token.STRING && strings.Contains(lit, "\n"):
+			value, _ := strconv.Unquote(lit)
+			lit = strconv.Quote(value)
 		}
 		out = append(out, lit)
 	}

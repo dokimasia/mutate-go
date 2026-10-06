@@ -11,12 +11,18 @@
 // variable that the caller passes, the protocol's DOKIMI_MUTATE_MUTANT,
 // when the package initializes.
 //
-// A form writes each operand once, evaluates it as the active mutant's
-// expression does, and adds no line, so every line of an instrumented file
-// keeps its number, except when an increment's operand spans lines. No form
-// passes a function value, so no form makes an operand escape. Render
-// type-checks the instrumented package and gives up a site whose form the
-// type checker rejects.
+// A form evaluates each operand as the active mutant's expression does, and
+// does not add a line, so every line of an instrumented file keeps its
+// number. No form passes a function value, so no form makes an operand
+// escape. Render type-checks the instrumented package and gives up a site
+// whose form the type checker rejects.
+//
+// No declaration of the package changes what a form computes, as a local
+// variable named false or nil, or one named after a type, would change a
+// constant or a zero value that the form writes as code. A form writes the
+// constants true and false as comparisons of literals, and a return of zero
+// values returns variables of the instrumentation's own that contain the
+// function's zero results.
 //
 // Plain writes one mutant into its file without a switch, for the mutant's
 // ordinary build. The mutant's source keeps the code that the mutant leaves
@@ -34,8 +40,9 @@
 //
 // # Dependency position
 //
-// Imports bytes, encoding/json, errors, fmt, go/ast, go/build/constraint,
-// go/parser, go/scanner, go/token, os, path/filepath, sort, strconv and
-// strings from the standard library, and internal/enumerate, internal/load
-// and internal/spec from this module.
+// Imports bytes, cmp, encoding/json, errors, fmt, go/ast,
+// go/build/constraint, go/parser, go/scanner, go/token, maps, os,
+// path/filepath, slices, sort, strconv and strings from the standard
+// library, and internal/enumerate, internal/load and internal/spec from this
+// module.
 package render

@@ -384,8 +384,8 @@ These rules guard the load:
 
 Each instrumented file replaces each site with a form that switches on the
 active mutant. Sites nest strictly inside one another, and each form writes
-its operands once, so a file's size grows linearly with the depth of
-nesting.
+the forms of the sites inside it once, so a file's size grows linearly with
+the depth of nesting.
 
 | Kind | Site | Instrumented form |
 |---|---|---|
@@ -398,7 +398,27 @@ nesting.
 | `uoi-not` | a boolean operand `x` | `(x != _mutateIs(17))` |
 | `uoi-minus` | `-x`, where `x` is not a constant | `_mutate_s17(x)`, a generic function per site that returns `-x`, or `x` when the mutant is active |
 | `sbr-delete` | a statement | `if !_mutateIs(17) { stmt }` |
-| `sbr-zero` | `return e1, e2` | `if _mutateIs(17) { return 0, nil }`, before the original return, with the zero value of each result type as the overlay writes it |
+| `sbr-zero` | `return e1, e2` | `if _mutateIs(17) { return _mutateZero0, _mutateZero1 }`, before the original return. The variables contain the zero values of the function's results, as the following list states |
+
+No declaration of the package changes what a form computes. A local
+variable named `nil`, or one named after a result's type, would change a
+zero value that the form writes as code, so a return of zero values
+returns variables of the instrumentation's own:
+
+- A function whose results have no names gets the names, in parentheses
+  where the result list has none, as `func() T` becomes
+  `func() (_mutateZero0 T)`. Only a return assigns such a variable, and a
+  return ends the body.
+- A result named `_` gets the name in its place.
+- The function copies each other named result into its variable before its
+  first statement, where the result is still the zero value.
+
+The helper file writes the constants `true` and `false` as `0 == 0` and
+`0 != 0`, which no declaration of the package can hide. Each of these edits
+is on the line that it changes. The mutant's copy of an increment's operand
+is on one line, with a raw string that spans lines written as an
+interpreted string, so every line of the file keeps its number, and
+`runtime.Caller` reports the line of the source.
 
 No form passes a function value, so no form makes an operand escape to
 the heap.
@@ -588,18 +608,22 @@ build:
   `ordinary-control-failed`.
 - **The mutant's source.** The engine writes the mutant alone into its
   file. The file keeps the code that the mutant leaves out, behind a
-  constant that skips it. Every line of the file keeps its number.
+  constant that skips it. Every line of the file keeps its number. The
+  source writes the constants `true` and `false` as `(0 == 0)` and
+  `(0 != 0)`, which no declaration of the package can hide.
   - `aor`, `ror-boundary` and `uoi-incdec` write their operator in place of
     the site's.
-  - `ror-true` and `ror-false` write `(a < b || true)` and
-    `(a < b && false)`, which still evaluate both operands.
-  - `lcr-left` writes `((a) || false && (b))`, `lcr-right`
-    `(false && (a) || (b))`, `lcr-true` `(true || (a) || (b))` and
-    `lcr-false` `(false && ((a) && (b)))`.
+  - `ror-true` and `ror-false` write `(a < b || (0 == 0))` and
+    `(a < b && (0 != 0))`, which still evaluate both operands.
+  - `lcr-left` writes `((a) || (0 != 0) && (b))`, `lcr-right`
+    `((0 != 0) && (a) || (b))`, `lcr-true` `((0 == 0) || (a) || (b))` and
+    `lcr-false` `((0 != 0) && ((a) && (b)))`.
   - `uoi-not` writes `!(x)` for `x` and `(x)` for `!x`, and `uoi-minus`
     writes `(x)` for `-x`.
-  - `sbr-delete` writes `if false { stmt }`, and `sbr-zero` writes
-    `if true { return 0, nil };` before the original return.
+  - `sbr-delete` writes `if (0 != 0) { stmt }`, and `sbr-zero` writes
+    `if (0 == 0) { return _mutateZero0, _mutateZero1 };` before the
+    original return, with the variables of the function's results that the
+    instrumented form binds.
 - **The confirmation run.** The engine builds each test binary whose
   opening control run executed the site, or every test binary for a mutant
   whose site none executed, with an overlay of that one file. It runs each
@@ -617,12 +641,16 @@ build:
   its run, its confirmation run and the closing control run, plus the time
   that the ordinary control run's builds took.
 
-The tests of the renderer build each of the 71 runnable mutants of a
-fixture both ways, and every mutant's ordinary build computes the value
+The tests of the renderer build each of the 113 runnable mutants of two
+fixtures both ways, and every mutant's ordinary build computes the value
 that its instrumented form computes. Four of them leave out the only use
-of a variable or of an imported package. On go-humanize v1.1.0, with one
-worker, a run took 13.5 s without confirmation and 18.5 s with it. All 42
-survivors survived their ordinary builds too, and the score was the same.
+of a variable or of an imported package. Local variables of the first
+fixture hide the names `true`, `false`, `nil` and `new` and a type's name,
+and the second fixture declares constants named `true` and `false`.
+
+On go-humanize v1.1.0, with one worker, a run took 13.5 s without
+confirmation and 18.5 s with it. All 42 survivors survived their ordinary
+builds too, and the score was the same.
 
 After the closing control run, the engine reads the data files of every
 package of the suite again, and compares them with the files before the

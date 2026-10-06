@@ -109,6 +109,48 @@ func Keep(s string, ok bool) string {
 	}
 	return s + "."
 }
+
+func Line(xs []int) int {
+	xs[
+		0]++
+	return line()
+}
+
+func Positive(n int) (bool, *int) {
+	false, nil := n > 0, &n
+	return false, nil
+}
+
+func Shift(p Pair) Pair {
+	Pair := Pair{p.A + 1, p.B}
+	return Pair
+}
+
+func First[T any](xs []T) T {
+	new := xs[0]
+	return new
+}
+
+func Count(xs []int) (n int, err error) {
+	for _, x := range xs {
+		if x > 0 {
+			n++
+		}
+	}
+	return n, err
+}
+
+func Halve(n int) (_ int, even bool) {
+	return n / 2, n%2 == 0
+}
+
+func Swapped(a, b int, ok bool) bool {
+	true, false := 0 != 0, 0 == 0
+	if a == b && ok {
+		return false
+	}
+	return true
+}
 `
 
 const semanticsTest = `package fixture
@@ -138,19 +180,37 @@ func TestPrint(t *testing.T) {
 	fmt.Println("Bump", Bump([]int{0, 0, 0, 0}, 1, 1))
 	fmt.Println("Recovers", guarded(Recovers, true))
 	fmt.Println("Keep", Keep("ab", true))
+	fmt.Println("Line", Line([]int{0}))
+	positive, address := Positive(3)
+	fmt.Printf("Positive %v nil=%v\n", positive, address == nil)
+	fmt.Println("Shift", Shift(Pair{A: 1, B: 2}))
+	fmt.Println("First", First([]int{7}))
+	n, err := Count([]int{1, 0, 2})
+	fmt.Println("Count", n, err)
+	half, even := Halve(7)
+	fmt.Println("Halve", half, even)
+	fmt.Printf("Swapped unequal=%v equal=%v\n", Swapped(1, 2, true), Swapped(1, 1, true))
 }
 `
 
 // semanticsProbe records the operands that a connector evaluates, in the
-// order of evaluation, and states a panic that a function passes on. It is
-// generated, so it has no site of its own.
+// order of evaluation, states a panic that a function passes on, and states
+// the line of a call. It is generated, so it has no site of its own.
 const semanticsProbe = `// Code generated for the test. DO NOT EDIT.
 
 package fixture
 
-import "strconv"
+import (
+	"runtime"
+	"strconv"
+)
 
 var trail string
+
+func line() int {
+	_, _, n, _ := runtime.Caller(1)
+	return n
+}
 
 func seen(name string, v bool) bool {
 	trail += name
@@ -173,33 +233,119 @@ func guarded(f func(bool) bool, v bool) (s string) {
 }
 `
 
-// semanticsOriginal is the value of each function of the semantics fixture
-// with no mutant active. OrderAnd and OrderOr state the result, a colon,
-// and the operands that the connector evaluated, in order.
-var semanticsOriginal = map[string]string{
-	"Add":      "8",
-	"Later":    "5s",
-	"Mod":      "1",
-	"Less":     "false",
-	"AtLeast":  "true",
-	"Same":     "true",
-	"Both":     "false",
-	"Either":   "true",
-	"OrderAnd": "false:ab",
-	"OrderOr":  "true:ab",
-	"Neg":      "-4",
-	"Not":      "false",
-	"Inc":      "5",
-	"Grow":     "44",
-	"Steps":    "10",
-	"Bump":     "[0 0 1 0]",
-	"Recovers": "true",
-	"Keep":     "AB",
+// hidden is a package that hides the predeclared constants true and false
+// with constants of the other's value, as a package may.
+const hidden = `package fixture
+
+const (
+	true  = 0 != 0
+	false = 0 == 0
+)
+
+func Equal(a, b int) bool { return a == b }
+
+func Less(a, b int) bool { return a < b }
+
+func Both(a, b bool) bool { return a && b }
+
+func Clear(xs []int) []int {
+	xs[0] = 0
+	return xs
+}
+`
+
+const hiddenTest = `package fixture
+
+import (
+	"fmt"
+	"testing"
+)
+
+func TestPrint(t *testing.T) {
+	fmt.Println("Equal", Equal(1, 2))
+	fmt.Println("Less", Less(1, 2))
+	fmt.Println("Both", Both(2 < 1, 1 < 2))
+	fmt.Println("Clear", Clear([]int{5}))
+}
+`
+
+// semanticsFixture is a package whose test prints one line per function of
+// the package: the function's name and its value. original is the value of
+// each function with no mutant active, and want the value of the function of
+// each runnable mutant with the mutant active, by the mutant's name. Its
+// files are shared, so a test only reads them.
+type semanticsFixture struct {
+	files    map[string]string
+	original map[string]string
+	want     map[string]string
 }
 
-// semanticsWant is the value of the function of each runnable mutant of the
-// semantics fixture with the mutant active, by the mutant's name.
-var semanticsWant = map[string]string{
+// everyKind makes every kind, with local variables that hide the names
+// false, nil, new and true, and a type's name, and an increment whose
+// operand spans lines. OrderAnd and OrderOr state the result, a colon, and
+// the operands that the connector evaluated, in order. Line states the line
+// of its return, Positive its result and whether the pointer is nil, and
+// Swapped its result for different and for equal numbers.
+var everyKind = semanticsFixture{
+	files: map[string]string{
+		"f.go":      semantics,
+		"f_test.go": semanticsTest,
+		"probe.go":  semanticsProbe,
+		"types.go":  "package fixture\n\n// Pair is a type without a site.\ntype Pair struct{ A, B int }\n",
+	},
+	original: map[string]string{
+		"Add":      "8",
+		"Later":    "5s",
+		"Mod":      "1",
+		"Less":     "false",
+		"AtLeast":  "true",
+		"Same":     "true",
+		"Both":     "false",
+		"Either":   "true",
+		"OrderAnd": "false:ab",
+		"OrderOr":  "true:ab",
+		"Neg":      "-4",
+		"Not":      "false",
+		"Inc":      "5",
+		"Grow":     "44",
+		"Steps":    "10",
+		"Bump":     "[0 0 1 0]",
+		"Recovers": "true",
+		"Keep":     "AB",
+		"Line":     "75",
+		"Positive": "true nil=false",
+		"Shift":    "{2 2}",
+		"First":    "7",
+		"Count":    "2 <nil>",
+		"Halve":    "3 false",
+		"Swapped":  "unequal=false equal=true",
+	},
+	want: everyKindWant,
+}
+
+// hiddenConstants is the package hidden, whose mutants compute the constants
+// true and false, and not the package's constants of those names.
+var hiddenConstants = semanticsFixture{
+	files:    map[string]string{"f.go": hidden, "f_test.go": hiddenTest},
+	original: map[string]string{"Equal": "false", "Less": "true", "Both": "false", "Clear": "[0]"},
+	want: map[string]string{
+		"Equal sbr-zero 0":    "false",
+		"Equal ror-true 0":    "true",
+		"Equal ror-false 0":   "false",
+		"Less sbr-zero 0":     "false",
+		"Less ror-boundary 0": "true",
+		"Less ror-false 0":    "false",
+		"Both sbr-zero 0":     "false",
+		"Both lcr-left 0":     "false",
+		"Both lcr-right 0":    "true",
+		"Both lcr-false 0":    "false",
+		"Clear sbr-delete 0":  "[5]",
+		"Clear sbr-zero 0":    "[]",
+	},
+}
+
+// everyKindWant is the want of everyKind.
+var everyKindWant = map[string]string{
 	"Add sbr-zero 0":         "0",
 	"Add aor 0":              "2",
 	"Later sbr-zero 0":       "0s",
@@ -275,16 +421,62 @@ var semanticsWant = map[string]string{
 	"Keep ror-false 0":    "ab.",
 	"Keep sbr-zero 0":     "",
 	"Keep sbr-zero 1":     "AB",
+	// The mutant's copy of the operand is on one line, and the line of the
+	// return is its line in the source.
+	"Line uoi-incdec 0": "75",
+	"Line sbr-zero 0":   "0",
+	// The zero values are false and nil, not the local variables of those
+	// names.
+	"Positive ror-boundary 0": "true nil=false",
+	"Positive ror-false 0":    "false nil=false",
+	"Positive sbr-zero 0":     "false nil=true",
+	"Positive uoi-not 0":      "false nil=false",
+	"Shift aor 0":             "{0 2}",
+	"Shift sbr-zero 0":        "{0 0}",
+	"First sbr-zero 0":        "0",
+	// The zero values are the named results' values before the loop writes
+	// them.
+	"Count sbr-delete 0":   "0 <nil>",
+	"Count sbr-delete 1":   "0 <nil>",
+	"Count ror-boundary 0": "3 <nil>",
+	"Count ror-false 0":    "0 <nil>",
+	"Count uoi-incdec 0":   "-2 <nil>",
+	"Count sbr-zero 0":     "0 <nil>",
+	"Halve sbr-zero 0":     "0 false",
+	"Halve aor 0":          "14 false",
+	"Halve ror-true 0":     "3 true",
+	"Halve ror-false 0":    "3 false",
+	"Halve aor 1":          "3 false",
+	// The local variable true contains false, and false contains true. Each
+	// mutant computes the constants, not the variables.
+	"Swapped sbr-delete 0": "unequal=false equal=false",
+	"Swapped lcr-left 0":   "unequal=false equal=true",
+	"Swapped lcr-right 0":  "unequal=true equal=true",
+	"Swapped lcr-false 0":  "unequal=false equal=false",
+	"Swapped ror-true 0":   "unequal=true equal=true",
+	"Swapped ror-false 0":  "unequal=false equal=false",
+	"Swapped sbr-zero 0":   "unequal=false equal=false",
+	"Swapped uoi-not 0":    "unequal=false equal=false",
+	"Swapped sbr-zero 1":   "unequal=false equal=true",
+	"Swapped uoi-not 1":    "unequal=true equal=true",
 }
 
-// semanticsFiles returns the files of the semantics fixture.
-func semanticsFiles() map[string]string {
-	return map[string]string{
-		"f.go":      semantics,
-		"f_test.go": semanticsTest,
-		"probe.go":  semanticsProbe,
-		"types.go":  "package fixture\n\n// Pair is a type without a site.\ntype Pair struct{ A, B int }\n",
+// describe writes the value of each function of the fixture, in the order
+// of their names.
+func (fx semanticsFixture) describe(values map[string]string) string {
+	var b strings.Builder
+	for _, name := range slices.Sorted(maps.Keys(fx.original)) {
+		fmt.Fprintf(&b, "%s=%s ", name, values[name])
 	}
+	return b.String()
+}
+
+// expected returns the values of the fixture's functions with m active: the
+// original values, and m's value for the function of its site.
+func (fx semanticsFixture) expected(names map[*enumerate.Mutant]string, m *enumerate.Mutant) map[string]string {
+	out := maps.Clone(fx.original)
+	out[m.Site.Scope] = fx.want[names[m]]
+	return out
 }
 
 // fixture writes files into a new directory, with the module file module
@@ -388,22 +580,4 @@ func lines(out string) map[string]string {
 		}
 	}
 	return got
-}
-
-// describe writes the value of each function of the semantics fixture, in
-// the order of their names.
-func describe(values map[string]string) string {
-	var b strings.Builder
-	for _, name := range slices.Sorted(maps.Keys(semanticsOriginal)) {
-		fmt.Fprintf(&b, "%s=%s ", name, values[name])
-	}
-	return b.String()
-}
-
-// expected returns the values of the semantics fixture's functions with m
-// active: the original values, and m's value for the function of its site.
-func expected(names map[*enumerate.Mutant]string, m *enumerate.Mutant) map[string]string {
-	out := maps.Clone(semanticsOriginal)
-	out[m.Site.Scope] = semanticsWant[names[m]]
-	return out
 }

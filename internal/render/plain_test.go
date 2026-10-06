@@ -26,16 +26,18 @@ func TestPlain(t *testing.T) {
 			src := head + "\tif a < b &&\n\t\tok {\n\t\ta++\n\t}\n\treturn -a\n}\n"
 			p, r := fixture(t, map[string]string{"f.go": src})
 			tail := "\t\ta++\n\t}\n\treturn -a\n}\n"
+			bound := "package fixture\n\nfunc f(a, b int, ok bool) (_mutateZero0 int) {\n"
 			want := map[string]string{
-				"f sbr-delete 0":   head + "\tif false { if a < b &&\n\t\tok {\n\t\ta++\n\t} }\n\treturn -a\n}\n",
-				"f lcr-left 0":     head + "\tif ((a < b) || false && \n(ok)) {\n" + tail,
-				"f lcr-right 0":    head + "\tif (false && (a < b) || \n(ok)) {\n" + tail,
-				"f lcr-false 0":    head + "\tif (false && ((a < b) && \n(ok))) {\n" + tail,
+				"f sbr-delete 0":   head + "\tif (0 != 0) { if a < b &&\n\t\tok {\n\t\ta++\n\t} }\n\treturn -a\n}\n",
+				"f lcr-left 0":     head + "\tif ((a < b) || (0 != 0) && \n(ok)) {\n" + tail,
+				"f lcr-right 0":    head + "\tif ((0 != 0) && (a < b) || \n(ok)) {\n" + tail,
+				"f lcr-false 0":    head + "\tif ((0 != 0) && ((a < b) && \n(ok))) {\n" + tail,
 				"f ror-boundary 0": head + "\tif a <= b &&\n\t\tok {\n" + tail,
-				"f ror-false 0":    head + "\tif (a < b && false) &&\n\t\tok {\n" + tail,
+				"f ror-false 0":    head + "\tif (a < b && (0 != 0)) &&\n\t\tok {\n" + tail,
 				"f uoi-incdec 0":   head + "\tif a < b &&\n\t\tok {\n\t\ta--\n\t}\n\treturn -a\n}\n",
-				"f sbr-zero 0":     head + "\tif a < b &&\n\t\tok {\n\t\ta++\n\t}\n\tif true { return 0 }; return -a\n}\n",
-				"f uoi-minus 0":    head + "\tif a < b &&\n\t\tok {\n\t\ta++\n\t}\n\treturn (a)\n}\n",
+				"f sbr-zero 0": bound + "\tif a < b &&\n\t\tok {\n\t\ta++\n\t}\n" +
+					"\tif (0 == 0) { return _mutateZero0 }; return -a\n}\n",
+				"f uoi-minus 0": head + "\tif a < b &&\n\t\tok {\n\t\ta++\n\t}\n\treturn (a)\n}\n",
 			}
 			names := ids(r)
 			path := filepath.Join(p.Dir, "f.go")
@@ -62,33 +64,50 @@ func TestPlain(t *testing.T) {
 				"uoi-not of a negation drops the negation")
 		})
 
-		t.Run("writes a zero value whose type spans lines on the return's line", func(t *testing.T) {
+		t.Run("binds a result whose type spans lines and keeps every line", func(t *testing.T) {
 			t.Parallel()
-			head := "package fixture\n\nfunc f(n int) struct {\n\ta int\n\tb int // the second field\n} {\n"
+			result := "struct {\n\ta int\n\tb int // the second field\n}"
 			ret := "return struct {\n\t\ta int\n\t\tb int // the second field\n\t}{n, n}\n}\n"
-			p, r := fixture(t, map[string]string{"f.go": head + "\t" + ret})
+			p, r := fixture(t, map[string]string{"f.go": "package fixture\n\nfunc f(n int) " + result + " {\n\t" + ret})
 			assert.Length(t, r.Mutants, 1, "the return is the only site")
 			got := string(render.Plain(p, r.Mutants[0]).Files[filepath.Join(p.Dir, "f.go")])
-			assert.Equal(t, got, head+"\tif true { return struct { a int ; b int ; } { } }; "+ret,
-				"the zero value's type keeps its semicolons, and the return keeps its lines")
+			assert.Equal(t, got, "package fixture\n\nfunc f(n int) (_mutateZero0 "+result+") {\n"+
+				"\tif (0 == 0) { return _mutateZero0 }; "+ret,
+				"the result's type and the return keep their lines")
 		})
 
-		t.Run("builds each mutant to compute what its instrumented form computes", func(t *testing.T) {
-			t.Parallel()
-			p, r := fixture(t, semanticsFiles())
-			instrument(t, p, r)
-			names := ids(r)
-			for _, m := range r.Mutants {
-				if m.Status != enumerate.Runnable {
-					continue
+		semantics := []struct {
+			name string
+			fx   semanticsFixture
+		}{
+			{name: "builds each mutant to compute what its instrumented form computes", fx: everyKind},
+			{
+				name: "builds each mutant to compute the constants true and false where the package hides their names",
+				fx:   hiddenConstants,
+			},
+		}
+		for _, tt := range semantics {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				p, r := fixture(t, tt.fx.files)
+				instrument(t, p, r)
+				names := ids(r)
+				for _, m := range r.Mutants {
+					if m.Status != enumerate.Runnable {
+						continue
+					}
+					t.Run(names[m], func(t *testing.T) {
+						t.Parallel()
+						bin := buildProgram(t, p, render.Plain(p, m))
+						assert.Equal(
+							t,
+							tt.fx.describe(lines(run(t, bin, p.Dir))),
+							tt.fx.describe(tt.fx.expected(names, m)),
+							"the ordinary build of the mutant computes what the catalogue states",
+						)
+					})
 				}
-				t.Run(names[m], func(t *testing.T) {
-					t.Parallel()
-					bin := buildProgram(t, p, render.Plain(p, m))
-					assert.Equal(t, describe(lines(run(t, bin, p.Dir))), describe(expected(names, m)),
-						"the ordinary build of the mutant computes what the catalogue states")
-				})
-			}
-		})
+			})
+		}
 	})
 }

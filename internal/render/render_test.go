@@ -30,26 +30,35 @@ func TestRender(t *testing.T) {
 	t.Run("Render", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("computes each mutant as the catalogue defines it when its ordinal is active", func(t *testing.T) {
-			t.Parallel()
-			p, r := fixture(t, semanticsFiles())
-			prog, bin := build(t, p, r)
-			assert.Equal(t, describe(lines(run(t, bin, p.Dir, active(0)))), describe(semanticsOriginal),
-				"with no mutant active the package computes as its source")
-			names := ids(r)
-			var ran []string
-			for _, m := range r.Mutants {
-				if m.Status != enumerate.Runnable {
-					continue
+		semantics := []struct {
+			name string
+			fx   semanticsFixture
+		}{
+			{name: "computes each mutant as the catalogue defines it when its ordinal is active", fx: everyKind},
+			{name: "computes the constants true and false where the package hides their names", fx: hiddenConstants},
+		}
+		for _, tt := range semantics {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				p, r := fixture(t, tt.fx.files)
+				prog, bin := build(t, p, r)
+				assert.Equal(t, tt.fx.describe(lines(run(t, bin, p.Dir, active(0)))), tt.fx.describe(tt.fx.original),
+					"with no mutant active the package computes as its source")
+				names := ids(r)
+				var ran []string
+				for _, m := range r.Mutants {
+					if m.Status != enumerate.Runnable {
+						continue
+					}
+					got := lines(run(t, bin, p.Dir, active(prog.Ordinals[m])))
+					expect.Equal(t, tt.fx.describe(got), tt.fx.describe(tt.fx.expected(names, m)),
+						names[m]+" computes what the catalogue states while its ordinal is active")
+					ran = append(ran, names[m])
 				}
-				got := lines(run(t, bin, p.Dir, active(prog.Ordinals[m])))
-				expect.Equal(t, describe(got), describe(expected(names, m)),
-					names[m]+" computes what the catalogue states while its ordinal is active")
-				ran = append(ran, names[m])
-			}
-			assert.Permutation(t, ran, slices.Collect(maps.Keys(semanticsWant)),
-				"every mutant of the fixture runs, and no other")
-		})
+				assert.Permutation(t, ran, slices.Collect(maps.Keys(tt.fx.want)),
+					"every mutant of the fixture runs, and no other")
+			})
+		}
 
 		t.Run("numbers the mutants of the instrumented sites consecutively in source order", func(t *testing.T) {
 			t.Parallel()
@@ -104,14 +113,14 @@ func TestRender(t *testing.T) {
 			t.Parallel()
 			p, r := fixture(t, map[string]string{"f.go": "package fixture\n\nfunc F(a int) int { return a + 1 }\n"})
 			for _, s := range r.Sites {
-				if s.Form == enumerate.Zero {
-					s.Zeros = []string{"}"}
+				if s.Form == enumerate.Arithmetic {
+					s.TypeArg = "1 +"
 				}
 			}
 			instrument(t, p, r)
 			for _, m := range r.Mutants {
-				expect.Equal(t, m.Status == enumerate.NotViable, m.Kind == spec.SBRZero,
-					"only the zero return, whose form does not parse, is not viable: "+string(m.Kind))
+				expect.Equal(t, m.Status == enumerate.NotViable, m.Kind == spec.AOR,
+					"only the arithmetic, whose form does not parse, is not viable: "+string(m.Kind))
 			}
 		})
 
@@ -119,14 +128,14 @@ func TestRender(t *testing.T) {
 			t.Parallel()
 			p, r := fixture(t, map[string]string{"f.go": "package fixture\n\nfunc F(a int) int { return a + 1 }\n"})
 			for _, s := range r.Sites {
-				if s.Form == enumerate.Zero {
-					s.Zeros = []string{"func() int { type x int; type x int; return 0 }()"}
+				if s.Form == enumerate.Arithmetic {
+					s.TypeArg = "struct{ x int; x int }"
 				}
 			}
 			instrument(t, p, r)
 			for _, m := range r.Mutants {
-				if m.Kind == spec.SBRZero {
-					expect.Equal(t, m.Status, enumerate.NotViable, "the zero return is not viable")
+				if m.Kind == spec.AOR {
+					expect.Equal(t, m.Status, enumerate.NotViable, "the arithmetic is not viable")
 					expect.Contains(t, m.Reason, "redeclared", "for the redeclaration")
 				} else {
 					expect.Equal(t, m.Status, enumerate.Runnable, string(m.Kind)+" runs")

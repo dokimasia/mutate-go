@@ -90,6 +90,13 @@ type Options struct {
 	IncludeGenerated bool
 }
 
+// Function is a function declaration with a body, or a function literal:
+// its type, which lists its results, and its body.
+type Function struct {
+	Type *ast.FuncType
+	Body *ast.BlockStmt
+}
+
 // Site is one place in a source file that one or more mutants change.
 type Site struct {
 	File  *load.File
@@ -108,8 +115,9 @@ type Site struct {
 	// calls a generic function of its own, and the name denotes that type
 	// at the site. It is empty where the call infers the type.
 	TypeArg string
-	// Zeros are the zero values of a Zero site's results, one per result.
-	Zeros []string
+	// Func is the function that a Zero site returns from, and nil for any
+	// other site.
+	Func *Function
 	// Mutants lists the site's mutants in catalogue order.
 	Mutants []*Mutant
 }
@@ -303,7 +311,7 @@ func (e *enumerator) file(f *load.File) {
 	for _, decl := range f.Syntax.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			e.walk(f, d, scopeOf(d), d.Type)
+			e.walk(f, d, scopeOf(d), &Function{Type: d.Type, Body: d.Body})
 		case *ast.GenDecl:
 			for _, sp := range d.Specs {
 				switch s := sp.(type) {

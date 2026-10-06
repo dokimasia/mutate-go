@@ -1,0 +1,501 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "positive",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a2437c40d0861cec",
+      "file": "shadowed.go",
+      "start": {
+        "line": 11,
+        "column": 11
+      },
+      "end": {
+        "line": 11,
+        "column": 16
+      },
+      "original": "n > 0",
+      "replacement": "n >= 0"
+    },
+    {
+      "scope": "positive",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7567cfae1bcf5d83",
+      "file": "shadowed.go",
+      "start": {
+        "line": 11,
+        "column": 11
+      },
+      "end": {
+        "line": 11,
+        "column": 16
+      },
+      "original": "n > 0",
+      "replacement": "false"
+    },
+    {
+      "scope": "positive",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3552521f6c70f903",
+      "file": "shadowed.go",
+      "start": {
+        "line": 12,
+        "column": 2
+      },
+      "end": {
+        "line": 12,
+        "column": 14
+      },
+      "original": "return false",
+      "replacement": "return false"
+    },
+    {
+      "scope": "positive",
+      "kind": "uoi-not",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2e5ec39d2cf7e262",
+      "file": "shadowed.go",
+      "start": {
+        "line": 12,
+        "column": 9
+      },
+      "end": {
+        "line": 12,
+        "column": 14
+      },
+      "original": "false",
+      "replacement": "!false"
+    },
+    {
+      "scope": "address",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "132af769a23cca02",
+      "file": "shadowed.go",
+      "start": {
+        "line": 19,
+        "column": 2
+      },
+      "end": {
+        "line": 19,
+        "column": 12
+      },
+      "original": "return nil",
+      "replacement": "return nil"
+    },
+    {
+      "scope": "moved",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f1959a01811674d2",
+      "file": "shadowed.go",
+      "start": {
+        "line": 25,
+        "column": 17
+      },
+      "end": {
+        "line": 25,
+        "column": 24
+      },
+      "original": "p.x + 1",
+      "replacement": "p.x - 1"
+    },
+    {
+      "scope": "moved",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d4763eb840c1daa2",
+      "file": "shadowed.go",
+      "start": {
+        "line": 26,
+        "column": 2
+      },
+      "end": {
+        "line": 26,
+        "column": 14
+      },
+      "original": "return point",
+      "replacement": "return point{}"
+    },
+    {
+      "scope": "first",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "5122e0bf06258f24",
+      "file": "shadowed.go",
+      "start": {
+        "line": 33,
+        "column": 2
+      },
+      "end": {
+        "line": 33,
+        "column": 12
+      },
+      "original": "return new",
+      "replacement": "return *new(T)"
+    },
+    {
+      "scope": "count",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "28871521e3dd8422",
+      "file": "shadowed.go",
+      "start": {
+        "line": 39,
+        "column": 2
+      },
+      "end": {
+        "line": 43,
+        "column": 3
+      },
+      "original": "for _, x := range xs { if x > 0 { n++ } }",
+      "replacement": ""
+    },
+    {
+      "scope": "count",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "5adc1938c75aec73",
+      "file": "shadowed.go",
+      "start": {
+        "line": 40,
+        "column": 3
+      },
+      "end": {
+        "line": 42,
+        "column": 4
+      },
+      "original": "if x > 0 { n++ }",
+      "replacement": ""
+    },
+    {
+      "scope": "count",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "81cd16c7dbf47726",
+      "file": "shadowed.go",
+      "start": {
+        "line": 40,
+        "column": 6
+      },
+      "end": {
+        "line": 40,
+        "column": 11
+      },
+      "original": "x > 0",
+      "replacement": "x >= 0"
+    },
+    {
+      "scope": "count",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d26ce5cf3609ea7d",
+      "file": "shadowed.go",
+      "start": {
+        "line": 40,
+        "column": 6
+      },
+      "end": {
+        "line": 40,
+        "column": 11
+      },
+      "original": "x > 0",
+      "replacement": "false"
+    },
+    {
+      "scope": "count",
+      "kind": "uoi-incdec",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "df0e4f4cf3f3bf4e",
+      "file": "shadowed.go",
+      "start": {
+        "line": 41,
+        "column": 4
+      },
+      "end": {
+        "line": 41,
+        "column": 7
+      },
+      "original": "n++",
+      "replacement": "n--"
+    },
+    {
+      "scope": "count",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f200d164827843b5",
+      "file": "shadowed.go",
+      "start": {
+        "line": 44,
+        "column": 2
+      },
+      "end": {
+        "line": 44,
+        "column": 15
+      },
+      "original": "return n, err",
+      "replacement": "return 0, nil"
+    },
+    {
+      "scope": "half",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3460e34c1dfb45d2",
+      "file": "shadowed.go",
+      "start": {
+        "line": 49,
+        "column": 2
+      },
+      "end": {
+        "line": 49,
+        "column": 24
+      },
+      "original": "return n / 2, n%2 == 0",
+      "replacement": "return 0, false"
+    },
+    {
+      "scope": "half",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "8a6d836d8caed7f1",
+      "file": "shadowed.go",
+      "start": {
+        "line": 49,
+        "column": 9
+      },
+      "end": {
+        "line": 49,
+        "column": 14
+      },
+      "original": "n / 2",
+      "replacement": "n * 2"
+    },
+    {
+      "scope": "half",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "15d51f21836b75f8",
+      "file": "shadowed.go",
+      "start": {
+        "line": 49,
+        "column": 16
+      },
+      "end": {
+        "line": 49,
+        "column": 24
+      },
+      "original": "n%2 == 0",
+      "replacement": "true"
+    },
+    {
+      "scope": "half",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "1eac8d6df2607e61",
+      "file": "shadowed.go",
+      "start": {
+        "line": 49,
+        "column": 16
+      },
+      "end": {
+        "line": 49,
+        "column": 24
+      },
+      "original": "n%2 == 0",
+      "replacement": "false"
+    },
+    {
+      "scope": "half",
+      "kind": "aor",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "d36de5dcbad30a00",
+      "file": "shadowed.go",
+      "start": {
+        "line": 49,
+        "column": 16
+      },
+      "end": {
+        "line": 49,
+        "column": 19
+      },
+      "original": "n%2",
+      "replacement": "n*2"
+    },
+    {
+      "scope": "same",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "eb63d1a606081f48",
+      "file": "shadowed.go",
+      "start": {
+        "line": 56,
+        "column": 2
+      },
+      "end": {
+        "line": 58,
+        "column": 3
+      },
+      "original": "if a == b { return false }",
+      "replacement": ""
+    },
+    {
+      "scope": "same",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7157c55aea413b3a",
+      "file": "shadowed.go",
+      "start": {
+        "line": 56,
+        "column": 5
+      },
+      "end": {
+        "line": 56,
+        "column": 11
+      },
+      "original": "a == b",
+      "replacement": "true"
+    },
+    {
+      "scope": "same",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "55061dbda76d58dd",
+      "file": "shadowed.go",
+      "start": {
+        "line": 56,
+        "column": 5
+      },
+      "end": {
+        "line": 56,
+        "column": 11
+      },
+      "original": "a == b",
+      "replacement": "false"
+    },
+    {
+      "scope": "same",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3ce80f79b2b38fb3",
+      "file": "shadowed.go",
+      "start": {
+        "line": 57,
+        "column": 3
+      },
+      "end": {
+        "line": 57,
+        "column": 15
+      },
+      "original": "return false",
+      "replacement": "return false"
+    },
+    {
+      "scope": "same",
+      "kind": "uoi-not",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4f57befc7bf84c73",
+      "file": "shadowed.go",
+      "start": {
+        "line": 57,
+        "column": 10
+      },
+      "end": {
+        "line": 57,
+        "column": 15
+      },
+      "original": "false",
+      "replacement": "!false"
+    },
+    {
+      "scope": "same",
+      "kind": "sbr-zero",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "f2ed1f90a6eef3fb",
+      "file": "shadowed.go",
+      "start": {
+        "line": 59,
+        "column": 2
+      },
+      "end": {
+        "line": 59,
+        "column": 13
+      },
+      "original": "return true",
+      "replacement": "return false"
+    },
+    {
+      "scope": "same",
+      "kind": "uoi-not",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "eef362b2c90f2401",
+      "file": "shadowed.go",
+      "start": {
+        "line": 59,
+        "column": 9
+      },
+      "end": {
+        "line": 59,
+        "column": 13
+      },
+      "original": "true",
+      "replacement": "!true"
+    }
+  ],
+  "skipped": [
+    {
+      "file": "shadowed.go",
+      "start": {
+        "line": 55,
+        "column": 17
+      },
+      "end": {
+        "line": 55,
+        "column": 23
+      },
+      "reason": "constant expression"
+    },
+    {
+      "file": "shadowed.go",
+      "start": {
+        "line": 55,
+        "column": 25
+      },
+      "end": {
+        "line": 55,
+        "column": 31
+      },
+      "reason": "constant expression"
+    }
+  ],
+  "generated": [],
+  "errors": []
+}

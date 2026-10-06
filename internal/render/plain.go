@@ -20,21 +20,22 @@ import (
 //
 // The change evaluates the operands as m's expression does. It keeps the
 // code that m leaves out behind a constant that skips it, so every name that
-// the file uses remains in use:
+// the file uses remains in use. It writes the constants true and false as
+// (0 == 0) and (0 != 0), which no declaration of the program can hide:
 //
 //   - aor, ror-boundary and uoi-incdec write their operator in place of the
 //     site's.
 //   - ror-true and ror-false keep the comparison and join the constant to
-//     it, as (a < b || true) and (a < b && false), so both operands are
-//     still evaluated.
-//   - lcr-left writes ((a) || false && (b)) for a && b or a || b,
-//     lcr-right (false && (a) || (b)), lcr-true (true || (a) || (b)) and
-//     lcr-false (false && ((a) && (b))).
+//     it, as (a < b || (0 == 0)) and (a < b && (0 != 0)), so both operands
+//     are still evaluated.
+//   - lcr-left writes ((a) || (0 != 0) && (b)) for a && b or a || b,
+//     lcr-right ((0 != 0) && (a) || (b)), lcr-true ((0 == 0) || (a) || (b))
+//     and lcr-false ((0 != 0) && ((a) && (b))).
 //   - uoi-not writes !(x) for x, and (x) for !x, and uoi-minus writes (x) for
 //     -x.
-//   - sbr-delete writes if false { s } for the statement s, and sbr-zero
-//     writes if true { return z }; before the return statement, with z the
-//     zero values.
+//   - sbr-delete writes if (0 != 0) { s } for the statement s, and sbr-zero
+//     writes if (0 == 0) { return z }; before the return statement, with z
+//     the variables that zeroBindings binds to the function's results.
 //
 // The change keeps every line of the file at its number: it writes the
 // line breaks of the source that it removes where a line break ends no
@@ -42,15 +43,18 @@ import (
 //
 // # Allocation contract
 //
-// Plain allocates the copy of the file and the change's text.
+// Plain allocates the copy of the file, the change's text and, for sbr-zero,
+// the bindings of the results.
 func Plain(p *load.Package, m *enumerate.Mutant) *Program {
 	s := m.Site
 	text := s.File.Text
 	off := func(pos token.Pos) int { return p.Fset.File(pos).Offset(pos) }
 	source := func(n ast.Node) string { return string(text[off(n.Pos()):off(n.End())]) }
 	start, end := s.Start, s.End
-	// The change is head, the line breaks that it removes, and body.
+	// The change is head, the line breaks that it removes, and body. edits
+	// are the edits before it.
 	var head, body string
+	var edits []edit
 	switch m.Kind {
 	case spec.AOR, spec.RORBoundary, spec.UOIIncDec:
 		var at token.Pos
@@ -67,21 +71,21 @@ func Plain(p *load.Package, m *enumerate.Mutant) *Program {
 		start = off(at)
 		end = start + len(op)
 	case spec.RORTrue:
-		head = "(" + source(s.Node) + " || true)"
+		head = "(" + source(s.Node) + " || " + trueExpr + ")"
 	case spec.RORFalse:
-		head = "(" + source(s.Node) + " && false)"
+		head = "(" + source(s.Node) + " && " + falseExpr + ")"
 	case spec.LCRLeft, spec.LCRRight, spec.LCRTrue, spec.LCRFalse:
 		n := s.Node.(*ast.BinaryExpr)
 		x, y := "("+source(n.X)+")", "("+source(n.Y)+")"
 		switch m.Kind {
 		case spec.LCRLeft:
-			head, body = "("+x+" || false && ", y+")"
+			head, body = "("+x+" || "+falseExpr+" && ", y+")"
 		case spec.LCRRight:
-			head, body = "(false && "+x+" || ", y+")"
+			head, body = "("+falseExpr+" && "+x+" || ", y+")"
 		case spec.LCRTrue:
-			head, body = "(true || "+x+" || ", y+")"
+			head, body = "("+trueExpr+" || "+x+" || ", y+")"
 		default:
-			head, body = "(false && ("+x+" && ", y+"))"
+			head, body = "("+falseExpr+" && ("+x+" && ", y+"))"
 		}
 	case spec.UOINot:
 		head = "!(" + source(s.Node) + ")"
@@ -91,13 +95,16 @@ func Plain(p *load.Package, m *enumerate.Mutant) *Program {
 	case spec.UOIMinus:
 		head, body = "(", source(s.Node.(*ast.UnaryExpr).X)+")"
 	case spec.SBRDelete:
-		head = "if false { " + source(s.Node) + " }"
+		head = "if " + falseExpr + " { " + source(s.Node) + " }"
 	case spec.SBRZero:
-		head = "if true { return " + oneLine([]byte(strings.Join(s.Zeros, ", "))) + " }; " + source(s.Node)
+		var vars []string
+		edits, vars = zeroBindings(p.Fset, s.Func)
+		head = "if " + trueExpr + " { return " + strings.Join(vars, ", ") + " }; " + source(s.Node)
 	}
 	breaks := bytes.Count(text[start:end], []byte("\n")) - strings.Count(head+body, "\n")
 	change := head + strings.Repeat("\n", max(0, breaks)) + body
-	out := make([]byte, 0, len(text)-(end-start)+len(change))
-	out = append(append(append(out, text[:start]...), change...), text[end:]...)
-	return &Program{Files: map[string][]byte{s.File.Path: out}}
+	r := &fileRenderer{text: text, edits: append(edits, edit{start: start, end: end, text: change})}
+	r.buf.Grow(len(text) + len(change))
+	r.writeText(0, len(text))
+	return &Program{Files: map[string][]byte{s.File.Path: r.buf.Bytes()}}
 }

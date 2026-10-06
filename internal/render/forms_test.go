@@ -31,14 +31,30 @@ func TestForms(t *testing.T) {
 			assert.Equal(
 				t,
 				string(prog.Files[filepath.Join(p.Dir, "f.go")]),
-				"package fixture\n\nfunc f(a, b int, ok bool) int {\n"+
+				"package fixture\n\nfunc f(a, b int, ok bool) (_mutateZero0 int) {\n"+
 					"\tif !_mutateIs(1) { if (!_mutateCT(2, 4) && (_mutateActive == 3 || (_mutate_s5[int](a, b))) && \n"+
 					"(_mutateActive == 2 || (ok))) {\n"+
 					"\t\tif _mutateIs(7) { a-- } else { a++ }\n"+
 					"\t} }\n"+
-					"\tif _mutateIs(8) { return 0 }; return _mutate_s9[int](a)\n}\n",
+					"\tif _mutateIs(8) { return _mutateZero0 }; return _mutate_s9[int](a)\n}\n",
 				"each form keeps the lines of the code that it replaces",
 			)
+		})
+
+		t.Run("writes the mutant's copy of an increment's operand on one line", func(t *testing.T) {
+			t.Parallel()
+			src := "package fixture\n\nfunc f(m map[string]int) {\n\tm[`a\r\nb`+\n\t\t`c`]++\n}\n"
+			p, r := fixture(t, map[string]string{"f.go": src})
+			prog := instrument(t, p, r)
+			got := string(prog.Files[filepath.Join(p.Dir, "f.go")])
+			assert.Equal(
+				t,
+				got,
+				"package fixture\n\nfunc f(m map[string]int) {\n"+
+					"\tif _mutateIs(1) { m [ \"a\\nb\" + `c` ]-- } else { m[`a\r\nb`+\n\t\t`c`]++ }\n}\n",
+				"the mutant's copy writes the raw string as an interpreted string without its carriage return",
+			)
+			expect.Equal(t, strings.Count(got, "\n"), strings.Count(src, "\n"), "and the form keeps every line")
 		})
 
 		t.Run("raises the language version of a module below go 1.18 and keeps every line", func(t *testing.T) {
@@ -66,17 +82,19 @@ func TestForms(t *testing.T) {
 			assert.Equal(t, lines(run(t, bin, p.Dir, active(0)))["Sum"], "8", "the package computes as its source")
 		})
 
-		t.Run("writes a zero value whose type spans lines on one line", func(t *testing.T) {
+		t.Run("binds a result whose type spans lines and keeps every line", func(t *testing.T) {
 			t.Parallel()
-			src := "package fixture\n\nfunc f(n int) struct {\n\ta int\n\tb int // the second field\n} {\n" +
-				"\treturn struct {\n\t\ta int\n\t\tb int // the second field\n\t}{n, n}\n}\n"
+			result := "struct {\n\ta int\n\tb int `json:\"b\n\"`\n}"
+			ret := "return struct {\n\t\ta int\n\t\tb int `json:\"b\n\"`\n\t}{n, n}\n}\n"
+			src := "package fixture\n\nfunc f(n int) " + result + " {\n\t" + ret
 			p, r := fixture(t, map[string]string{"f.go": src})
 			prog := instrument(t, p, r)
 			assert.Length(t, r.Mutants, 1, "the return is the only site")
 			expect.Equal(t, r.Mutants[0].Status, enumerate.Runnable, "the type checker accepts its form")
 			got := string(prog.Files[filepath.Join(p.Dir, "f.go")])
-			expect.Contains(t, got, "\tif _mutateIs(1) { return struct { a int ; b int ; } { } }; return struct {\n",
-				"the form writes the semicolons of the zero value's type")
+			expect.Equal(t, got, "package fixture\n\nfunc f(n int) (_mutateZero0 "+result+") {\n"+
+				"\tif _mutateIs(1) { return _mutateZero0 }; "+ret,
+				"the form returns the result's variable, and the result's type keeps its raw string tag")
 			expect.Equal(t, strings.Count(got, "\n"), strings.Count(src, "\n"), "and keeps every line")
 		})
 	})

@@ -122,30 +122,30 @@ kinds sbr-zero 1: return total -> "return 0"
 			expect.Equal(t, s.EndPos, enumerate.Position{Line: 5, Column: 12}, "and ends after its value")
 		})
 
-		t.Run("states each site's form, operator, type argument and zero values", func(t *testing.T) {
+		t.Run("states each site's form, operator, type argument and function", func(t *testing.T) {
 			t.Parallel()
 			r := all(t, map[string]string{"kinds.go": kinds})
 			var b strings.Builder
 			for _, s := range r.Sites {
-				fmt.Fprintf(&b, "%s %s %q %q %v\n", s.Scope, forms[s.Form], s.Op, s.TypeArg, s.Zeros)
+				fmt.Fprintf(&b, "%s %s %q %q %v\n", s.Scope, forms[s.Form], s.Op, s.TypeArg, s.Func != nil)
 			}
-			expect.Equal(t, b.String(), `kinds Arithmetic "+" "int" []
-kinds Compound "-" "int" []
-kinds Delete "ILLEGAL" "" []
-kinds Delete "ILLEGAL" "" []
-kinds Connector "&&" "" []
-kinds Ordered "<" "int" []
-kinds IncDec "++" "" []
-kinds Delete "ILLEGAL" "" []
-kinds Connector "||" "" []
-kinds Equality "==" "" []
-kinds Ordered ">=" "int" []
-kinds Zero "ILLEGAL" "" [0]
-kinds Minus "-" "int" []
-kinds Delete "ILLEGAL" "" []
-kinds Not "ILLEGAL" "" []
-kinds Zero "ILLEGAL" "" [0]
-`, "each site states the facts of its instrumented form")
+			expect.Equal(t, b.String(), `kinds Arithmetic "+" "int" false
+kinds Compound "-" "int" false
+kinds Delete "ILLEGAL" "" false
+kinds Delete "ILLEGAL" "" false
+kinds Connector "&&" "" false
+kinds Ordered "<" "int" false
+kinds IncDec "++" "" false
+kinds Delete "ILLEGAL" "" false
+kinds Connector "||" "" false
+kinds Equality "==" "" false
+kinds Ordered ">=" "int" false
+kinds Zero "ILLEGAL" "" true
+kinds Minus "-" "int" false
+kinds Delete "ILLEGAL" "" false
+kinds Not "ILLEGAL" "" false
+kinds Zero "ILLEGAL" "" true
+`, "each site states the facts of its instrumented form, and only a return its function")
 			var ops []string
 			for _, m := range r.Mutants {
 				if m.Op != token.ILLEGAL {
@@ -154,6 +154,30 @@ kinds Zero "ILLEGAL" "" [0]
 			}
 			expect.Equal(t, ops, []string{"aor -", "aor +", "ror-boundary <=", "uoi-incdec --", "ror-boundary >"},
 				"and each mutant that writes an operator states it")
+		})
+
+		t.Run("records the innermost function that a return leaves", func(t *testing.T) {
+			t.Parallel()
+			r := all(t, map[string]string{"inner.go": `package fixture
+
+func outer(n int) (int, error) {
+	f := func() int { return n + 1 }
+	return f(), nil
+}
+`})
+			decl := r.Sites[0].File.Syntax.Decls[0].(*ast.FuncDecl)
+			lit := decl.Body.List[0].(*ast.AssignStmt).Rhs[0].(*ast.FuncLit)
+			var returns []*enumerate.Site
+			for _, s := range r.Sites {
+				if s.Form == enumerate.Zero {
+					returns = append(returns, s)
+				}
+			}
+			assert.Length(t, returns, 2, "both returns are sites")
+			expect.True(t, returns[0].Func.Type == lit.Type, "the literal's return leaves the literal's type")
+			expect.True(t, returns[0].Func.Body == lit.Body, "and the literal's body")
+			expect.True(t, returns[1].Func.Type == decl.Type, "the declaration's return leaves the declaration's type")
+			expect.True(t, returns[1].Func.Body == decl.Body, "and the declaration's body")
 		})
 
 		t.Run("names the operands' type only where the name denotes it at the site", func(t *testing.T) {

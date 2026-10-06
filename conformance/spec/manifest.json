@@ -1,5 +1,5 @@
 {
-    "digest": "sha256:e69132938a333ecceec517ec2363a21073062d213cfd9c2ac10ae41ed0370775",
+    "digest": "sha256:b3cca5c6eb864583ddc85eefac7d286a5034ae3e52c4ee039e34f089dfdfc95b",
     "files": {
         "VERSION": "sha256:59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
         "spec/catalogue.json": "sha256:47f4e8b4220037bc74a83f6e90305a2e7173ee1c48cb496fb4ca3622c0907aa9",
@@ -117,6 +117,11 @@
         "spec/corpus/selection/go/copy_test.go": "sha256:07f8fcd3b91e4e134296fb549cb863144a4f0e82c5c4ef88b56dddd49fc71ae0",
         "spec/corpus/selection/go/expect.json": "sha256:b4aa8fdfc9ba737985ac96f5e8b43074185c610ebc88896c20263cbc425685e6",
         "spec/corpus/selection/go/go.mod": "sha256:46f331a63521db5231dd0051685d07f6b22185536bbc0c9a2d0b1e2d99b074d6",
+        "spec/corpus/shadowed/case.json": "sha256:b59a609578798a22f876f800d8c7c307bd009176dfc4fcf652e1124c9f89e9c5",
+        "spec/corpus/shadowed/go/expect.json": "sha256:a77ee3d0da7a44ffa68db536137cd57966309a41f8d9f3f07f1f9022f80914e4",
+        "spec/corpus/shadowed/go/go.mod": "sha256:46f331a63521db5231dd0051685d07f6b22185536bbc0c9a2d0b1e2d99b074d6",
+        "spec/corpus/shadowed/go/shadowed.go": "sha256:87f7461b1d679d20cec8582af45ec491bd47601b7f55a8648220024e00d0a171",
+        "spec/corpus/shadowed/go/shadowed_test.go": "sha256:5e20101bb259e737fb1bff6b40006b5e37ebb92d7f125eb9fc0df0318c66d9be",
         "spec/corpus/short-circuit/case.json": "sha256:7df93aa59310319458d69319677c514afc1f0dcd324e14016f59868a9bd65353",
         "spec/corpus/short-circuit/go/expect.json": "sha256:f17b9fe2bbada553d7b892ca21d8b452d303b27a6ccf8a83385eeba6147728dd",
         "spec/corpus/short-circuit/go/go.mod": "sha256:46f331a63521db5231dd0051685d07f6b22185536bbc0c9a2d0b1e2d99b074d6",
@@ -174,7 +179,7 @@
         "spec/corpus/zero/go/go.mod": "sha256:46f331a63521db5231dd0051685d07f6b22185536bbc0c9a2d0b1e2d99b074d6",
         "spec/corpus/zero/go/zero.go": "sha256:70bdab6e3c5c1057113bd1010e6d7892c41ea5681bdd72edd90ef96a4e906992",
         "spec/corpus/zero/go/zero_test.go": "sha256:b012f26722c51ee965677f1387fa747fc545856eeb6df562195024ccb4f22171",
-        "spec/overlays/go.json": "sha256:4e3946553b0acb3a1d0b154b56f3222488004bdd0bf05de22cc82f5506bd09b9",
+        "spec/overlays/go.json": "sha256:507cc5d992791dfaef9cef4059fe5852d19cbab30b10b754105c7c1e12b9c7b1",
         "spec/protocol.json": "sha256:d8a100ee59ae896d63669b3391d8c2db1207dedb7bbf0afeeae9bfbacdf1f642",
         "spec/record.schema.json": "sha256:e7ad86e32848e6a1691f8ff4b0487ddced93a0724dc6bb6f852124d10e858d7d",
         "tools/spec-check.sh": "sha256:9e98173f97cfe92fea69140f38a34ad4ebbaa91028d56e92e0fbdb2478745d85",

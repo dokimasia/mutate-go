@@ -23,15 +23,15 @@ const (
 )
 
 // frame is one node on the path from the walk's root to the visited node,
-// with the innermost function type around it.
+// with the innermost function around it.
 type frame struct {
 	node ast.Node
-	fn   *ast.FuncType
+	fn   *Function
 }
 
 // walk visits root and every node below it. scope is the scope of every
-// site that it finds, and fn the function type around root, or nil.
-func (e *enumerator) walk(f *load.File, root ast.Node, scope string, fn *ast.FuncType) {
+// site that it finds, and fn the function around root, or nil.
+func (e *enumerator) walk(f *load.File, root ast.Node, scope string, fn *Function) {
 	var stack []frame
 	constants := 0
 	ast.Inspect(root, func(n ast.Node) bool {
@@ -61,7 +61,7 @@ func (e *enumerator) walk(f *load.File, root ast.Node, scope string, fn *ast.Fun
 			outer = fr.node
 		}
 		if lit, ok := n.(*ast.FuncLit); ok {
-			inner = lit.Type
+			inner = &Function{Type: lit.Type, Body: lit.Body}
 		}
 		if call, ok := n.(*ast.CallExpr); ok {
 			e.family(f, call)
@@ -103,8 +103,8 @@ func (e *enumerator) constantSite(n ast.Node) bool {
 
 // visit makes the sites of n. outer and around are the position of n
 // without its parentheses, as walk states them, and fn is the innermost
-// function type around n.
-func (e *enumerator) visit(f *load.File, n, outer, around ast.Node, scope string, fn *ast.FuncType) {
+// function around n.
+func (e *enumerator) visit(f *load.File, n, outer, around ast.Node, scope string, fn *Function) {
 	switch x := n.(type) {
 	case *ast.BinaryExpr:
 		switch x.Op {
@@ -488,14 +488,17 @@ func (e *enumerator) delete(f *load.File, st ast.Stmt, parent ast.Node, scope st
 
 // zero makes the mutant that returns the zero value of every result type
 // before a return statement whose results are not all the zero values of
-// their result types already. The mutant does not evaluate the results.
-func (e *enumerator) zero(f *load.File, n *ast.ReturnStmt, fn *ast.FuncType, scope string) {
-	if fn == nil || fn.Results == nil || len(n.Results) == 0 {
+// their result types already. The mutant does not evaluate the results. The
+// site records fn, the function that the statement returns from, whose
+// results the instrumented form binds to variables of its own. The
+// mutant's replacement states the zero values as zeroOf writes them.
+func (e *enumerator) zero(f *load.File, n *ast.ReturnStmt, fn *Function, scope string) {
+	if fn == nil || fn.Type.Results == nil || len(n.Results) == 0 {
 		return
 	}
 	var zeros []string
 	var dests []types.Type
-	for _, field := range fn.Results.List {
+	for _, field := range fn.Type.Results.List {
 		zero, dest := e.zeroOf(f, field.Type), e.pkg.Info.TypeOf(field.Type)
 		for range max(len(field.Names), 1) {
 			zeros, dests = append(zeros, zero), append(dests, dest)
@@ -505,12 +508,12 @@ func (e *enumerator) zero(f *load.File, n *ast.ReturnStmt, fn *ast.FuncType, sco
 		return
 	}
 	s := e.newSite(f, n, scope, Zero, token.ILLEGAL)
-	s.Zeros = zeros
+	s.Func = fn
 	s.add(spec.SBRZero, token.ILLEGAL, "return "+strings.Join(zeros, ", "))
 }
 
 // zeroOf returns the zero value of the type that the expression t writes,
-// as Go code writes it: 0, "", false or nil by the underlying type, the
+// as a record writes it: 0, "", false or nil by the underlying type, the
 // type followed by {} for a struct or an array, and *new(T) for a type
 // parameter T, which has no literal.
 func (e *enumerator) zeroOf(f *load.File, t ast.Expr) string {
