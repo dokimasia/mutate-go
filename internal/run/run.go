@@ -64,6 +64,12 @@ type Config struct {
 	// Procs, and every run of a test binary with Procs divided by Workers,
 	// and at least 1.
 	Procs int
+	// Spare, when it is not nil, returns the threads that the run's go
+	// commands may use beside Procs, such as threads that the caller's other
+	// runs leave free. A go command reads it when it starts, and adds the
+	// threads to Procs before the division among the workers. A run of a
+	// test binary does not read it, so no verdict depends on it.
+	Spare func() int
 	// Deadline is when the caller's time ends, or zero for a caller
 	// without a deadline. The opening control run of each test binary gets
 	// at most half of the time left. Run does not start a mutant when the
@@ -116,16 +122,11 @@ type Config struct {
 // runner is the state of one run.
 type runner struct {
 	cfg Config
-	// procs is the number of threads that the run may use, and goEnv the
-	// environment of every go command, which sets GOMAXPROCS to procs. A
-	// confirmation's build runs beside the other workers, so confirmEnv
-	// sets GOMAXPROCS to procs divided by the workers.
-	procs      int
-	goEnv      []string
-	confirmEnv []string
-	def        spec.Definition
-	rec        *record.Record
-	work       string
+	// procs is the number of threads that the run may use.
+	procs int
+	def   spec.Definition
+	rec   *record.Record
+	work  string
 	// wd is the process's working directory as record.Resolved returns it,
 	// against which report states each mutant's path.
 	wd   string
@@ -219,15 +220,9 @@ func Run(ctx context.Context, cfg Config) (*record.Record, error) {
 	}
 	defer os.RemoveAll(work)
 	info, _ := debug.ReadBuildInfo()
-	procs := cfg.Procs
-	if procs < 1 {
-		procs = runtime.GOMAXPROCS(0)
-	}
 	r := &runner{
-		cfg: cfg, procs: procs, def: def, work: work, wd: record.Resolved(workingDir),
-		goEnv:      testbin.Setenv(cfg.Env, procsVar+"="+strconv.Itoa(procs)),
-		confirmEnv: testbin.Setenv(cfg.Env, procsVar+"="+strconv.Itoa(max(1, procs/max(1, cfg.Workers)))),
-		snapshots:  []snapshot{{dir: resolved, files: files}},
+		cfg: cfg, procs: threads(cfg), def: def, work: work, wd: record.Resolved(workingDir),
+		snapshots: []snapshot{{dir: resolved, files: files}},
 		rec: &record.Record{
 			Record:    def.Protocol.Record.Name,
 			Version:   def.Protocol.Record.Version,
@@ -257,13 +252,34 @@ func Run(ctx context.Context, cfg Config) (*record.Record, error) {
 	return r.rec, nil
 }
 
+// threads returns the number of threads that a run of cfg may use:
+// cfg.Procs, or the engine's GOMAXPROCS where cfg.Procs is below 1.
+func threads(cfg Config) int {
+	if cfg.Procs < 1 {
+		return runtime.GOMAXPROCS(0)
+	}
+	return cfg.Procs
+}
+
+// goEnv returns the environment of a go command of the run: cfg.Env with
+// GOMAXPROCS set to the run's threads and the threads that cfg.Spare
+// returns, divided by divisor, and at least 1. A confirmation's build runs
+// beside the other workers, so its divisor is the workers.
+func (r *runner) goEnv(divisor int) []string {
+	procs := r.procs
+	if r.cfg.Spare != nil {
+		procs += r.cfg.Spare()
+	}
+	return testbin.Setenv(r.cfg.Env, procsVar+"="+strconv.Itoa(max(1, procs/max(1, divisor))))
+}
+
 // inputs returns the record's inputs digest of the run of the package in
 // dir. The build ID of the engine's executable identifies a development
 // build, and when it does not read, the digest states the engine's version
 // alone.
 func (r *runner) inputs(ctx context.Context, dir string) string {
 	exe, _ := os.Executable()
-	engine, _ := buildID(context.WithoutCancel(ctx), dir, r.goEnv, exe)
+	engine, _ := buildID(context.WithoutCancel(ctx), dir, r.goEnv(1), exe)
 	var ids, digests []string
 	for _, p := range r.programs {
 		ids = append(ids, p.target+" "+p.buildID)
@@ -279,24 +295,13 @@ func (r *runner) inputs(ctx context.Context, dir string) string {
 	)
 }
 
-// run runs the protocol's steps up to the first that stops the run. A
-// package that go list lists has its import path as the target's name,
-// also when it does not load.
+// run runs the protocol's steps up to the first that stops the run.
 func (r *runner) run(ctx context.Context) {
-	include := r.def.Overlay.Comment + r.def.Catalogue.Include
-	p, err := load.Load(ctx, load.Config{Dir: r.cfg.Dir, Env: r.goEnv, Imports: render.Imports(), Include: include})
-	if p != nil {
-		r.rec.Target.Name, r.rec.Root, r.rec.Toolchain = p.ImportPath, p.Root, p.Toolchain
-	}
+	result, err := r.loadMutants(ctx)
 	if err != nil {
 		r.fail(spec.ErrorLoad, err.Error())
 		return
 	}
-	r.pkg = p
-	result := enumerate.Enumerate(p, r.def, enumerate.Options{
-		Lines:            r.selection(),
-		IncludeGenerated: r.cfg.IncludeGenerated,
-	})
 	for _, s := range result.Skipped {
 		r.rec.Skipped = append(
 			r.rec.Skipped,
@@ -317,7 +322,7 @@ func (r *runner) run(ctx context.Context) {
 		r.stop("the run stopped at an annotation error")
 		return
 	}
-	prog, err := render.Render(p, result, r.def.Protocol.Variable)
+	prog, err := render.Render(r.pkg, result, r.def.Protocol.Variable)
 	r.list(result)
 	r.prog = prog
 	if r.cfg.List {
@@ -360,6 +365,26 @@ func (r *runner) run(ctx context.Context) {
 	r.alone(ctx)
 	r.mutants(ctx)
 	r.closing(ctx)
+}
+
+// loadMutants loads the run's package and enumerates its mutants under the
+// run's selection. A package that go list lists has its import path as the
+// target's name, also when it does not load. It returns the error of the
+// load when the package does not load.
+func (r *runner) loadMutants(ctx context.Context) (*enumerate.Result, error) {
+	include := r.def.Overlay.Comment + r.def.Catalogue.Include
+	p, err := load.Load(ctx, load.Config{Dir: r.cfg.Dir, Env: r.goEnv(1), Imports: render.Imports(), Include: include})
+	if p != nil {
+		r.rec.Target.Name, r.rec.Root, r.rec.Toolchain = p.ImportPath, p.Root, p.Toolchain
+	}
+	if err != nil {
+		return nil, err
+	}
+	r.pkg = p
+	return enumerate.Enumerate(p, r.def, enumerate.Options{
+		Lines:            r.selection(),
+		IncludeGenerated: r.cfg.IncludeGenerated,
+	}), nil
 }
 
 // admit waits until cfg.Admit admits the runs that follow the opening
@@ -423,7 +448,7 @@ func (r *runner) suite(ctx context.Context) error {
 	if len(r.cfg.Suite) == 0 {
 		return nil
 	}
-	linked, err := load.Linking(ctx, load.Config{Dir: r.pkg.Dir, Env: r.goEnv}, r.pkg.ImportPath, r.cfg.Suite)
+	linked, err := load.Linking(ctx, load.Config{Dir: r.pkg.Dir, Env: r.goEnv(1)}, r.pkg.ImportPath, r.cfg.Suite)
 	if err != nil {
 		return err
 	}

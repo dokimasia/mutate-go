@@ -138,8 +138,9 @@ var commandFlags = []option{
 	},
 	{
 		name: flagParallel, value: "n", section: executionSection,
-		usage: "The number of packages to test at once. The default is 1. The packages that run at once share " +
-			"the command's GOMAXPROCS threads.",
+		usage: "The number of packages that may run at once. The default is 1. Above 1, the command counts " +
+			"each package's mutants first, starts the packages with the most mutants first, and gives each " +
+			"a share of the command's GOMAXPROCS threads in proportion to its mutants.",
 		define: func(fs *flag.FlagSet, name string, o *options) { fs.IntVar(&o.parallel, name, o.parallel, "") },
 	},
 	{

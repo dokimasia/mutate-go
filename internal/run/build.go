@@ -62,10 +62,10 @@ func (r *runner) build(ctx context.Context, err error) string {
 			name = suiteBinary + strconv.Itoa(i)
 		}
 		p.bin = filepath.Join(r.work, name+binarySuffix+process.ExeSuffix)
-		if err = r.compile(ctx, r.goEnv, p, p.bin, overlay); err != nil {
+		if err = r.compile(ctx, r.goEnv(1), p, p.bin, overlay); err != nil {
 			return r.buildFailed(ctx, p, err)
 		}
-		p.buildID, err = buildID(ctx, r.pkg.Dir, r.goEnv, p.bin)
+		p.buildID, err = buildID(ctx, r.pkg.Dir, r.goEnv(1), p.bin)
 	}
 	if err != nil {
 		r.fail(spec.ErrorBuild, err.Error())
@@ -98,7 +98,7 @@ func (r *runner) buildFailed(ctx context.Context, p *program, err error) string 
 // ended it, and not-viable with the toolchain's message otherwise.
 func (r *runner) ordinaryBinary(ctx context.Context, dir string, p *program, overlay string) (string, *outcome) {
 	bin := filepath.Join(dir, filepath.Base(p.bin))
-	if err := r.compile(ctx, r.confirmEnv, p, bin, overlay); err != nil {
+	if err := r.compile(ctx, r.goEnv(r.cfg.Workers), p, bin, overlay); err != nil {
 		if ctx.Err() != nil {
 			return "", &outcome{verdict: spec.NotRun, reason: cancelled}
 		}

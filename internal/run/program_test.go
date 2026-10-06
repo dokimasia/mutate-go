@@ -63,29 +63,43 @@ func TestProgram(t *testing.T) {
 			})
 		}
 
-		t.Run("runs every go command with GOMAXPROCS set to Procs", func(t *testing.T) {
-			t.Parallel()
-			if runtime.GOOS == "windows" {
-				t.Skip("the go wrapper is a shell script")
-			}
-			goCmd, err := exec.LookPath(goCommand)
-			assert.NoError(t, err, "the go command is on the PATH")
-			log := filepath.Join(t.TempDir(), logName)
-			env := testbin.Setenv(
-				os.Environ(),
-				pathVar+"="+goLog+string(filepath.ListSeparator)+os.Getenv(pathVar),
-				goVar+"="+goCmd,
-				goLogVar+"="+log,
-				expectedProcsVar+"=3",
-			)
-			rec := runIn(t, module(t, map[string]string{addFile: add, addTestFile: procsTest}),
-				run.Config{Env: env, Procs: 3})
-			assert.Equal(t, verdicts(rec), addKilled, "each mutant's run has three threads")
-			data, err := os.ReadFile(log)
-			assert.NoError(t, err, "the wrapper's log reads")
-			lines := strings.Fields(string(data))
-			assert.Length(t, lines, goCommands, "the run runs the go command for each step")
-			assert.Equal(t, slices.Compact(lines), []string{"3"}, "every go command has three threads")
-		})
+		commands := []struct {
+			name  string
+			spare func() int
+			want  string
+		}{
+			{name: "runs every go command with GOMAXPROCS set to Procs", want: "3"},
+			{
+				name:  "runs every go command with the threads of Spare beside Procs",
+				spare: func() int { return 2 },
+				want:  "5",
+			},
+		}
+		for _, tt := range commands {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				if runtime.GOOS == "windows" {
+					t.Skip("the go wrapper is a shell script")
+				}
+				goCmd, err := exec.LookPath(goCommand)
+				assert.NoError(t, err, "the go command is on the PATH")
+				log := filepath.Join(t.TempDir(), logName)
+				env := testbin.Setenv(
+					os.Environ(),
+					pathVar+"="+goLog+string(filepath.ListSeparator)+os.Getenv(pathVar),
+					goVar+"="+goCmd,
+					goLogVar+"="+log,
+					expectedProcsVar+"=3",
+				)
+				rec := runIn(t, module(t, map[string]string{addFile: add, addTestFile: procsTest}),
+					run.Config{Env: env, Procs: 3, Spare: tt.spare})
+				assert.Equal(t, verdicts(rec), addKilled, "each mutant's run has the three threads of Procs")
+				data, err := os.ReadFile(log)
+				assert.NoError(t, err, "the wrapper's log reads")
+				lines := strings.Fields(string(data))
+				assert.Length(t, lines, goCommands, "the run runs the go command for each step")
+				assert.Equal(t, slices.Compact(lines), []string{tt.want}, "every go command has the expected threads")
+			})
+		}
 	})
 }

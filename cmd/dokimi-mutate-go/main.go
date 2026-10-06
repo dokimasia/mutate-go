@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -83,7 +84,9 @@ type cli struct {
 // command line that is not valid gets one line that states the error, and
 // a line on the help. Otherwise main changes to the directory of -C,
 // resolves the selection, the suite and the packages, and tests or lists
-// each package. When a write to stdout fails, main states the first error
+// each package. Before it tests more than one package at once, it counts
+// each package's mutants to order the packages and to size their shares of
+// the threads. When a write to stdout fails, main states the first error
 // on stderr and returns at least exitFailed, because the command did not
 // write its results.
 func (c *cli) main(ctx context.Context, args []string) (status int) {
@@ -153,15 +156,20 @@ func (c *cli) main(ctx context.Context, args []string) (status int) {
 		progress: &progress{stderr: out.stderr, every: c.every, now: c.now, deadline: deadline},
 		records:  o.records,
 	}
+	threads := runtime.GOMAXPROCS(0)
 	if o.list {
-		return max(status, schedule(ctx, pkgs, o.parallel, deadline, out, s.list))
+		return max(status, schedule(ctx, pkgs, nil, threads, o.parallel, deadline, out, s.list))
 	}
 	if o.budget > 0 {
 		s.cfg.Admit = newBudget(int64(o.budget)).admit
 	}
 	stop := s.progress.watch()
 	defer stop()
-	return max(status, schedule(ctx, pkgs, o.parallel, deadline, out, s.check))
+	var weights []int
+	if o.parallel > 1 && len(pkgs) > 1 {
+		weights = weigh(ctx, pkgs, s.cfg, threads, o.parallel)
+	}
+	return max(status, schedule(ctx, pkgs, weights, threads, o.parallel, deadline, out, s.check))
 }
 
 // readDiff returns the selection of the unified diff in the file path, or

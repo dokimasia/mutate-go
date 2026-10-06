@@ -40,7 +40,7 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 			var out bytes.Buffer
 			s := testSession(os.Environ(), &out, io.Discard, "")
-			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, addFiles)}, 1)
+			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, addFiles)}, 1, nil)
 			assert.Equal(t, got, exitDetected, "every mutant is killed")
 			assert.Equal(t, out.String(), addKilled, "the summary states the run")
 		})
@@ -48,7 +48,7 @@ func TestCheck(t *testing.T) {
 		t.Run("returns exitUndetected for a mutant that survived", func(t *testing.T) {
 			t.Parallel()
 			s := testSession(os.Environ(), io.Discard, io.Discard, "")
-			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, 1)
+			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, 1, nil)
 			assert.Equal(t, got, exitUndetected, "Sub's mutants survive")
 		})
 
@@ -56,7 +56,7 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 			var errs bytes.Buffer
 			s := testSession(append(os.Environ(), failVar+"=1"), io.Discard, &errs, "")
-			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, 1)
+			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, 1, nil)
 			assert.Equal(t, got, exitFailed, "the opening control run fails")
 			assert.HasPrefix(t, errs.String(), name+": fixture: control-failed: ", "the note states the run error")
 		})
@@ -65,7 +65,12 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 			var errs bytes.Buffer
 			s := testSession(os.Environ(), io.Discard, &errs, "")
-			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: filepath.Join(t.TempDir(), "missing")}, 1)
+			got := s.check(
+				t.Context(),
+				load.Listed{ImportPath: fixture, Dir: filepath.Join(t.TempDir(), "missing")},
+				1,
+				nil,
+			)
 			assert.Equal(t, got, exitFailed, "a run without its directory fails")
 			assert.HasPrefix(t, errs.String(), name+": fixture: run: ", "the note states the run's error")
 		})
@@ -74,7 +79,7 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 			records := t.TempDir()
 			s := testSession(os.Environ(), io.Discard, io.Discard, records)
-			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, addFiles)}, 1)
+			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, addFiles)}, 1, nil)
 			assert.Equal(t, got, exitDetected, "the run passes")
 			_, err := os.Stat(filepath.Join(records, record.FileName(fixture)))
 			assert.NoError(t, err, "the record file exists")
@@ -85,7 +90,7 @@ func TestCheck(t *testing.T) {
 			dir := module(t, addFiles)
 			var errs bytes.Buffer
 			s := testSession(os.Environ(), io.Discard, &errs, filepath.Join(dir, addFile))
-			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: dir}, 1)
+			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: dir}, 1, nil)
 			assert.Equal(t, got, exitFailed, "a record under a file does not write")
 			assert.HasPrefix(t, errs.String(), name+": record: ", "the note states the record's error")
 		})
@@ -98,7 +103,7 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 			var out bytes.Buffer
 			s := testSession(append(os.Environ(), failVar+"=1"), &out, io.Discard, "")
-			got := s.list(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, 1)
+			got := s.list(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, 1, nil)
 			assert.Equal(t, got, exitDetected, "a listing runs no test, so failing tests do not fail it")
 			assert.HasSuffix(t, out.String(), "fixture: 6 mutants to test\n", "the listing counts the mutants")
 		})
@@ -109,7 +114,7 @@ func TestCheck(t *testing.T) {
 			s := testSession(os.Environ(), io.Discard, &errs, "")
 			// The file hides nil, which the instrumentation's helper file uses.
 			dir := module(t, with(addFiles, map[string]string{"hiding.go": "package fixture\n\nvar nil = 0\n"}))
-			got := s.list(t.Context(), load.Listed{ImportPath: fixture, Dir: dir}, 1)
+			got := s.list(t.Context(), load.Listed{ImportPath: fixture, Dir: dir}, 1, nil)
 			assert.Equal(t, got, exitFailed, "the listing fails")
 			assert.HasPrefix(t, errs.String(), name+": fixture: build: ", "the note states the run error")
 		})
@@ -118,7 +123,12 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 			var errs bytes.Buffer
 			s := testSession(os.Environ(), io.Discard, &errs, "")
-			got := s.list(t.Context(), load.Listed{ImportPath: fixture, Dir: filepath.Join(t.TempDir(), "missing")}, 1)
+			got := s.list(
+				t.Context(),
+				load.Listed{ImportPath: fixture, Dir: filepath.Join(t.TempDir(), "missing")},
+				1,
+				nil,
+			)
 			assert.Equal(t, got, exitFailed, "a listing without its directory fails")
 			assert.HasPrefix(t, errs.String(), name+": fixture: run: ", "the note states the error")
 		})

@@ -307,6 +307,26 @@ file as cargo-mutants' `--in-diff` selects them:
   mutants. Its record's `selection` is an empty list, and each of its
   mutants is `not-selected`.
 
+Under `-p` above 1, the command counts the mutants that each package's run
+would test before the first run starts. It loads and enumerates each
+package for its count, and schedules the packages by the counts:
+
+- The packages start in the order of their counts, the most first, and in
+  the order of `go list` among equal counts.
+- A package that starts gets a share of the threads that the running
+  packages leave free, in proportion to its count against the counts of
+  the packages that may start beside it: the free slots of `-p`, or the
+  packages left when they are fewer. The share is rounded, at least 1 and
+  at most the free threads, and equal where those packages count 0.
+- While GOMAXPROCS is at least `-p`, a package starts only when a thread
+  is free, so a package with many mutants runs on more threads beside fewer
+  packages. Where GOMAXPROCS is below `-p`, each package gets one thread.
+- A package's share does not change during its run, and the package
+  returns it when the run ends. A share that grew during a run would change
+  how many tests a binary runs at once, so the mutants before and after the
+  change would run under different conditions, and the limits of the
+  opening control run would no longer describe the later runs.
+
 `-memory-budget` keeps the packages that run at once within a budget of
 memory:
 
@@ -344,7 +364,7 @@ any run starts.
 | `DOKIMI_MUTATE_INSTRUMENTED` | The engine | `1` in every run of the instrumented test binary, the control runs included, and unset in the ordinary control run and in each confirmation run. A test that asserts an allocation count or a duration skips while it is set |
 | `DOKIMI_MUTATE_TRACE` | The engine | The path of the opening control run's trace |
 | `TMPDIR` | The engine | A fresh directory per run, removed when the run ends |
-| `GOMAXPROCS` | The engine | Every go command of a package's run gets the package's share of the engine's GOMAXPROCS. Under the command, a package that starts gets the threads that the running packages leave free, divided by the packages that may start beside it, and at least 1, and it returns its share when its run ends. Every run of a test binary gets the package's share divided by the workers, and at least 1 |
+| `GOMAXPROCS` | The engine | Every run of a test binary gets the package's share of the engine's GOMAXPROCS divided by the workers, and at least 1. Every go command of a package's run gets the package's share and the threads that the running packages leave free, divided among them, because a build's threads do not change a verdict. A confirmation's build divides them by the workers too. Under the command, the rules of `-p` decide each package's share |
 
 The record's file name is the package's import path, escaped with
 `url.PathEscape`, followed by `.mutate.json`.
@@ -656,8 +676,9 @@ build:
   `no-coverage` when every binary passes. A build that the toolchain
   rejects makes the mutant `not-viable`, with the toolchain's message as
   its reason.
-- **Workers.** A mutant is confirmed on the worker that ran it, and each
-  worker's go command gets GOMAXPROCS divided by the workers.
+- **Workers.** A mutant is confirmed on the worker that ran it. Each
+  worker's go command gets the package's share and its part of the threads
+  that the running packages leave free, divided by the workers.
 - **The caller's deadline.** Under confirmation, a mutant starts only while
   the time left covers three times the sum of the binaries' deadlines, for
   its run, its confirmation run and the closing control run, plus the time

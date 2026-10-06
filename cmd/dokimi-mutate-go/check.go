@@ -35,14 +35,15 @@ type session struct {
 	records  string
 }
 
-// check runs mutation testing on pkg with procs threads, and returns the
-// exit status of its run: exitFailed for a run that returns an error or
-// whose record does not write, and the status that exitStatus states
-// otherwise. It writes each listed mutant's line when the mutant's verdict
-// is final, and the run's result when the run ends.
-func (s *session) check(ctx context.Context, pkg load.Listed, procs int) int {
+// check runs mutation testing on pkg with procs threads, and the threads
+// that spare returns for its go commands, and returns the exit status of
+// its run: exitFailed for a run that returns an error or whose record does
+// not write, and the status that exitStatus states otherwise. It writes
+// each listed mutant's line when the mutant's verdict is final, and the
+// run's result when the run ends.
+func (s *session) check(ctx context.Context, pkg load.Listed, procs int, spare func() int) int {
 	cfg := s.cfg
-	cfg.Dir, cfg.Procs = pkg.Dir, procs
+	cfg.Dir, cfg.Procs, cfg.Spare = pkg.Dir, procs, spare
 	cfg.Verdict = func(m record.Mutant, mutants int, path string) {
 		s.progress.verdict(pkg.ImportPath, m, mutants)
 		s.out.line(m, path)
@@ -64,13 +65,14 @@ func (s *session) check(ctx context.Context, pkg load.Listed, procs int) int {
 	return exitStatus(rec)
 }
 
-// list lists the mutants of pkg with procs threads, and returns the exit
-// status of the listing: exitFailed when the package does not load, an
-// annotation is not valid or the instrumentation does not type-check, and
-// exitDetected otherwise. It writes the listing when it ends.
-func (s *session) list(ctx context.Context, pkg load.Listed, procs int) int {
+// list lists the mutants of pkg with procs threads, and the threads that
+// spare returns for its go commands, and returns the exit status of the
+// listing: exitFailed when the package does not load, an annotation is not
+// valid or the instrumentation does not type-check, and exitDetected
+// otherwise. It writes the listing when it ends.
+func (s *session) list(ctx context.Context, pkg load.Listed, procs int, spare func() int) int {
 	cfg := s.cfg
-	cfg.Dir, cfg.Procs, cfg.List = pkg.Dir, procs, true
+	cfg.Dir, cfg.Procs, cfg.Spare, cfg.List = pkg.Dir, procs, spare, true
 	rec, err := run.Run(ctx, cfg)
 	if err != nil {
 		s.out.errorf("%s: %v", pkg.ImportPath, err)

@@ -104,9 +104,11 @@ Execution:
 	-C dir
 		Change to dir before the command resolves packages and paths.
 	-p n
-		The number of packages to test at once. The default is 1. The
-		packages that run at once share the command's GOMAXPROCS
-		threads.
+		The number of packages that may run at once. The default is 1.
+		Above 1, the command counts each package's mutants first, starts
+		the packages with the most mutants first, and gives each a share
+		of the command's GOMAXPROCS threads in proportion to its
+		mutants.
 	-workers n
 		The number of mutants of one package to test at once. The
 		default is 1. Above 1, tests that share a resource, such as a
@@ -382,11 +384,19 @@ suppressed mutant with its reason, and the score leaves it out.
   once, each in its own process. Tests that share a resource outside their
   temporary directory, such as a fixed port, then fail each other, and the
   failures count as kills.
-- The packages that run at once share GOMAXPROCS threads. A package that
-  starts gets the threads that the running packages leave free, divided by
-  the packages that may start beside it, and returns them when its run
-  ends. Every go command of a package runs with its share, and every test
-  binary with the share divided by the workers.
+- The packages that run at once share GOMAXPROCS threads. Under `-p` above
+  1, the command counts each package's mutants before the runs and starts
+  the packages with the most mutants first. A package that starts gets a
+  share of the threads that the running packages leave free, in proportion
+  to its mutants against those of the packages that may start beside it,
+  and returns its share when its run ends. While GOMAXPROCS is at least
+  `-p`, a package starts only when a thread is free, so a package with
+  many mutants can run on more threads beside fewer packages.
+- A package's share does not change during its run. Each run of a test
+  binary gets the share divided by the workers. A go command, such as a
+  confirmation's build, also gets the threads that the running packages
+  leave free, divided among them, because a build's threads do not change
+  a verdict.
 - A mutant's run of a test binary ends at 10 times that binary's time in
   the opening control run plus 2 seconds. On Linux, it also ends when its
   resident memory exceeds 4 times that binary's peak in the opening control

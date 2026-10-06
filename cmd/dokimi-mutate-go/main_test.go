@@ -326,10 +326,11 @@ func TestCLIEnv(t *testing.T) {
 					subProcsVar, 1),
 			}))
 			threads := runtime.GOMAXPROCS(0)
-			// The first package starts beside the second, and the second gets
-			// the threads that the first leaves free. Each package's workers
-			// share its threads.
-			first := max(1, threads/2)
+			// The packages have two mutants each, so the first starts beside
+			// the second with half of the threads, rounded, and the second
+			// gets the threads that the first leaves free. Each package's
+			// workers share its threads.
+			first := max(1, (threads+1)/2)
 			t.Setenv(expectedProcsVar, strconv.Itoa(max(1, first/2)))
 			t.Setenv(subProcsVar, strconv.Itoa(max(1, max(1, threads-first)/2)))
 			status, stdout, stderr := call("-"+flagParallel, "2", "-"+flagWorkers, "2", "./...")
