@@ -1,0 +1,80 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "double",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "724386ccdecf3f16",
+      "file": "scale.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return x * 2",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "double",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3b0f05e4966f9013",
+      "file": "scale.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "x * 2",
+      "replacement": "x / 2"
+    },
+    {
+      "scope": "triple",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "42a973ad50e81396",
+      "file": "scale.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 14
+      },
+      "original": "return x * 3",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "triple",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "299a88445bc6b103",
+      "file": "scale.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 14
+      },
+      "original": "x * 3",
+      "replacement": "x / 3"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

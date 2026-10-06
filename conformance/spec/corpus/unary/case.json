@@ -1,0 +1,14 @@
+{
+  "case": "unary",
+  "proves": "An increment becomes a decrement, a negation loses its !, and a unary minus is removed. A test that checks a result only against zero misses the lost minus.",
+  "fixture": "negate returns -x, flip returns !ok, and count increments n. The test of negate checks only that the result is not zero.",
+  "mutants": [
+    { "scope": "negate", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "negate", "kind": "uoi-minus", "nth": 0, "verdict": "survived" },
+    { "scope": "flip", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "flip", "kind": "uoi-not", "nth": 0, "verdict": "killed" },
+    { "scope": "count", "kind": "uoi-incdec", "nth": 0, "verdict": "killed" },
+    { "scope": "count", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

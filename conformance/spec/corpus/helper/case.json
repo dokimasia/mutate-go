@@ -1,0 +1,19 @@
+{
+  "case": "helper",
+  "proves": "The mark of a test helper is suppressed with the rule helper, both as an API of the standard library and as a method of a library's own interface that a method rule matches. A method of the same name with another signature is not.",
+  "fixture": "equal and same report a failure when two numbers differ, and mark each function as a test helper first: equal through testing.TB, and same through an interface of its own. mark calls a method Helper that takes a depth.",
+  "mutants": [
+    { "scope": "equal", "kind": "sbr-delete", "nth": 0, "verdict": "suppressed", "languages": ["go"] },
+    { "scope": "equal", "kind": "sbr-delete", "nth": 1, "verdict": "killed", "languages": ["go"] },
+    { "scope": "equal", "kind": "ror-true", "nth": 0, "verdict": "killed", "languages": ["go"] },
+    { "scope": "equal", "kind": "ror-false", "nth": 0, "verdict": "killed", "languages": ["go"] },
+    { "scope": "equal", "kind": "sbr-delete", "nth": 2, "verdict": "killed", "languages": ["go"] },
+    { "scope": "same", "kind": "sbr-delete", "nth": 0, "verdict": "suppressed", "languages": ["go"] },
+    { "scope": "same", "kind": "sbr-delete", "nth": 1, "verdict": "killed", "languages": ["go"] },
+    { "scope": "same", "kind": "ror-true", "nth": 0, "verdict": "killed", "languages": ["go"] },
+    { "scope": "same", "kind": "ror-false", "nth": 0, "verdict": "killed", "languages": ["go"] },
+    { "scope": "same", "kind": "sbr-delete", "nth": 2, "verdict": "killed", "languages": ["go"] },
+    { "scope": "mark", "kind": "sbr-delete", "nth": 0, "verdict": "killed", "languages": ["go"] }
+  ],
+  "errors": []
+}

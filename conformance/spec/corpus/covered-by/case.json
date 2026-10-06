@@ -1,0 +1,13 @@
+{
+  "case": "covered-by",
+  "proves": "The engine runs each test alone in a program with fewer tests than mutants to run, and the record names, for each mutant, the tests whose run alone executed its site, in coveredBy.",
+  "fixture": "sum adds two numbers, double adds a number to itself with sum, and half divides a number by two. TestDouble, TestHalf and TestSum check one function each, so the sites of sum execute in TestDouble and in TestSum.",
+  "mutants": [
+    { "scope": "sum", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "sum", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "double", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "half", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "half", "kind": "aor", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

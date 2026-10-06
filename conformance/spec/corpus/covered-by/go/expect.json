@@ -1,0 +1,115 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "sum",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "593f97cb092f0eb4",
+      "file": "sum.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return a + b",
+      "replacement": "return 0",
+      "coveredBy": [
+        "TestDouble",
+        "TestSum"
+      ]
+    },
+    {
+      "scope": "sum",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "618d675cc783420c",
+      "file": "sum.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "a + b",
+      "replacement": "a - b",
+      "coveredBy": [
+        "TestDouble",
+        "TestSum"
+      ]
+    },
+    {
+      "scope": "double",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0f4cf7f35a20bf77",
+      "file": "sum.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 18
+      },
+      "original": "return sum(n, n)",
+      "replacement": "return 0",
+      "coveredBy": [
+        "TestDouble"
+      ]
+    },
+    {
+      "scope": "half",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "18c6f89f5fa8b784",
+      "file": "sum.go",
+      "start": {
+        "line": 15,
+        "column": 2
+      },
+      "end": {
+        "line": 15,
+        "column": 14
+      },
+      "original": "return n / 2",
+      "replacement": "return 0",
+      "coveredBy": [
+        "TestHalf"
+      ]
+    },
+    {
+      "scope": "half",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2e66f56e6b5adba2",
+      "file": "sum.go",
+      "start": {
+        "line": 15,
+        "column": 9
+      },
+      "end": {
+        "line": 15,
+        "column": 14
+      },
+      "original": "n / 2",
+      "replacement": "n * 2",
+      "coveredBy": [
+        "TestHalf"
+      ]
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

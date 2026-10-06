@@ -1,0 +1,119 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "set",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "bbb515c4dcab1f65",
+      "file": "set.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 25
+      },
+      "original": "return p != nil && p.on",
+      "replacement": "return false"
+    },
+    {
+      "scope": "set",
+      "kind": "lcr-left",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "b0b2b153792514b6",
+      "file": "set.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 25
+      },
+      "original": "p != nil && p.on",
+      "replacement": "p != nil"
+    },
+    {
+      "scope": "set",
+      "kind": "lcr-right",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "c6fa28a5476b451e",
+      "file": "set.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 25
+      },
+      "original": "p != nil && p.on",
+      "replacement": "p.on",
+      "tests": [
+        "TestSet"
+      ]
+    },
+    {
+      "scope": "set",
+      "kind": "lcr-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "df13a7bc8ffa3340",
+      "file": "set.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 25
+      },
+      "original": "p != nil && p.on",
+      "replacement": "false"
+    },
+    {
+      "scope": "set",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "554eb420e3035928",
+      "file": "set.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 17
+      },
+      "original": "p != nil",
+      "replacement": "true"
+    },
+    {
+      "scope": "set",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e5af9ab60ccaf0ca",
+      "file": "set.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 17
+      },
+      "original": "p != nil",
+      "replacement": "false"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

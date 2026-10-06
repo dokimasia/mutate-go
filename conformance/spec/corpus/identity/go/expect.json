@@ -1,0 +1,278 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "steps",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0372856f8a4e501a",
+      "file": "identity.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 7,
+        "column": 3
+      },
+      "original": "if n > 0 { n-- }",
+      "replacement": ""
+    },
+    {
+      "scope": "steps",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d741d1ded28ac0f7",
+      "file": "identity.go",
+      "start": {
+        "line": 5,
+        "column": 5
+      },
+      "end": {
+        "line": 5,
+        "column": 10
+      },
+      "original": "n > 0",
+      "replacement": "n >= 0"
+    },
+    {
+      "scope": "steps",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a2297fd82bbf2a6b",
+      "file": "identity.go",
+      "start": {
+        "line": 5,
+        "column": 5
+      },
+      "end": {
+        "line": 5,
+        "column": 10
+      },
+      "original": "n > 0",
+      "replacement": "false"
+    },
+    {
+      "scope": "steps",
+      "kind": "uoi-incdec",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "eb14907ebd56a3c5",
+      "file": "identity.go",
+      "start": {
+        "line": 6,
+        "column": 3
+      },
+      "end": {
+        "line": 6,
+        "column": 6
+      },
+      "original": "n--",
+      "replacement": "n++"
+    },
+    {
+      "scope": "steps",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 1,
+      "key": "1118a0d7d662e94e",
+      "file": "identity.go",
+      "start": {
+        "line": 8,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 3
+      },
+      "original": "if n > 0 { n-- }",
+      "replacement": ""
+    },
+    {
+      "scope": "steps",
+      "kind": "ror-boundary",
+      "nth": 1,
+      "occurrence": 1,
+      "key": "a30295285ee28824",
+      "file": "identity.go",
+      "start": {
+        "line": 8,
+        "column": 5
+      },
+      "end": {
+        "line": 8,
+        "column": 10
+      },
+      "original": "n > 0",
+      "replacement": "n >= 0"
+    },
+    {
+      "scope": "steps",
+      "kind": "ror-false",
+      "nth": 1,
+      "occurrence": 1,
+      "key": "a8fa4d48943f4544",
+      "file": "identity.go",
+      "start": {
+        "line": 8,
+        "column": 5
+      },
+      "end": {
+        "line": 8,
+        "column": 10
+      },
+      "original": "n > 0",
+      "replacement": "false"
+    },
+    {
+      "scope": "steps",
+      "kind": "uoi-incdec",
+      "nth": 1,
+      "occurrence": 1,
+      "key": "22cac94df0433fc2",
+      "file": "identity.go",
+      "start": {
+        "line": 9,
+        "column": 3
+      },
+      "end": {
+        "line": 9,
+        "column": 6
+      },
+      "original": "n--",
+      "replacement": "n++"
+    },
+    {
+      "scope": "steps",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "ce5357a255e0cc92",
+      "file": "identity.go",
+      "start": {
+        "line": 11,
+        "column": 2
+      },
+      "end": {
+        "line": 11,
+        "column": 10
+      },
+      "original": "return n",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "counter.add",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "19348c22684824fc",
+      "file": "identity.go",
+      "start": {
+        "line": 22,
+        "column": 2
+      },
+      "end": {
+        "line": 22,
+        "column": 16
+      },
+      "original": "return c.n + 1",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "counter.add",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4006e12960ea62d5",
+      "file": "identity.go",
+      "start": {
+        "line": 22,
+        "column": 9
+      },
+      "end": {
+        "line": 22,
+        "column": 16
+      },
+      "original": "c.n + 1",
+      "replacement": "c.n - 1"
+    },
+    {
+      "scope": "counter.sub",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a5c89947ab2d703b",
+      "file": "identity.go",
+      "start": {
+        "line": 27,
+        "column": 2
+      },
+      "end": {
+        "line": 27,
+        "column": 16
+      },
+      "original": "return c.n - 1",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "counter.sub",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "53d1cf1005f2f4c4",
+      "file": "identity.go",
+      "start": {
+        "line": 27,
+        "column": 9
+      },
+      "end": {
+        "line": 27,
+        "column": 16
+      },
+      "original": "c.n - 1",
+      "replacement": "c.n + 1"
+    },
+    {
+      "scope": "counter.twice",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "297ec2ed359a465e",
+      "file": "identity.go",
+      "start": {
+        "line": 33,
+        "column": 2
+      },
+      "end": {
+        "line": 33,
+        "column": 16
+      },
+      "original": "return c.n * 2",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "counter.twice",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "afedb5963d1906ba",
+      "file": "identity.go",
+      "start": {
+        "line": 33,
+        "column": 9
+      },
+      "end": {
+        "line": 33,
+        "column": 16
+      },
+      "original": "c.n * 2",
+      "replacement": "c.n / 2"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

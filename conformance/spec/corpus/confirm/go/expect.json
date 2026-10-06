@@ -1,0 +1,167 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "double",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d49687e97bb79802",
+      "file": "scale.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return n * 2",
+      "replacement": "return 0",
+      "tests": [
+        "TestDouble"
+      ]
+    },
+    {
+      "scope": "double",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9ad93dbd7c0d879f",
+      "file": "scale.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "n * 2",
+      "replacement": "n / 2",
+      "tests": [
+        "TestDouble"
+      ]
+    },
+    {
+      "scope": "half",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "dd04f2b27bd503ce",
+      "file": "scale.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 14
+      },
+      "original": "return n / 2",
+      "replacement": "return 0",
+      "tests": [
+        "TestCalls"
+      ]
+    },
+    {
+      "scope": "half",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "5938e32d832da4ba",
+      "file": "scale.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 14
+      },
+      "original": "n / 2",
+      "replacement": "n * 2"
+    },
+    {
+      "scope": "triple",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "03bba00f6839c48e",
+      "file": "scale.go",
+      "start": {
+        "line": 15,
+        "column": 2
+      },
+      "end": {
+        "line": 15,
+        "column": 14
+      },
+      "original": "return n * 3",
+      "replacement": "return 0",
+      "tests": [
+        "TestTriple"
+      ]
+    },
+    {
+      "scope": "triple",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "093bb8b5f2f74206",
+      "file": "scale.go",
+      "start": {
+        "line": 15,
+        "column": 9
+      },
+      "end": {
+        "line": 15,
+        "column": 14
+      },
+      "original": "n * 3",
+      "replacement": "n / 3",
+      "tests": [
+        "TestTriple"
+      ]
+    },
+    {
+      "scope": "quarter",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2e5eff9651c7af0f",
+      "file": "scale.go",
+      "start": {
+        "line": 20,
+        "column": 2
+      },
+      "end": {
+        "line": 20,
+        "column": 14
+      },
+      "original": "return n / 4",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "quarter",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9255346f76d75a96",
+      "file": "scale.go",
+      "start": {
+        "line": 20,
+        "column": 9
+      },
+      "end": {
+        "line": 20,
+        "column": 14
+      },
+      "original": "n / 4",
+      "replacement": "n * 4"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

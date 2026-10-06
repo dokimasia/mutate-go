@@ -1,0 +1,116 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "negate",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "51abd5ed687af77c",
+      "file": "unary.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 11
+      },
+      "original": "return -x",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "negate",
+      "kind": "uoi-minus",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "bfdff7d9a65d7ce4",
+      "file": "unary.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 11
+      },
+      "original": "-x",
+      "replacement": "x"
+    },
+    {
+      "scope": "flip",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a0e409a859776e73",
+      "file": "unary.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 12
+      },
+      "original": "return !ok",
+      "replacement": "return false"
+    },
+    {
+      "scope": "flip",
+      "kind": "uoi-not",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "6bc5abcfc3a400a9",
+      "file": "unary.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 12
+      },
+      "original": "!ok",
+      "replacement": "ok"
+    },
+    {
+      "scope": "count",
+      "kind": "uoi-incdec",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "aecfdcf3134e6694",
+      "file": "unary.go",
+      "start": {
+        "line": 15,
+        "column": 2
+      },
+      "end": {
+        "line": 15,
+        "column": 5
+      },
+      "original": "n++",
+      "replacement": "n--"
+    },
+    {
+      "scope": "count",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "04bd179d05974d2f",
+      "file": "unary.go",
+      "start": {
+        "line": 16,
+        "column": 2
+      },
+      "end": {
+        "line": 16,
+        "column": 10
+      },
+      "original": "return n",
+      "replacement": "return 0"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

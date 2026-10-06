@@ -1,0 +1,35 @@
+{
+  "record": {
+    "name": "dokimi-mutate",
+    "version": 1
+  },
+  "variable": "DOKIMI_MUTATE_MUTANT",
+  "instrumented": "DOKIMI_MUTATE_INSTRUMENTED",
+  "verdicts": [
+    { "id": "killed", "score": "detected" },
+    { "id": "timed-out", "score": "detected" },
+    { "id": "exhausted", "score": "detected" },
+    { "id": "survived", "score": "undetected" },
+    { "id": "no-coverage", "score": "undetected" },
+    { "id": "not-viable", "score": "excluded" },
+    { "id": "suppressed", "score": "excluded" },
+    { "id": "not-selected", "score": "excluded" },
+    { "id": "not-run", "score": "excluded" },
+    { "id": "error", "score": "excluded" }
+  ],
+  "errors": [
+    "load",
+    "annotation-without-reason",
+    "stale-annotation",
+    "build",
+    "control-failed",
+    "not-instrumented",
+    "ordinary-control-failed",
+    "closing-control-failed",
+    "changed-files"
+  ],
+  "limits": {
+    "deadline": { "factor": 10, "seconds": 2 },
+    "memory": { "factor": 4, "bytes": 536870912 }
+  }
+}

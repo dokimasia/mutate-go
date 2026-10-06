@@ -1,0 +1,119 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "report",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2d08098b9431da4f",
+      "file": "rules.go",
+      "start": {
+        "line": 7,
+        "column": 2
+      },
+      "end": {
+        "line": 7,
+        "column": 29
+      },
+      "original": "log.Printf(\"n+1 = %d\", n+1)",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "report",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "651148f6e01507cb",
+      "file": "rules.go",
+      "start": {
+        "line": 7,
+        "column": 25
+      },
+      "end": {
+        "line": 7,
+        "column": 28
+      },
+      "original": "n+1",
+      "replacement": "n-1",
+      "rule": "logging"
+    },
+    {
+      "scope": "report",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9b1e9d664a1aa5e6",
+      "file": "rules.go",
+      "start": {
+        "line": 8,
+        "column": 2
+      },
+      "end": {
+        "line": 8,
+        "column": 14
+      },
+      "original": "return n * 2",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "report",
+      "kind": "aor",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "8d6551aeb50a2930",
+      "file": "rules.go",
+      "start": {
+        "line": 8,
+        "column": 9
+      },
+      "end": {
+        "line": 8,
+        "column": 14
+      },
+      "original": "n * 2",
+      "replacement": "n / 2"
+    },
+    {
+      "scope": "room",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7076e1e41ae8e186",
+      "file": "rules.go",
+      "start": {
+        "line": 13,
+        "column": 2
+      },
+      "end": {
+        "line": 13,
+        "column": 28
+      },
+      "original": "return make([]int, 0, n+1)",
+      "replacement": "return nil"
+    },
+    {
+      "scope": "room",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4e0f0ff29df64213",
+      "file": "rules.go",
+      "start": {
+        "line": 13,
+        "column": 24
+      },
+      "end": {
+        "line": 13,
+        "column": 27
+      },
+      "original": "n+1",
+      "replacement": "n-1",
+      "rule": "capacity"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

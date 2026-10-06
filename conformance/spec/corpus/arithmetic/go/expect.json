@@ -1,0 +1,206 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "ops",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0162860fe6b90de3",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 49
+      },
+      "original": "return []int{a + b, a - b, a * b, a / b, a % b}",
+      "replacement": "return nil"
+    },
+    {
+      "scope": "ops",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "aba2e45e1c571915",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 5,
+        "column": 15
+      },
+      "end": {
+        "line": 5,
+        "column": 20
+      },
+      "original": "a + b",
+      "replacement": "a - b"
+    },
+    {
+      "scope": "ops",
+      "kind": "aor",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "b2603a18d49f8b6d",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 5,
+        "column": 22
+      },
+      "end": {
+        "line": 5,
+        "column": 27
+      },
+      "original": "a - b",
+      "replacement": "a + b"
+    },
+    {
+      "scope": "ops",
+      "kind": "aor",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "c5ca25c13096bc6c",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 5,
+        "column": 29
+      },
+      "end": {
+        "line": 5,
+        "column": 34
+      },
+      "original": "a * b",
+      "replacement": "a / b"
+    },
+    {
+      "scope": "ops",
+      "kind": "aor",
+      "nth": 3,
+      "occurrence": 0,
+      "key": "c5687c66779bee9f",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 5,
+        "column": 36
+      },
+      "end": {
+        "line": 5,
+        "column": 41
+      },
+      "original": "a / b",
+      "replacement": "a * b"
+    },
+    {
+      "scope": "ops",
+      "kind": "aor",
+      "nth": 4,
+      "occurrence": 0,
+      "key": "fa9f445b234cd12c",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 5,
+        "column": 43
+      },
+      "end": {
+        "line": 5,
+        "column": 48
+      },
+      "original": "a % b",
+      "replacement": "a * b"
+    },
+    {
+      "scope": "step",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7eca6421d5a50a4a",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 9
+      },
+      "original": "n += by",
+      "replacement": "n -= by"
+    },
+    {
+      "scope": "step",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "aba5bc56267c8ee3",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 9
+      },
+      "original": "n += by",
+      "replacement": ""
+    },
+    {
+      "scope": "step",
+      "kind": "aor",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "d595075ee4bddf68",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 11,
+        "column": 2
+      },
+      "end": {
+        "line": 11,
+        "column": 8
+      },
+      "original": "n *= 2",
+      "replacement": "n /= 2"
+    },
+    {
+      "scope": "step",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "45a996d173c3fc06",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 11,
+        "column": 2
+      },
+      "end": {
+        "line": 11,
+        "column": 8
+      },
+      "original": "n *= 2",
+      "replacement": ""
+    },
+    {
+      "scope": "step",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3ce2cf24fa943d4c",
+      "file": "arithmetic.go",
+      "start": {
+        "line": 12,
+        "column": 2
+      },
+      "end": {
+        "line": 12,
+        "column": 10
+      },
+      "original": "return n",
+      "replacement": "return 0"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

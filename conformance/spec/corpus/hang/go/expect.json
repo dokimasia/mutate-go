@@ -1,0 +1,140 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "sum",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "be895badf621b3dc",
+      "file": "sum.go",
+      "start": {
+        "line": 6,
+        "column": 2
+      },
+      "end": {
+        "line": 8,
+        "column": 3
+      },
+      "original": "for i := 1; i <= n; i++ { total += i }",
+      "replacement": ""
+    },
+    {
+      "scope": "sum",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "452546dcb288304e",
+      "file": "sum.go",
+      "start": {
+        "line": 6,
+        "column": 14
+      },
+      "end": {
+        "line": 6,
+        "column": 20
+      },
+      "original": "i <= n",
+      "replacement": "i < n"
+    },
+    {
+      "scope": "sum",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "561688aeaac51ddb",
+      "file": "sum.go",
+      "start": {
+        "line": 6,
+        "column": 14
+      },
+      "end": {
+        "line": 6,
+        "column": 20
+      },
+      "original": "i <= n",
+      "replacement": "true",
+      "tests": [
+        "TestSum"
+      ]
+    },
+    {
+      "scope": "sum",
+      "kind": "uoi-incdec",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "274804212f075bce",
+      "file": "sum.go",
+      "start": {
+        "line": 6,
+        "column": 22
+      },
+      "end": {
+        "line": 6,
+        "column": 25
+      },
+      "original": "i++",
+      "replacement": "i--",
+      "tests": [
+        "TestSum"
+      ]
+    },
+    {
+      "scope": "sum",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2bb8054e840e2e65",
+      "file": "sum.go",
+      "start": {
+        "line": 7,
+        "column": 3
+      },
+      "end": {
+        "line": 7,
+        "column": 13
+      },
+      "original": "total += i",
+      "replacement": "total -= i"
+    },
+    {
+      "scope": "sum",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "5d3bd473e3509dcb",
+      "file": "sum.go",
+      "start": {
+        "line": 7,
+        "column": 3
+      },
+      "end": {
+        "line": 7,
+        "column": 13
+      },
+      "original": "total += i",
+      "replacement": ""
+    },
+    {
+      "scope": "sum",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "863598e61f8ac312",
+      "file": "sum.go",
+      "start": {
+        "line": 9,
+        "column": 2
+      },
+      "end": {
+        "line": 9,
+        "column": 14
+      },
+      "original": "return total",
+      "replacement": "return 0"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

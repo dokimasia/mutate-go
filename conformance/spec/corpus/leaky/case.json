@@ -1,0 +1,10 @@
+{
+  "case": "leaky",
+  "proves": "A test that depends on a file that an earlier run wrote fails the closing control run, and the file is a changed file of the target.",
+  "fixture": "inc adds one. Its test fails when the file marker is in the package directory, and creates it. The opening control run creates the file, so every later run fails.",
+  "mutants": [
+    { "scope": "inc", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "inc", "kind": "aor", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": ["changed-files", "closing-control-failed"]
+}

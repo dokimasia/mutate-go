@@ -1,0 +1,23 @@
+{
+  "case": "identity",
+  "proves": "Two sites with the same scope, kind and tokens have the key occurrences 0 and 1. A method's scope is its receiver's type and its name, also where the receiver's type is in parentheses.",
+  "fixture": "steps counts n down with two identical if statements. counter has three methods, whose receivers are written (*counter), (counter) and *(counter).",
+  "mutants": [
+    { "scope": "steps", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "steps", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
+    { "scope": "steps", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "steps", "kind": "uoi-incdec", "nth": 0, "verdict": "killed" },
+    { "scope": "steps", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "steps", "kind": "ror-boundary", "nth": 1, "verdict": "killed" },
+    { "scope": "steps", "kind": "ror-false", "nth": 1, "verdict": "killed" },
+    { "scope": "steps", "kind": "uoi-incdec", "nth": 1, "verdict": "killed" },
+    { "scope": "steps", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "counter.add", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "counter.add", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "counter.sub", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "counter.sub", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "counter.twice", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "counter.twice", "kind": "aor", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

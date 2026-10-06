@@ -1,0 +1,10 @@
+{
+  "case": "suite",
+  "proves": "The tests of another target that the caller names count for the target's mutants. The record names the other target in suite, and names a test of it after the target's name.",
+  "fixture": "Scale multiplies two numbers. Its own test uses the factor 1, which cannot tell a multiplication from a division. The tests of the package conformance, which the run names, use another factor.",
+  "mutants": [
+    { "scope": "Scale", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "Scale", "kind": "aor", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

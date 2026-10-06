@@ -1,0 +1,458 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "keep",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "fd1ce2942cdc04b3",
+      "file": "keep.go",
+      "start": {
+        "line": 14,
+        "column": 2
+      },
+      "end": {
+        "line": 14,
+        "column": 26
+      },
+      "original": "names = append(names, s)",
+      "replacement": ""
+    },
+    {
+      "scope": "keep",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "101d6ce1d95901ee",
+      "file": "keep.go",
+      "start": {
+        "line": 15,
+        "column": 2
+      },
+      "end": {
+        "line": 15,
+        "column": 21
+      },
+      "original": "sort.Strings(names)",
+      "replacement": ""
+    },
+    {
+      "scope": "keep",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "22c8fc8958cf65b2",
+      "file": "keep.go",
+      "start": {
+        "line": 17,
+        "column": 2
+      },
+      "end": {
+        "line": 17,
+        "column": 12
+      },
+      "original": "total += n",
+      "replacement": "total -= n"
+    },
+    {
+      "scope": "keep",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "882e25e1d1de89b2",
+      "file": "keep.go",
+      "start": {
+        "line": 17,
+        "column": 2
+      },
+      "end": {
+        "line": 17,
+        "column": 12
+      },
+      "original": "total += n",
+      "replacement": ""
+    },
+    {
+      "scope": "keep",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "26bec5aaa9b1d48b",
+      "file": "keep.go",
+      "start": {
+        "line": 18,
+        "column": 2
+      },
+      "end": {
+        "line": 18,
+        "column": 14
+      },
+      "original": "return total",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "small",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "469afc75ae636b84",
+      "file": "keep.go",
+      "start": {
+        "line": 23,
+        "column": 2
+      },
+      "end": {
+        "line": 25,
+        "column": 3
+      },
+      "original": "if v, ok := m[key]; ok && v < 10 { return true }",
+      "replacement": ""
+    },
+    {
+      "scope": "small",
+      "kind": "lcr-left",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "826097a0b7c70d8f",
+      "file": "keep.go",
+      "start": {
+        "line": 23,
+        "column": 22
+      },
+      "end": {
+        "line": 23,
+        "column": 34
+      },
+      "original": "ok && v < 10",
+      "replacement": "ok"
+    },
+    {
+      "scope": "small",
+      "kind": "lcr-right",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2311fa2a86b132c6",
+      "file": "keep.go",
+      "start": {
+        "line": 23,
+        "column": 22
+      },
+      "end": {
+        "line": 23,
+        "column": 34
+      },
+      "original": "ok && v < 10",
+      "replacement": "v < 10"
+    },
+    {
+      "scope": "small",
+      "kind": "lcr-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4577af2bbf096ca8",
+      "file": "keep.go",
+      "start": {
+        "line": 23,
+        "column": 22
+      },
+      "end": {
+        "line": 23,
+        "column": 34
+      },
+      "original": "ok && v < 10",
+      "replacement": "false"
+    },
+    {
+      "scope": "small",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "fd9d941aa841bf52",
+      "file": "keep.go",
+      "start": {
+        "line": 23,
+        "column": 28
+      },
+      "end": {
+        "line": 23,
+        "column": 34
+      },
+      "original": "v < 10",
+      "replacement": "v <= 10"
+    },
+    {
+      "scope": "small",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "cc0e7df70bf99214",
+      "file": "keep.go",
+      "start": {
+        "line": 23,
+        "column": 28
+      },
+      "end": {
+        "line": 23,
+        "column": 34
+      },
+      "original": "v < 10",
+      "replacement": "false"
+    },
+    {
+      "scope": "small",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "b6fdcdb8b05f56c8",
+      "file": "keep.go",
+      "start": {
+        "line": 24,
+        "column": 3
+      },
+      "end": {
+        "line": 24,
+        "column": 14
+      },
+      "original": "return true",
+      "replacement": "return false"
+    },
+    {
+      "scope": "size",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9dc2d9df824b6bac",
+      "file": "keep.go",
+      "start": {
+        "line": 32,
+        "column": 2
+      },
+      "end": {
+        "line": 32,
+        "column": 10
+      },
+      "original": "return n",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "upper",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "ae2de1e63064de90",
+      "file": "keep.go",
+      "start": {
+        "line": 37,
+        "column": 2
+      },
+      "end": {
+        "line": 37,
+        "column": 27
+      },
+      "original": "return strings.ToUpper(s)",
+      "replacement": "return \"\""
+    },
+    {
+      "scope": "length",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "ee9253a83ec8d6ee",
+      "file": "keep.go",
+      "start": {
+        "line": 44,
+        "column": 2
+      },
+      "end": {
+        "line": 49,
+        "column": 3
+      },
+      "original": "switch x := v.(type) { case string: n = len(x) case []int: n = len(x) }",
+      "replacement": ""
+    },
+    {
+      "scope": "length",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "7e3481698b6ed87f",
+      "file": "keep.go",
+      "start": {
+        "line": 46,
+        "column": 3
+      },
+      "end": {
+        "line": 46,
+        "column": 13
+      },
+      "original": "n = len(x)",
+      "replacement": ""
+    },
+    {
+      "scope": "length",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 1,
+      "key": "65697f5335d3ab7c",
+      "file": "keep.go",
+      "start": {
+        "line": 48,
+        "column": 3
+      },
+      "end": {
+        "line": 48,
+        "column": 13
+      },
+      "original": "n = len(x)",
+      "replacement": ""
+    },
+    {
+      "scope": "length",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f5736148e1e971bd",
+      "file": "keep.go",
+      "start": {
+        "line": 50,
+        "column": 2
+      },
+      "end": {
+        "line": 50,
+        "column": 10
+      },
+      "original": "return n",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "first",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "8f031fc4cdff70ad",
+      "file": "keep.go",
+      "start": {
+        "line": 58,
+        "column": 8
+      },
+      "end": {
+        "line": 58,
+        "column": 19
+      },
+      "original": "i < len(xs)",
+      "replacement": "i <= len(xs)"
+    },
+    {
+      "scope": "first",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "225c788181f3c8a6",
+      "file": "keep.go",
+      "start": {
+        "line": 58,
+        "column": 8
+      },
+      "end": {
+        "line": 58,
+        "column": 19
+      },
+      "original": "i < len(xs)",
+      "replacement": "false"
+    },
+    {
+      "scope": "first",
+      "kind": "uoi-incdec",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4c5c5d395754ae17",
+      "file": "keep.go",
+      "start": {
+        "line": 58,
+        "column": 21
+      },
+      "end": {
+        "line": 58,
+        "column": 24
+      },
+      "original": "i++",
+      "replacement": "i--"
+    },
+    {
+      "scope": "first",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "c0fc0f730eca42a8",
+      "file": "keep.go",
+      "start": {
+        "line": 59,
+        "column": 3
+      },
+      "end": {
+        "line": 61,
+        "column": 4
+      },
+      "original": "if xs[i] < 0 { break scan }",
+      "replacement": ""
+    },
+    {
+      "scope": "first",
+      "kind": "ror-boundary",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "44bf1f5af88fa67d",
+      "file": "keep.go",
+      "start": {
+        "line": 59,
+        "column": 6
+      },
+      "end": {
+        "line": 59,
+        "column": 15
+      },
+      "original": "xs[i] < 0",
+      "replacement": "xs[i] <= 0"
+    },
+    {
+      "scope": "first",
+      "kind": "ror-false",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "375eaf75bbeb9fed",
+      "file": "keep.go",
+      "start": {
+        "line": 59,
+        "column": 6
+      },
+      "end": {
+        "line": 59,
+        "column": 15
+      },
+      "original": "xs[i] < 0",
+      "replacement": "false"
+    },
+    {
+      "scope": "first",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "b1b686b5445e78b4",
+      "file": "keep.go",
+      "start": {
+        "line": 63,
+        "column": 2
+      },
+      "end": {
+        "line": 63,
+        "column": 10
+      },
+      "original": "return i",
+      "replacement": "return 0"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

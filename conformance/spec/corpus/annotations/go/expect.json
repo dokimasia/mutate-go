@@ -1,0 +1,174 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "clamp",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "76a68d18858083ba",
+      "file": "notes.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 7,
+        "column": 3
+      },
+      "original": "if x > 10 { //dokimi:mutate-skip ror-boundary: x equal to 10 returns 10 either way return 10 }",
+      "replacement": ""
+    },
+    {
+      "scope": "clamp",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e5bc8cebda05ddcc",
+      "file": "notes.go",
+      "start": {
+        "line": 5,
+        "column": 5
+      },
+      "end": {
+        "line": 5,
+        "column": 11
+      },
+      "original": "x > 10",
+      "replacement": "x >= 10",
+      "reason": "x equal to 10 returns 10 either way"
+    },
+    {
+      "scope": "clamp",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "765575a96960ddbe",
+      "file": "notes.go",
+      "start": {
+        "line": 5,
+        "column": 5
+      },
+      "end": {
+        "line": 5,
+        "column": 11
+      },
+      "original": "x > 10",
+      "replacement": "false"
+    },
+    {
+      "scope": "clamp",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "26334e7e1bb4d401",
+      "file": "notes.go",
+      "start": {
+        "line": 6,
+        "column": 3
+      },
+      "end": {
+        "line": 6,
+        "column": 12
+      },
+      "original": "return 10",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "clamp",
+      "kind": "sbr-zero",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "b94b4163a9fc7afc",
+      "file": "notes.go",
+      "start": {
+        "line": 8,
+        "column": 2
+      },
+      "end": {
+        "line": 8,
+        "column": 10
+      },
+      "original": "return x",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "half",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "68d0e61f38050c12",
+      "file": "notes.go",
+      "start": {
+        "line": 14,
+        "column": 2
+      },
+      "end": {
+        "line": 14,
+        "column": 14
+      },
+      "original": "return x / 2",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "half",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "51b36992286e8ec0",
+      "file": "notes.go",
+      "start": {
+        "line": 14,
+        "column": 9
+      },
+      "end": {
+        "line": 14,
+        "column": 14
+      },
+      "original": "x / 2",
+      "replacement": "x * 2"
+    },
+    {
+      "scope": "twice",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2708f5c16a375811",
+      "file": "notes.go",
+      "start": {
+        "line": 20,
+        "column": 2
+      },
+      "end": {
+        "line": 20,
+        "column": 14
+      },
+      "original": "return x * 2",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "twice",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "57603cd91ce03bc9",
+      "file": "notes.go",
+      "start": {
+        "line": 20,
+        "column": 9
+      },
+      "end": {
+        "line": 20,
+        "column": 14
+      },
+      "original": "x * 2",
+      "replacement": "x / 2"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": [
+    "annotation-without-reason",
+    "stale-annotation"
+  ]
+}

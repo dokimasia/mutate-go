@@ -1,0 +1,80 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "marked",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2c18d55208ad8212",
+      "file": "marked.go",
+      "start": {
+        "line": 8,
+        "column": 2
+      },
+      "end": {
+        "line": 8,
+        "column": 164
+      },
+      "original": "return strings.Contains(s, \"release-candidate-of-the-long-term-support-branch-for-the-second-quarter-of-the-year-twenty…",
+      "replacement": "return false"
+    },
+    {
+      "scope": "marked",
+      "kind": "lcr-left",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "466f797379f1ea80",
+      "file": "marked.go",
+      "start": {
+        "line": 8,
+        "column": 9
+      },
+      "end": {
+        "line": 8,
+        "column": 164
+      },
+      "original": "…-quarter-of-the-year-twenty-twenty-six\") && !strings.HasPrefix(s, \"#\")",
+      "replacement": "…-quarter-of-the-year-twenty-twenty-six\")"
+    },
+    {
+      "scope": "marked",
+      "kind": "lcr-right",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "28553e7789867900",
+      "file": "marked.go",
+      "start": {
+        "line": 8,
+        "column": 9
+      },
+      "end": {
+        "line": 8,
+        "column": 164
+      },
+      "original": "strings.Contains(s, \"release-candidate-of-the-long-term-support-branch-for-the-second-quarter-of-the-year-twenty-twenty…",
+      "replacement": "!strings.HasPrefix(s, \"#\")"
+    },
+    {
+      "scope": "marked",
+      "kind": "lcr-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3d0a2c2466cb9f8d",
+      "file": "marked.go",
+      "start": {
+        "line": 8,
+        "column": 9
+      },
+      "end": {
+        "line": 8,
+        "column": 164
+      },
+      "original": "strings.Contains(s, \"release-candidate-of-the-long-term-support-branch-for-the-second-quarter-of-the-year-twenty-twenty…",
+      "replacement": "false"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

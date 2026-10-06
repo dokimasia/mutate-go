@@ -1,0 +1,208 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "equal",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "dec29fdf25915d43",
+      "file": "helper.go",
+      "start": {
+        "line": 20,
+        "column": 2
+      },
+      "end": {
+        "line": 20,
+        "column": 12
+      },
+      "original": "t.Helper()",
+      "replacement": "",
+      "rule": "helper"
+    },
+    {
+      "scope": "equal",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "03ae66d23804831a",
+      "file": "helper.go",
+      "start": {
+        "line": 21,
+        "column": 2
+      },
+      "end": {
+        "line": 23,
+        "column": 3
+      },
+      "original": "if got != want { t.Errorf(\"got %d, want %d\", got, want) }",
+      "replacement": ""
+    },
+    {
+      "scope": "equal",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d3bc8a600e78c870",
+      "file": "helper.go",
+      "start": {
+        "line": 21,
+        "column": 5
+      },
+      "end": {
+        "line": 21,
+        "column": 16
+      },
+      "original": "got != want",
+      "replacement": "true"
+    },
+    {
+      "scope": "equal",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "83cca533e80433f4",
+      "file": "helper.go",
+      "start": {
+        "line": 21,
+        "column": 5
+      },
+      "end": {
+        "line": 21,
+        "column": 16
+      },
+      "original": "got != want",
+      "replacement": "false"
+    },
+    {
+      "scope": "equal",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "066041de71917955",
+      "file": "helper.go",
+      "start": {
+        "line": 22,
+        "column": 3
+      },
+      "end": {
+        "line": 22,
+        "column": 41
+      },
+      "original": "t.Errorf(\"got %d, want %d\", got, want)",
+      "replacement": ""
+    },
+    {
+      "scope": "same",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "98bbc317dfb1050c",
+      "file": "helper.go",
+      "start": {
+        "line": 28,
+        "column": 2
+      },
+      "end": {
+        "line": 28,
+        "column": 12
+      },
+      "original": "t.Helper()",
+      "replacement": "",
+      "rule": "helper"
+    },
+    {
+      "scope": "same",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "91d4dd343411720c",
+      "file": "helper.go",
+      "start": {
+        "line": 29,
+        "column": 2
+      },
+      "end": {
+        "line": 31,
+        "column": 3
+      },
+      "original": "if got != want { t.Errorf(\"got %d, want %d\", got, want) }",
+      "replacement": ""
+    },
+    {
+      "scope": "same",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0f8b12c797b5e974",
+      "file": "helper.go",
+      "start": {
+        "line": 29,
+        "column": 5
+      },
+      "end": {
+        "line": 29,
+        "column": 16
+      },
+      "original": "got != want",
+      "replacement": "true"
+    },
+    {
+      "scope": "same",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d24c52bda7c5eee4",
+      "file": "helper.go",
+      "start": {
+        "line": 29,
+        "column": 5
+      },
+      "end": {
+        "line": 29,
+        "column": 16
+      },
+      "original": "got != want",
+      "replacement": "false"
+    },
+    {
+      "scope": "same",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "6e000e927756a884",
+      "file": "helper.go",
+      "start": {
+        "line": 30,
+        "column": 3
+      },
+      "end": {
+        "line": 30,
+        "column": 41
+      },
+      "original": "t.Errorf(\"got %d, want %d\", got, want)",
+      "replacement": ""
+    },
+    {
+      "scope": "mark",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f3d63eb0fc68b454",
+      "file": "helper.go",
+      "start": {
+        "line": 36,
+        "column": 2
+      },
+      "end": {
+        "line": 36,
+        "column": 13
+      },
+      "original": "m.Helper(1)",
+      "replacement": ""
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

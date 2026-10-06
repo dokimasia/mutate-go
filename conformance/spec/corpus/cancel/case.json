@@ -1,0 +1,23 @@
+{
+  "case": "cancel",
+  "proves": "A call of the cancel function that a deadline API returned is suppressed with the rule timing, deferred or not, when every assignment to its variable assigns such a function. The call of a cancel function of a context without a deadline keeps its mutants, and so does the call of a variable that one assignment gives such a function and another assignment does not.",
+  "fixture": "bounded cancels a context with a deadline before it returns it, and later does the same when its argument is true. stopped cancels a context without a deadline. ended cancels a context that has a deadline when its argument is true, and none otherwise. One test per function checks the context that the function returns.",
+  "mutants": [
+    { "scope": "bounded", "kind": "sbr-delete", "nth": 0, "verdict": "suppressed" },
+    { "scope": "bounded", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "later", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "later", "kind": "uoi-not", "nth": 0, "verdict": "killed" },
+    { "scope": "later", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "later", "kind": "sbr-delete", "nth": 2, "verdict": "suppressed" },
+    { "scope": "later", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "stopped", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "stopped", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "ended", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "ended", "kind": "uoi-not", "nth": 0, "verdict": "killed" },
+    { "scope": "ended", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "ended", "kind": "sbr-delete", "nth": 2, "verdict": "killed" },
+    { "scope": "ended", "kind": "sbr-delete", "nth": 3, "verdict": "killed" },
+    { "scope": "ended", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

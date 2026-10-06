@@ -1,0 +1,17 @@
+{
+  "case": "confirm",
+  "confirm": true,
+  "proves": "A run that confirms runs each survivor, and each mutant whose site the instrumented program never executed, once more in its ordinary build, where the instrumented variable is not set, and takes the verdict of that run. A mutant without coverage keeps no-coverage when that run passes. A mutant that the instrumented program kills is not confirmed.",
+  "fixture": "double, half, triple and quarter return twice, half, three times and a quarter of a number. TestDouble and TestTriple check double and triple only while the instrumented variable is not set, as a test of a property of the build does. TestCalls calls double without checking the result, and checks that half of 4 is not 0. No test calls quarter.",
+  "mutants": [
+    { "scope": "double", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "confirmed": true },
+    { "scope": "double", "kind": "aor", "nth": 0, "verdict": "killed", "confirmed": true },
+    { "scope": "half", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "half", "kind": "aor", "nth": 0, "verdict": "survived", "confirmed": true },
+    { "scope": "triple", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "confirmed": true },
+    { "scope": "triple", "kind": "aor", "nth": 0, "verdict": "killed", "confirmed": true },
+    { "scope": "quarter", "kind": "sbr-zero", "nth": 0, "verdict": "no-coverage", "confirmed": true },
+    { "scope": "quarter", "kind": "aor", "nth": 0, "verdict": "no-coverage", "confirmed": true }
+  ],
+  "errors": []
+}

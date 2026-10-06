@@ -1,0 +1,10 @@
+{
+  "case": "store",
+  "proves": "A file that a mutant's run writes into the target is the run error changed-files, although the closing control run passes.",
+  "fixture": "inc adds one. Its test writes the wrong result to testdata/failure when it fails, as a library stores a failing input for later runs.",
+  "mutants": [
+    { "scope": "inc", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "inc", "kind": "aor", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": ["changed-files"]
+}

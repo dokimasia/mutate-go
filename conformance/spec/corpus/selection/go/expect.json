@@ -1,0 +1,176 @@
+{
+  "language": "go",
+  "lines": [
+    "copy.go:13-23"
+  ],
+  "mutants": [
+    {
+      "scope": "outside",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a34f990ab3afa4bd",
+      "file": "copy.go",
+      "start": {
+        "line": 9,
+        "column": 7
+      },
+      "end": {
+        "line": 9,
+        "column": 17
+      },
+      "original": "x * weight",
+      "replacement": "x / weight"
+    },
+    {
+      "scope": "outside",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e09ebef1643ee1a0",
+      "file": "copy.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 14
+      },
+      "original": "return y + 1",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "outside",
+      "kind": "aor",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "4b1b75f0ee2d4657",
+      "file": "copy.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 14
+      },
+      "original": "y + 1",
+      "replacement": "y - 1"
+    },
+    {
+      "scope": "inside",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "22508f1ff815f54c",
+      "file": "copy.go",
+      "start": {
+        "line": 15,
+        "column": 7
+      },
+      "end": {
+        "line": 15,
+        "column": 17
+      },
+      "original": "x * weight",
+      "replacement": "x / weight",
+      "reason": "the compiler rejects the division by weight",
+      "notViable": true
+    },
+    {
+      "scope": "inside",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4055409c0199ee9b",
+      "file": "copy.go",
+      "start": {
+        "line": 16,
+        "column": 2
+      },
+      "end": {
+        "line": 16,
+        "column": 14
+      },
+      "original": "return y + 1",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "inside",
+      "kind": "aor",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "6977c2822c1e09e7",
+      "file": "copy.go",
+      "start": {
+        "line": 16,
+        "column": 9
+      },
+      "end": {
+        "line": 16,
+        "column": 14
+      },
+      "original": "y + 1",
+      "replacement": "y - 1"
+    },
+    {
+      "scope": "plain",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e00798db4826eb45",
+      "file": "copy.go",
+      "start": {
+        "line": 21,
+        "column": 7
+      },
+      "end": {
+        "line": 21,
+        "column": 17
+      },
+      "original": "x * weight",
+      "replacement": "x / weight",
+      "notViable": true
+    },
+    {
+      "scope": "plain",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4427aa6a63f4153b",
+      "file": "copy.go",
+      "start": {
+        "line": 22,
+        "column": 2
+      },
+      "end": {
+        "line": 22,
+        "column": 14
+      },
+      "original": "return y + 1",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "plain",
+      "kind": "aor",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "376d695459ce7e11",
+      "file": "copy.go",
+      "start": {
+        "line": 22,
+        "column": 9
+      },
+      "end": {
+        "line": 22,
+        "column": 14
+      },
+      "original": "y + 1",
+      "replacement": "y - 1"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

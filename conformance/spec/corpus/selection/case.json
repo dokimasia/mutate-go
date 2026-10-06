@@ -1,0 +1,17 @@
+{
+  "case": "selection",
+  "proves": "A mutant outside the run's selection is not-selected, whatever else excludes it, and an annotation that suppresses only such mutants is not stale. Inside the selection, a suppressed mutant is suppressed, also where the toolchain rejects it, and otherwise a rejected mutant is not-viable.",
+  "fixture": "outside, inside and plain each multiply x by the constant weight, which is 0, and add one. The aor mutant of the multiplication divides an integer by a constant 0, which the compiler rejects. The selection is the lines of inside and plain. outside and inside have an annotation of that mutant.",
+  "mutants": [
+    { "scope": "outside", "kind": "aor", "nth": 0, "verdict": "not-selected" },
+    { "scope": "outside", "kind": "sbr-zero", "nth": 0, "verdict": "not-selected" },
+    { "scope": "outside", "kind": "aor", "nth": 1, "verdict": "not-selected" },
+    { "scope": "inside", "kind": "aor", "nth": 0, "verdict": "suppressed" },
+    { "scope": "inside", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "inside", "kind": "aor", "nth": 1, "verdict": "killed" },
+    { "scope": "plain", "kind": "aor", "nth": 0, "verdict": "not-viable" },
+    { "scope": "plain", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "plain", "kind": "aor", "nth": 1, "verdict": "killed" }
+  ],
+  "errors": []
+}

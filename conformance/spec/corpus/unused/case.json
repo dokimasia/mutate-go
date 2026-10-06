@@ -1,0 +1,33 @@
+{
+  "case": "unused",
+  "proves": "A mutant that leaves out the only use of a variable, an imported package, a label or a Go type switch's symbol runs, because its source writes that code behind a constant that skips it: a deletion, a return of zero values, and a connector's mutant that does not evaluate an operand. The tests kill each one.",
+  "fixture": "keep appends to a package variable, sorts it with the only call of the file to the package sort, and adds a length to a total in the only statement that reads the length. small tests a value of a map and its comma-ok flag in the only connector that reads them. size returns a length through a variable, and upper returns the only call of the file to the package strings. length reads the symbol of a type switch in two clauses. first leaves a labelled loop in the only statement that names the label.",
+  "mutants": [
+    { "scope": "keep", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "keep", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "keep", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "keep", "kind": "sbr-delete", "nth": 2, "verdict": "killed" },
+    { "scope": "keep", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "small", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "small", "kind": "lcr-left", "nth": 0, "verdict": "killed" },
+    { "scope": "small", "kind": "lcr-right", "nth": 0, "verdict": "killed" },
+    { "scope": "small", "kind": "lcr-false", "nth": 0, "verdict": "killed" },
+    { "scope": "small", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
+    { "scope": "small", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "small", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "size", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "upper", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "length", "kind": "sbr-delete", "nth": 0, "verdict": "killed", "languages": ["go"] },
+    { "scope": "length", "kind": "sbr-delete", "nth": 1, "verdict": "killed", "languages": ["go"] },
+    { "scope": "length", "kind": "sbr-delete", "nth": 2, "verdict": "killed", "languages": ["go"] },
+    { "scope": "length", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "languages": ["go"] },
+    { "scope": "first", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
+    { "scope": "first", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "first", "kind": "uoi-incdec", "nth": 0, "verdict": "killed" },
+    { "scope": "first", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "first", "kind": "ror-boundary", "nth": 1, "verdict": "killed" },
+    { "scope": "first", "kind": "ror-false", "nth": 1, "verdict": "killed" },
+    { "scope": "first", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

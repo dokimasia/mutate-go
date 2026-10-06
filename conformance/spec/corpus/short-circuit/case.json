@@ -1,0 +1,14 @@
+{
+  "case": "short-circuit",
+  "proves": "Operands evaluate as the mutated expression does. The right operand alone dereferences a nil pointer and crashes, which kills it. The left operand alone never evaluates the right one, so it survives a test with a nil pointer.",
+  "fixture": "set returns p != nil && p.on. The test checks a nil pointer and an option that is on.",
+  "mutants": [
+    { "scope": "set", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "set", "kind": "lcr-left", "nth": 0, "verdict": "survived" },
+    { "scope": "set", "kind": "lcr-right", "nth": 0, "verdict": "killed" },
+    { "scope": "set", "kind": "lcr-false", "nth": 0, "verdict": "killed" },
+    { "scope": "set", "kind": "ror-true", "nth": 0, "verdict": "killed" },
+    { "scope": "set", "kind": "ror-false", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

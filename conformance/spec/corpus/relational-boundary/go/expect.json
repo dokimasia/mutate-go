@@ -1,0 +1,170 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "between",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "902310bf4ccc861d",
+      "file": "between.go",
+      "start": {
+        "line": 6,
+        "column": 2
+      },
+      "end": {
+        "line": 8,
+        "column": 3
+      },
+      "original": "if x < lo { return false }",
+      "replacement": ""
+    },
+    {
+      "scope": "between",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "169b13fd1eb7b02c",
+      "file": "between.go",
+      "start": {
+        "line": 6,
+        "column": 5
+      },
+      "end": {
+        "line": 6,
+        "column": 11
+      },
+      "original": "x < lo",
+      "replacement": "x <= lo"
+    },
+    {
+      "scope": "between",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "60a108e861946d49",
+      "file": "between.go",
+      "start": {
+        "line": 6,
+        "column": 5
+      },
+      "end": {
+        "line": 6,
+        "column": 11
+      },
+      "original": "x < lo",
+      "replacement": "false"
+    },
+    {
+      "scope": "between",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "706b1502022c5dc8",
+      "file": "between.go",
+      "start": {
+        "line": 9,
+        "column": 2
+      },
+      "end": {
+        "line": 9,
+        "column": 15
+      },
+      "original": "return x < hi",
+      "replacement": "return false"
+    },
+    {
+      "scope": "between",
+      "kind": "ror-boundary",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "ba74901e75daf19d",
+      "file": "between.go",
+      "start": {
+        "line": 9,
+        "column": 9
+      },
+      "end": {
+        "line": 9,
+        "column": 15
+      },
+      "original": "x < hi",
+      "replacement": "x <= hi"
+    },
+    {
+      "scope": "between",
+      "kind": "ror-false",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "c3513304f9f6f814",
+      "file": "between.go",
+      "start": {
+        "line": 9,
+        "column": 9
+      },
+      "end": {
+        "line": 9,
+        "column": 15
+      },
+      "original": "x < hi",
+      "replacement": "false"
+    },
+    {
+      "scope": "least",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "32c6b7d7822dd1fc",
+      "file": "between.go",
+      "start": {
+        "line": 14,
+        "column": 2
+      },
+      "end": {
+        "line": 14,
+        "column": 16
+      },
+      "original": "return x >= lo",
+      "replacement": "return false"
+    },
+    {
+      "scope": "least",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e0a14fcc9da611bc",
+      "file": "between.go",
+      "start": {
+        "line": 14,
+        "column": 9
+      },
+      "end": {
+        "line": 14,
+        "column": 16
+      },
+      "original": "x >= lo",
+      "replacement": "x > lo"
+    },
+    {
+      "scope": "least",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "5e4a4e1b15fa71b0",
+      "file": "between.go",
+      "start": {
+        "line": 14,
+        "column": 9
+      },
+      "end": {
+        "line": 14,
+        "column": 16
+      },
+      "original": "x >= lo",
+      "replacement": "true"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

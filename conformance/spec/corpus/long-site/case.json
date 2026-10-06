@@ -1,0 +1,12 @@
+{
+  "case": "long-site",
+  "proves": "An original and a replacement longer than 120 characters keep one window around the first character where they differ, so the record shows the change of a mutant past the 119th character.",
+  "fixture": "marked looks for a marker of 102 characters in s and checks that s is no comment, in one connector of 155 characters whose left operand has 125. Its test checks a marked line, a marked comment and an unmarked line.",
+  "mutants": [
+    { "scope": "marked", "kind": "lcr-left", "nth": 0, "verdict": "killed" },
+    { "scope": "marked", "kind": "lcr-right", "nth": 0, "verdict": "killed" },
+    { "scope": "marked", "kind": "lcr-false", "nth": 0, "verdict": "killed" },
+    { "scope": "marked", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

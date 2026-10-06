@@ -1,0 +1,14 @@
+{
+  "case": "runaway",
+  "proves": "A mutant that makes a loop allocate without end is exhausted where the record states a memory ceiling, and timed-out where it does not. The record names the test that was running.",
+  "fixture": "fill appends to a list until its counter equals n. A condition that is always true, and an increment that becomes a decrement, never end the loop. TestFill sleeps half a second in the control runs, so the deadline of a mutant's run leaves those mutants the time to cross the memory ceiling first.",
+  "mutants": [
+    { "scope": "fill", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "fill", "kind": "ror-true", "nth": 0, "verdict": "exhausted" },
+    { "scope": "fill", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "fill", "kind": "uoi-incdec", "nth": 0, "verdict": "exhausted" },
+    { "scope": "fill", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "fill", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

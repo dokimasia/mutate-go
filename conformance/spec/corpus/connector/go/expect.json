@@ -1,0 +1,152 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "both",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a7ce48d7af666755",
+      "file": "both.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 15
+      },
+      "original": "return a && b",
+      "replacement": "return false"
+    },
+    {
+      "scope": "both",
+      "kind": "lcr-left",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "12aab6f82c02b401",
+      "file": "both.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 15
+      },
+      "original": "a && b",
+      "replacement": "a"
+    },
+    {
+      "scope": "both",
+      "kind": "lcr-right",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "efc26eaa662b6a16",
+      "file": "both.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 15
+      },
+      "original": "a && b",
+      "replacement": "b"
+    },
+    {
+      "scope": "both",
+      "kind": "lcr-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "c2b6ade3bbc1c9b8",
+      "file": "both.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 15
+      },
+      "original": "a && b",
+      "replacement": "false"
+    },
+    {
+      "scope": "either",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "8e6a7e4e997fd909",
+      "file": "both.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 15
+      },
+      "original": "return a || b",
+      "replacement": "return false"
+    },
+    {
+      "scope": "either",
+      "kind": "lcr-left",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e312bc4056ae301c",
+      "file": "both.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 15
+      },
+      "original": "a || b",
+      "replacement": "a"
+    },
+    {
+      "scope": "either",
+      "kind": "lcr-right",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "ce5499aae8a338c1",
+      "file": "both.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 15
+      },
+      "original": "a || b",
+      "replacement": "b"
+    },
+    {
+      "scope": "either",
+      "kind": "lcr-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "21f9bd65180ba0e8",
+      "file": "both.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 15
+      },
+      "original": "a || b",
+      "replacement": "true"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

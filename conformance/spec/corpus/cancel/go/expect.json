@@ -1,0 +1,280 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "bounded",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "18319296d881f82b",
+      "file": "cancel.go",
+      "start": {
+        "line": 12,
+        "column": 2
+      },
+      "end": {
+        "line": 12,
+        "column": 16
+      },
+      "original": "defer cancel()",
+      "replacement": "",
+      "rule": "timing"
+    },
+    {
+      "scope": "bounded",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9d228b35d42e4f6c",
+      "file": "cancel.go",
+      "start": {
+        "line": 13,
+        "column": 2
+      },
+      "end": {
+        "line": 13,
+        "column": 12
+      },
+      "original": "return ctx",
+      "replacement": "return nil"
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d118334e8db7f6bf",
+      "file": "cancel.go",
+      "start": {
+        "line": 22,
+        "column": 2
+      },
+      "end": {
+        "line": 25,
+        "column": 3
+      },
+      "original": "if bound { ctx, cancel = context.WithDeadline(ctx, time.Now().Add(time.Hour)) cancel() }",
+      "replacement": ""
+    },
+    {
+      "scope": "later",
+      "kind": "uoi-not",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4af8081f90b0838b",
+      "file": "cancel.go",
+      "start": {
+        "line": 22,
+        "column": 5
+      },
+      "end": {
+        "line": 22,
+        "column": 10
+      },
+      "original": "bound",
+      "replacement": "!bound"
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "8117babe2eecf8be",
+      "file": "cancel.go",
+      "start": {
+        "line": 23,
+        "column": 3
+      },
+      "end": {
+        "line": 23,
+        "column": 69
+      },
+      "original": "ctx, cancel = context.WithDeadline(ctx, time.Now().Add(time.Hour))",
+      "replacement": ""
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "e4e1925ad8701afa",
+      "file": "cancel.go",
+      "start": {
+        "line": 24,
+        "column": 3
+      },
+      "end": {
+        "line": 24,
+        "column": 11
+      },
+      "original": "cancel()",
+      "replacement": "",
+      "rule": "timing"
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f789571650264648",
+      "file": "cancel.go",
+      "start": {
+        "line": 26,
+        "column": 2
+      },
+      "end": {
+        "line": 26,
+        "column": 12
+      },
+      "original": "return ctx",
+      "replacement": "return nil"
+    },
+    {
+      "scope": "stopped",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "fdfe58cc0b318e53",
+      "file": "cancel.go",
+      "start": {
+        "line": 33,
+        "column": 2
+      },
+      "end": {
+        "line": 33,
+        "column": 16
+      },
+      "original": "defer cancel()",
+      "replacement": ""
+    },
+    {
+      "scope": "stopped",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7cbb741c837ba6e0",
+      "file": "cancel.go",
+      "start": {
+        "line": 34,
+        "column": 2
+      },
+      "end": {
+        "line": 34,
+        "column": 12
+      },
+      "original": "return ctx",
+      "replacement": "return nil"
+    },
+    {
+      "scope": "ended",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e3276dafcf42e007",
+      "file": "cancel.go",
+      "start": {
+        "line": 42,
+        "column": 2
+      },
+      "end": {
+        "line": 46,
+        "column": 3
+      },
+      "original": "if bound { ctx, cancel = context.WithTimeout(context.Background(), time.Hour) } else { ctx, cancel = context.WithCancel…",
+      "replacement": ""
+    },
+    {
+      "scope": "ended",
+      "kind": "uoi-not",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a75b06ef50075002",
+      "file": "cancel.go",
+      "start": {
+        "line": 42,
+        "column": 5
+      },
+      "end": {
+        "line": 42,
+        "column": 10
+      },
+      "original": "bound",
+      "replacement": "!bound"
+    },
+    {
+      "scope": "ended",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "e9b8ce2d25705368",
+      "file": "cancel.go",
+      "start": {
+        "line": 43,
+        "column": 3
+      },
+      "end": {
+        "line": 43,
+        "column": 69
+      },
+      "original": "ctx, cancel = context.WithTimeout(context.Background(), time.Hour)",
+      "replacement": ""
+    },
+    {
+      "scope": "ended",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "f0e755c0cdbdd87a",
+      "file": "cancel.go",
+      "start": {
+        "line": 45,
+        "column": 3
+      },
+      "end": {
+        "line": 45,
+        "column": 57
+      },
+      "original": "ctx, cancel = context.WithCancel(context.Background())",
+      "replacement": ""
+    },
+    {
+      "scope": "ended",
+      "kind": "sbr-delete",
+      "nth": 3,
+      "occurrence": 0,
+      "key": "1211f85e5f0a30c4",
+      "file": "cancel.go",
+      "start": {
+        "line": 47,
+        "column": 2
+      },
+      "end": {
+        "line": 47,
+        "column": 10
+      },
+      "original": "cancel()",
+      "replacement": ""
+    },
+    {
+      "scope": "ended",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3146f10d5a0cbee2",
+      "file": "cancel.go",
+      "start": {
+        "line": 48,
+        "column": 2
+      },
+      "end": {
+        "line": 48,
+        "column": 12
+      },
+      "original": "return ctx",
+      "replacement": "return nil"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

@@ -1,0 +1,12 @@
+{
+  "case": "uncovered",
+  "proves": "A mutant whose site no test executes is no-coverage, and the engine does not run it.",
+  "fixture": "double and triple multiply a number. The test calls double only.",
+  "mutants": [
+    { "scope": "double", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "double", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "triple", "kind": "sbr-zero", "nth": 0, "verdict": "no-coverage" },
+    { "scope": "triple", "kind": "aor", "nth": 0, "verdict": "no-coverage" }
+  ],
+  "errors": []
+}

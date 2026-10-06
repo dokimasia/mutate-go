@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/dokimasia/mutate-spec/main/spec/record.schema.json",
+  "title": "A mutation run's record",
+  "description": "One run of one target. The kinds, verdicts, rule families and error codes are the ones spec/catalogue.json and spec/protocol.json define.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["record", "version", "catalogue", "overlay", "engine", "toolchain", "target", "root", "startedAt", "finishedAt", "inputs", "selection", "limits", "errors", "score", "mutants", "skipped", "generated"],
+  "properties": {
+    "record": { "const": "dokimi-mutate" },
+    "version": { "const": 1 },
+    "catalogue": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "overlay": {
+      "description": "The version of the overlay of the target's language.",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "toolchain": { "type": "string", "minLength": 1 },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["language", "name"],
+      "properties": {
+        "language": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "root": { "type": "string", "minLength": 1 },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "inputs": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "suite": {
+      "description": "The other targets whose tests the run added to the target's own, or null when the target's own tests are the suite.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      ]
+    },
+    "selection": {
+      "description": "The line ranges in the target's files that the run selected, or null for a run of every line. An empty list selects no line of the target.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "first", "last"],
+            "properties": {
+              "file": { "$ref": "#/$defs/file" },
+              "first": { "type": "integer", "minimum": 1 },
+              "last": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "limits": {
+      "description": "The limits of each program of the suite, in the order of a mutant's run, from the program's own run in the opening control run. Empty when no opening control run passed.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "deadlineSeconds", "memoryCeilingBytes"],
+        "properties": {
+          "target": { "type": "string", "minLength": 1 },
+          "deadlineSeconds": { "type": "number", "exclusiveMinimum": 0 },
+          "memoryCeilingBytes": { "type": ["integer", "null"], "exclusiveMinimum": 0 }
+        }
+      }
+    },
+    "control": {
+      "description": "The control runs. Absent when no opening control run passed, such as in a run without a mutant to run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["opening"],
+      "properties": {
+        "opening": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seconds", "peakBytes", "sites", "sitesExecuted"],
+          "properties": {
+            "seconds": { "type": "number", "minimum": 0 },
+            "peakBytes": { "type": ["integer", "null"], "minimum": 0 },
+            "sites": { "type": "integer", "minimum": 0 },
+            "sitesExecuted": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "ordinary": {
+          "description": "The ordinary control run of a run that confirms its survivors: the suite built from the target's unchanged code, without the engine.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seconds"],
+          "properties": {
+            "seconds": { "type": "number", "minimum": 0 }
+          }
+        },
+        "closing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seconds"],
+          "properties": {
+            "seconds": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "$ref": "#/$defs/error" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "score": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "number", "minimum": 0, "maximum": 1 }
+      ]
+    },
+    "sample": {
+      "description": "The mutants that the score counts and whose keys sort before the first key of a mutant that did not run, when the caller's deadline or the caller ended the mutant runs, or null.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["before", "detected", "undetected", "score"],
+          "properties": {
+            "before": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+            "detected": { "type": "integer", "minimum": 0 },
+            "undetected": { "type": "integer", "minimum": 0 },
+            "score": {
+              "oneOf": [
+                { "type": "null" },
+                { "type": "number", "minimum": 0, "maximum": 1 }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "mutants": { "type": "array", "items": { "$ref": "#/$defs/mutant" } },
+    "skipped": { "type": "array", "items": { "$ref": "#/$defs/skip" } },
+    "generated": {
+      "description": "Each generated file of the target that the run leaves out, in the order of the target's files, with the number of mutants that the catalogue's kinds make at its sites. A generated file with the include directive is the target's own code and is not listed.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "mutants"],
+        "properties": {
+          "file": { "$ref": "#/$defs/file" },
+          "mutants": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "file": {
+      "description": "A path relative to the record's root, with / as the separator.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/]"
+    },
+    "position": {
+      "description": "A 1-based line and column. The column counts bytes of UTF-8.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["line", "column"],
+      "properties": {
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "kind": {
+      "enum": [
+        "aor",
+        "ror-boundary",
+        "ror-true",
+        "ror-false",
+        "lcr-left",
+        "lcr-right",
+        "lcr-true",
+        "lcr-false",
+        "uoi-incdec",
+        "uoi-not",
+        "uoi-minus",
+        "sbr-delete",
+        "sbr-zero"
+      ]
+    },
+    "verdict": {
+      "enum": [
+        "killed",
+        "timed-out",
+        "exhausted",
+        "survived",
+        "no-coverage",
+        "not-viable",
+        "suppressed",
+        "not-selected",
+        "not-run",
+        "error"
+      ]
+    },
+    "family": {
+      "enum": ["logging", "timing", "flags", "capacity", "helper"]
+    },
+    "error": {
+      "enum": [
+        "load",
+        "annotation-without-reason",
+        "stale-annotation",
+        "build",
+        "control-failed",
+        "not-instrumented",
+        "ordinary-control-failed",
+        "closing-control-failed",
+        "changed-files"
+      ]
+    },
+    "mutant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "kind", "file", "scope", "start", "end", "original", "replacement", "verdict"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "kind": { "$ref": "#/$defs/kind" },
+        "file": { "$ref": "#/$defs/file" },
+        "scope": { "type": "string", "minLength": 1 },
+        "start": { "$ref": "#/$defs/position" },
+        "end": { "$ref": "#/$defs/position" },
+        "original": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "replacement": { "type": "string", "maxLength": 120 },
+        "verdict": { "$ref": "#/$defs/verdict" },
+        "tests": { "type": "array", "items": { "type": "string" } },
+        "coveredBy": {
+          "description": "The tests whose run alone executed the mutant's site, named as tests names them. Absent when no test executed the site in its run alone, or when a program of the suite that executed the site did not run each of its tests alone.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "seconds": { "type": "number", "minimum": 0 },
+        "confirmed": {
+          "description": "True for a mutant whose verdict, tests and seconds come from the run of its ordinary build: a survivor of its run, or a mutant whose site never executed.",
+          "const": true
+        },
+        "rule": { "$ref": "#/$defs/family" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "skip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "start", "end", "reason"],
+      "properties": {
+        "file": { "$ref": "#/$defs/file" },
+        "start": { "$ref": "#/$defs/position" },
+        "end": { "$ref": "#/$defs/position" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

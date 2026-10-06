@@ -1,0 +1,18 @@
+{
+  "case": "zero",
+  "proves": "A return whose every result is already the zero value of its type has no sbr-zero site: an empty composite literal of a struct or an array, one whose elements are zero values, nil, and the zero value of a type parameter. A return of an empty list is a site, because the list is not nil. A replacement writes each zero value as code does.",
+  "fixture": "find returns a point and whether it found one, and the zero point when it did not. origin returns zero values only. first returns the first value of a list of any type, or the type's zero value. empty returns an empty list.",
+  "mutants": [
+    { "scope": "find", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "find", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "find", "kind": "ror-true", "nth": 0, "verdict": "killed" },
+    { "scope": "find", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "find", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "first", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "first", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
+    { "scope": "first", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "first", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "empty", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

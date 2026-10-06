@@ -1,0 +1,17 @@
+{
+  "case": "relational-boundary",
+  "proves": "An ordered comparison has a boundary mutant, and false for < and > or true for <= and >=. nth counts the sites of one scope and kind in source order. A boundary that no test reaches survives.",
+  "fixture": "between compares x with lo and then with hi, both with <. least compares x with lo with >=. The test of between checks lo itself and no value equal to hi. The test of least checks lo itself and a value below it.",
+  "mutants": [
+    { "scope": "between", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "between", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
+    { "scope": "between", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "between", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "between", "kind": "ror-boundary", "nth": 1, "verdict": "survived" },
+    { "scope": "between", "kind": "ror-false", "nth": 1, "verdict": "killed" },
+    { "scope": "least", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "least", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
+    { "scope": "least", "kind": "ror-true", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

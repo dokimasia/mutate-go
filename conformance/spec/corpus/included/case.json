@@ -1,0 +1,10 @@
+{
+  "case": "included",
+  "proves": "A generated file that contains the include directive before its package clause is a target, and one that contains it anywhere else is not.",
+  "fixture": "double is in a generated file with the directive in its header. triple is in a generated file with the directive after the package clause.",
+  "mutants": [
+    { "scope": "double", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "double", "kind": "aor", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

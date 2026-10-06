@@ -1,0 +1,571 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "warn",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "ed86122c8e34ffb9",
+      "file": "quiet.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 12,
+        "column": 3
+      },
+      "original": "if err != nil { log.Printf(\"warning: %v\", err) }",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "warn",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "b78db5c221780578",
+      "file": "quiet.go",
+      "start": {
+        "line": 10,
+        "column": 5
+      },
+      "end": {
+        "line": 10,
+        "column": 15
+      },
+      "original": "err != nil",
+      "replacement": "true",
+      "rule": "logging"
+    },
+    {
+      "scope": "warn",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f483c2a6b81eef16",
+      "file": "quiet.go",
+      "start": {
+        "line": 10,
+        "column": 5
+      },
+      "end": {
+        "line": 10,
+        "column": 15
+      },
+      "original": "err != nil",
+      "replacement": "false",
+      "rule": "logging"
+    },
+    {
+      "scope": "warn",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "4bb7b7e4da0b83c5",
+      "file": "quiet.go",
+      "start": {
+        "line": 11,
+        "column": 3
+      },
+      "end": {
+        "line": 11,
+        "column": 33
+      },
+      "original": "log.Printf(\"warning: %v\", err)",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "fail",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "69672f9ba20109b4",
+      "file": "quiet.go",
+      "start": {
+        "line": 17,
+        "column": 2
+      },
+      "end": {
+        "line": 20,
+        "column": 3
+      },
+      "original": "if err != nil { log.Printf(\"failure: %v\", err) return true }",
+      "replacement": ""
+    },
+    {
+      "scope": "fail",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9985933243de6a21",
+      "file": "quiet.go",
+      "start": {
+        "line": 17,
+        "column": 5
+      },
+      "end": {
+        "line": 17,
+        "column": 15
+      },
+      "original": "err != nil",
+      "replacement": "true"
+    },
+    {
+      "scope": "fail",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "98e4bfb17f72dd8f",
+      "file": "quiet.go",
+      "start": {
+        "line": 17,
+        "column": 5
+      },
+      "end": {
+        "line": 17,
+        "column": 15
+      },
+      "original": "err != nil",
+      "replacement": "false"
+    },
+    {
+      "scope": "fail",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "fe403ca99cadd388",
+      "file": "quiet.go",
+      "start": {
+        "line": 18,
+        "column": 3
+      },
+      "end": {
+        "line": 18,
+        "column": 33
+      },
+      "original": "log.Printf(\"failure: %v\", err)",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "fail",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9b45a2594db54dc8",
+      "file": "quiet.go",
+      "start": {
+        "line": 19,
+        "column": 3
+      },
+      "end": {
+        "line": 19,
+        "column": 14
+      },
+      "original": "return true",
+      "replacement": "return false"
+    },
+    {
+      "scope": "each",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f3f4c66022f3c8e1",
+      "file": "quiet.go",
+      "start": {
+        "line": 26,
+        "column": 2
+      },
+      "end": {
+        "line": 28,
+        "column": 3
+      },
+      "original": "for _, x := range xs { log.Printf(\"value: %d\", x) }",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "each",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "1942bd160ecb0bae",
+      "file": "quiet.go",
+      "start": {
+        "line": 27,
+        "column": 3
+      },
+      "end": {
+        "line": 27,
+        "column": 29
+      },
+      "original": "log.Printf(\"value: %d\", x)",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "drain",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "b990538ef7ac89d5",
+      "file": "quiet.go",
+      "start": {
+        "line": 33,
+        "column": 2
+      },
+      "end": {
+        "line": 35,
+        "column": 3
+      },
+      "original": "for x := range ch { log.Printf(\"value: %d\", x) }",
+      "replacement": ""
+    },
+    {
+      "scope": "drain",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "c08f976b37c4ad0a",
+      "file": "quiet.go",
+      "start": {
+        "line": 34,
+        "column": 3
+      },
+      "end": {
+        "line": 34,
+        "column": 29
+      },
+      "original": "log.Printf(\"value: %d\", x)",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "flush",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "31fcbb5db2a2c8d3",
+      "file": "quiet.go",
+      "start": {
+        "line": 40,
+        "column": 2
+      },
+      "end": {
+        "line": 42,
+        "column": 3
+      },
+      "original": "if _, err := w.Write(buf); err != nil { log.Printf(\"flush: %v\", err) }",
+      "replacement": ""
+    },
+    {
+      "scope": "flush",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a957a13f738562cb",
+      "file": "quiet.go",
+      "start": {
+        "line": 40,
+        "column": 29
+      },
+      "end": {
+        "line": 40,
+        "column": 39
+      },
+      "original": "err != nil",
+      "replacement": "true",
+      "rule": "logging"
+    },
+    {
+      "scope": "flush",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e64a4055ae99ce51",
+      "file": "quiet.go",
+      "start": {
+        "line": 40,
+        "column": 29
+      },
+      "end": {
+        "line": 40,
+        "column": 39
+      },
+      "original": "err != nil",
+      "replacement": "false",
+      "rule": "logging"
+    },
+    {
+      "scope": "flush",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "9b2cbe7887124d64",
+      "file": "quiet.go",
+      "start": {
+        "line": 41,
+        "column": 3
+      },
+      "end": {
+        "line": 41,
+        "column": 31
+      },
+      "original": "log.Printf(\"flush: %v\", err)",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "level",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3eb5d40fff6d92ef",
+      "file": "quiet.go",
+      "start": {
+        "line": 47,
+        "column": 2
+      },
+      "end": {
+        "line": 52,
+        "column": 3
+      },
+      "original": "switch err := check(); { case err == nil: log.Print(\"ok\") default: log.Printf(\"failed: %v\", err) }",
+      "replacement": ""
+    },
+    {
+      "scope": "level",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0eed0533950ea031",
+      "file": "quiet.go",
+      "start": {
+        "line": 48,
+        "column": 7
+      },
+      "end": {
+        "line": 48,
+        "column": 17
+      },
+      "original": "err == nil",
+      "replacement": "true",
+      "rule": "logging"
+    },
+    {
+      "scope": "level",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "60003837d7dd771b",
+      "file": "quiet.go",
+      "start": {
+        "line": 48,
+        "column": 7
+      },
+      "end": {
+        "line": 48,
+        "column": 17
+      },
+      "original": "err == nil",
+      "replacement": "false",
+      "rule": "logging"
+    },
+    {
+      "scope": "level",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "b0bd94266ac77fbc",
+      "file": "quiet.go",
+      "start": {
+        "line": 49,
+        "column": 3
+      },
+      "end": {
+        "line": 49,
+        "column": 18
+      },
+      "original": "log.Print(\"ok\")",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "level",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "a9efc5301f3ff40c",
+      "file": "quiet.go",
+      "start": {
+        "line": 51,
+        "column": 3
+      },
+      "end": {
+        "line": 51,
+        "column": 32
+      },
+      "original": "log.Printf(\"failed: %v\", err)",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "sign",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "ce1785501516e021",
+      "file": "quiet.go",
+      "start": {
+        "line": 57,
+        "column": 2
+      },
+      "end": {
+        "line": 64,
+        "column": 3
+      },
+      "original": "switch { case n > 0: log.Print(\"positive\") case n < 0: log.Print(\"negative\") default: log.Print(\"zero\") }",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "sign",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "532774bde95fda80",
+      "file": "quiet.go",
+      "start": {
+        "line": 58,
+        "column": 7
+      },
+      "end": {
+        "line": 58,
+        "column": 12
+      },
+      "original": "n > 0",
+      "replacement": "n >= 0",
+      "rule": "logging"
+    },
+    {
+      "scope": "sign",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "c4bdcfbc30fdf494",
+      "file": "quiet.go",
+      "start": {
+        "line": 58,
+        "column": 7
+      },
+      "end": {
+        "line": 58,
+        "column": 12
+      },
+      "original": "n > 0",
+      "replacement": "false",
+      "rule": "logging"
+    },
+    {
+      "scope": "sign",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "9f75fc321ff39764",
+      "file": "quiet.go",
+      "start": {
+        "line": 59,
+        "column": 3
+      },
+      "end": {
+        "line": 59,
+        "column": 24
+      },
+      "original": "log.Print(\"positive\")",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "sign",
+      "kind": "ror-boundary",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "a3956b58d15dad93",
+      "file": "quiet.go",
+      "start": {
+        "line": 60,
+        "column": 7
+      },
+      "end": {
+        "line": 60,
+        "column": 12
+      },
+      "original": "n < 0",
+      "replacement": "n <= 0",
+      "rule": "logging"
+    },
+    {
+      "scope": "sign",
+      "kind": "ror-false",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "c30d812dcc98e071",
+      "file": "quiet.go",
+      "start": {
+        "line": 60,
+        "column": 7
+      },
+      "end": {
+        "line": 60,
+        "column": 12
+      },
+      "original": "n < 0",
+      "replacement": "false",
+      "rule": "logging"
+    },
+    {
+      "scope": "sign",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "1912d23314a254a1",
+      "file": "quiet.go",
+      "start": {
+        "line": 61,
+        "column": 3
+      },
+      "end": {
+        "line": 61,
+        "column": 24
+      },
+      "original": "log.Print(\"negative\")",
+      "replacement": "",
+      "rule": "logging"
+    },
+    {
+      "scope": "sign",
+      "kind": "sbr-delete",
+      "nth": 3,
+      "occurrence": 0,
+      "key": "8664a56142ca96c3",
+      "file": "quiet.go",
+      "start": {
+        "line": 63,
+        "column": 3
+      },
+      "end": {
+        "line": 63,
+        "column": 20
+      },
+      "original": "log.Print(\"zero\")",
+      "replacement": "",
+      "rule": "logging"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

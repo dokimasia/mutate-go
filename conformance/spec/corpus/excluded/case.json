@@ -1,0 +1,10 @@
+{
+  "case": "excluded",
+  "proves": "A constant expression, a generated file and a file outside the build have no mutant. The record lists the constant expression as skipped, the generated file with the two mutants that it would have, and nothing of the file outside the build.",
+  "fixture": "blocks multiplies by a constant that a constant expression defines. next is in a generated file, and previous in a file that no build compiles.",
+  "mutants": [
+    { "scope": "blocks", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "blocks", "kind": "aor", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

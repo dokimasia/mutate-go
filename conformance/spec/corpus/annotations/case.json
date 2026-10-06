@@ -1,0 +1,17 @@
+{
+  "case": "annotations",
+  "proves": "An annotation suppresses the listed kinds on its line. An annotation without a reason and an annotation that suppresses nothing are run errors, which stop the run before any mutant runs.",
+  "fixture": "clamp has an annotation of its boundary mutant after code. half has an annotation without a reason, and twice an annotation of a kind its line does not have, each on a line of its own.",
+  "mutants": [
+    { "scope": "clamp", "kind": "sbr-delete", "nth": 0, "verdict": "not-run" },
+    { "scope": "clamp", "kind": "ror-boundary", "nth": 0, "verdict": "suppressed" },
+    { "scope": "clamp", "kind": "ror-false", "nth": 0, "verdict": "not-run" },
+    { "scope": "clamp", "kind": "sbr-zero", "nth": 0, "verdict": "not-run" },
+    { "scope": "clamp", "kind": "sbr-zero", "nth": 1, "verdict": "not-run" },
+    { "scope": "half", "kind": "sbr-zero", "nth": 0, "verdict": "not-run" },
+    { "scope": "half", "kind": "aor", "nth": 0, "verdict": "not-run" },
+    { "scope": "twice", "kind": "sbr-zero", "nth": 0, "verdict": "not-run" },
+    { "scope": "twice", "kind": "aor", "nth": 0, "verdict": "not-run" }
+  ],
+  "errors": ["annotation-without-reason", "stale-annotation"]
+}

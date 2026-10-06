@@ -1,0 +1,10 @@
+{
+  "case": "nothing-to-run",
+  "proves": "A run in which every mutant is not-selected, suppressed or not-viable runs no test, so a suite that fails with no mutant active is no run error.",
+  "fixture": "inc adds one, and its test expects two more. The selection is the line of inc's doc comment, which has no mutant.",
+  "mutants": [
+    { "scope": "inc", "kind": "sbr-zero", "nth": 0, "verdict": "not-selected" },
+    { "scope": "inc", "kind": "aor", "nth": 0, "verdict": "not-selected" }
+  ],
+  "errors": []
+}

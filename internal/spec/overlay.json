@@ -1,0 +1,219 @@
+{
+  "language": "go",
+  "version": "1.0.0",
+  "comment": "//",
+  "generated": "^// Code generated .* DO NOT EDIT\\.$",
+  "files": [
+    "The files the go command compiles for the target platform under the build's constraints, as go list reports them in GoFiles and CgoFiles.",
+    "Not test files, and not files that go/ast.IsGenerated reports, unless the comments before such a file's package clause contain a line that is exactly the comment marker followed by the catalogue's include directive, //dokimi:mutate-include. A generator writes that line to make its output a target."
+  ],
+  "scopes": [
+    "A function F has the scope F.",
+    "A method M of the type T or *T has the scope T.M, without T's type parameters.",
+    "An initializer of a package-level variable or constant V has the scope V.",
+    "A package-level type T has the scope T.",
+    "Every init function has the scope init.",
+    "A function literal has the scope around it."
+  ],
+  "tokens": "The tokens that go/scanner returns for the site's source, without comments and without the semicolons the scanner inserts at line ends. An operator is written as Go spells it, and any other token as its text.",
+  "zero": "The zero value of each result type T, as Go code writes it: 0 when T's underlying type is a number, \"\" when it is a string, false when it is a boolean, nil when it is a pointer, a slice, a map, a channel, a function, an interface or unsafe.Pointer, T{} when it is a struct or an array, with T written as the result's type is written, and *new(T) when T is a type parameter.",
+  "kinds": {
+    "aor": [
+      "A binary expression with +, -, *, / or % whose operands and result are of the same integer or floating-point type, or untyped constants of it.",
+      "An assignment statement with +=, -=, *=, /= or %= and one target of an integer or floating-point type.",
+      "Not viable when it divides an integer by a constant whose value is 0, as x / 0 for x * 0 and x /= 0 for x *= 0: the compiler rejects the division."
+    ],
+    "ror-boundary": [
+      "A binary expression with <, <=, > or >= whose result is bool or an untyped boolean."
+    ],
+    "ror-true": [
+      "A binary expression with <=, >=, == or != whose result is bool or an untyped boolean, with == and != whatever the operands' types."
+    ],
+    "ror-false": [
+      "A binary expression with <, >, == or != whose result is bool or an untyped boolean, with == and != whatever the operands' types."
+    ],
+    "lcr-left": [
+      "A binary expression with && or || whose result is bool or an untyped boolean.",
+      "The mutant does not evaluate the right operand. Its source writes that operand behind a constant that skips it, as (a) || false && (b), so a name that only the right operand uses remains in use."
+    ],
+    "lcr-right": [
+      "The sites of lcr-left.",
+      "The mutant does not evaluate the left operand. Its source writes that operand behind a constant that skips it, as false && (a) || (b)."
+    ],
+    "lcr-true": [
+      "The sites of lcr-left with ||.",
+      "The mutant evaluates neither operand. Its source writes both behind the constant, as true || (a) || (b)."
+    ],
+    "lcr-false": [
+      "The sites of lcr-left with &&.",
+      "The mutant evaluates neither operand. Its source writes both behind the constant, as false && ((a) && (b))."
+    ],
+    "uoi-incdec": [
+      "An increment or decrement statement of an integer or floating-point operand, in a statement list or as the post statement of a for loop."
+    ],
+    "uoi-not": [
+      "An identifier, a selector, a call, an index, a type assertion, a dereference or a !x expression whose value is bool or an untyped boolean and is not a constant.",
+      "Not the target of an assignment, not the source of a comma-ok assignment, not the operand of & or !, not an operand of && or ||, in parentheses or not, not a composite literal's key, not a selector's name, not a called function, and not an expression statement, a deferred call or a go statement."
+    ],
+    "uoi-minus": [
+      "A unary minus of an integer or floating-point operand whose value is not a constant."
+    ],
+    "sbr-delete": [
+      "An expression, send, if, for, range, switch, type switch, select, block, defer or go statement, or an assignment that is not a short variable declaration and does not assign only to the blank identifier.",
+      "Only in a block, or in the body of a case or a communication clause.",
+      "Not a statement that contains a label, and not the last statement of its list when that statement is terminating in the sense of the Go specification.",
+      "An increment or decrement statement is not deleted. uoi-incdec mutates it.",
+      "The mutant's source writes the statement behind a constant that skips it, as if false { statement }, so a variable, an imported package or a label that only the statement uses remains in use."
+    ],
+    "sbr-zero": [
+      "A return statement with results, unless every result is already the zero value of its type.",
+      "A result is the zero value of its type when it is nil, a constant whose value is 0, \"\" or false, *new(T) of a type T, or a composite literal of a struct or an array type whose every element is such a result. A composite literal of a slice or a map type is not nil, so it is not a zero value, and *new(x) of an expression x is the value of x.",
+      "The mutant does not evaluate the results. Its source writes the return of the zero values before the original return, which then never runs, as if true { return 0, nil } followed by return f(x), err."
+    ]
+  },
+  "skips": [
+    {
+      "reason": "constant expression",
+      "where": "A comparison, a connector, or arithmetic on numbers, whose value is a constant, array lengths included. Only the outermost such expression is listed."
+    },
+    {
+      "reason": "operand of type-parameter type",
+      "where": "Arithmetic, an ordered comparison, a compound assignment, a unary minus, or an increment or decrement in a for loop's post statement, whose operand has a type-parameter type."
+    },
+    {
+      "reason": "untyped constant in a non-constant shift",
+      "where": "Arithmetic or an ordered comparison with an operand that contains a non-constant shift whose left operand is an untyped constant, when the operands' type is neither predeclared nor declared at package level by the package without type parameters."
+    },
+    {
+      "reason": "named boolean result",
+      "where": "A comparison or a connector whose value has a named boolean type."
+    },
+    {
+      "reason": "assignment target with side effects",
+      "where": "A compound assignment, or an increment or decrement in a for loop's post statement, whose target is not an identifier or a chain of selectors on one."
+    },
+    {
+      "reason": "file imports C",
+      "where": "Every site in a file that go list reports in CgoFiles."
+    }
+  ],
+  "families": {
+    "logging": [
+      "log.Output",
+      "log.Print",
+      "log.Printf",
+      "log.Println",
+      "(*log.Logger).Output",
+      "(*log.Logger).Print",
+      "(*log.Logger).Printf",
+      "(*log.Logger).Println",
+      "log/slog.Debug",
+      "log/slog.DebugContext",
+      "log/slog.Error",
+      "log/slog.ErrorContext",
+      "log/slog.Info",
+      "log/slog.InfoContext",
+      "log/slog.Log",
+      "log/slog.LogAttrs",
+      "log/slog.Warn",
+      "log/slog.WarnContext",
+      "(*log/slog.Logger).Debug",
+      "(*log/slog.Logger).DebugContext",
+      "(*log/slog.Logger).Error",
+      "(*log/slog.Logger).ErrorContext",
+      "(*log/slog.Logger).Info",
+      "(*log/slog.Logger).InfoContext",
+      "(*log/slog.Logger).Log",
+      "(*log/slog.Logger).LogAttrs",
+      "(*log/slog.Logger).Warn",
+      "(*log/slog.Logger).WarnContext"
+    ],
+    "timing": [
+      "context.WithDeadline",
+      "context.WithDeadlineCause",
+      "context.WithTimeout",
+      "context.WithTimeoutCause",
+      "time.After",
+      "time.AfterFunc",
+      "time.NewTicker",
+      "time.NewTimer",
+      "time.Sleep",
+      "time.Tick",
+      "(*time.Ticker).Reset",
+      "(*time.Timer).Reset"
+    ],
+    "flags": [
+      "flag.Bool",
+      "flag.BoolFunc",
+      "flag.BoolVar",
+      "flag.Duration",
+      "flag.DurationVar",
+      "flag.Float64",
+      "flag.Float64Var",
+      "flag.Func",
+      "flag.Int",
+      "flag.Int64",
+      "flag.Int64Var",
+      "flag.IntVar",
+      "flag.String",
+      "flag.StringVar",
+      "flag.TextVar",
+      "flag.Uint",
+      "flag.Uint64",
+      "flag.Uint64Var",
+      "flag.UintVar",
+      "flag.Var",
+      "(*flag.FlagSet).Bool",
+      "(*flag.FlagSet).BoolFunc",
+      "(*flag.FlagSet).BoolVar",
+      "(*flag.FlagSet).Duration",
+      "(*flag.FlagSet).DurationVar",
+      "(*flag.FlagSet).Float64",
+      "(*flag.FlagSet).Float64Var",
+      "(*flag.FlagSet).Func",
+      "(*flag.FlagSet).Int",
+      "(*flag.FlagSet).Int64",
+      "(*flag.FlagSet).Int64Var",
+      "(*flag.FlagSet).IntVar",
+      "(*flag.FlagSet).String",
+      "(*flag.FlagSet).StringVar",
+      "(*flag.FlagSet).TextVar",
+      "(*flag.FlagSet).Uint",
+      "(*flag.FlagSet).Uint64",
+      "(*flag.FlagSet).Uint64Var",
+      "(*flag.FlagSet).UintVar",
+      "(*flag.FlagSet).Var"
+    ],
+    "capacity": [
+      { "func": "make", "of": "slice", "argument": 2 },
+      { "func": "make", "of": "map", "argument": 1 },
+      { "func": "(*bytes.Buffer).Grow", "argument": 0 },
+      { "func": "(*strings.Builder).Grow", "argument": 0 },
+      { "func": "slices.Grow", "argument": 1 }
+    ],
+    "helper": [
+      "(*testing.common).Helper",
+      "(*testing.F).Helper",
+      "(testing.TB).Helper"
+    ],
+    "methods": [
+      { "family": "helper", "name": "Helper", "signature": "func()", "on": "interface" }
+    ],
+    "results": [
+      { "family": "timing", "type": "context.CancelFunc" }
+    ]
+  },
+  "variables": [
+    "A result rule puts a call of a variable into its family when the variable is declared inside a function's body, an assignment gives it the result of the rule's type of a call of a function or method that the family lists, every other assignment to it does the same, and no expression takes its address.",
+    "A call of a variable is a call expression whose function, without parentheses, is an identifier that go/types resolves to the variable.",
+    "An assignment is an assignment statement, a short variable declaration, a variable declaration with values, or a range clause, whose left side contains the variable. A declaration without values assigns nothing. A parameter, a result, a receiver, a package-level variable and a field are not declared inside a function's body.",
+    "The result is the call's result at the variable's position when the right side is one call, or the call's only result when the right side lists one value per variable. Its type is the type of that result in the called function's signature, as go/types writes it, whatever type the variable declares."
+  ],
+  "compound": [
+    "An if, for, range, switch, type switch or block statement, labelled or not, is suppressed by a family that lists calls when every statement of its bodies is suppressed, it contains a call that such a family lists, and its header has no effect. A block statement is a block in a statement list, and an if statement can also be the else branch of another.",
+    "The bodies are the block and the else branch of an if statement, the block of a loop, the clauses of a switch or a type switch, and the statements of a block. A statement of a body is suppressed when it is an expression, defer or go statement whose call such a family lists, an empty statement, or such a compound statement.",
+    "The header is the init, condition and post statements, the range clause, the switch's tag, the type switch's guard and the expressions of the cases. It has no effect when it calls nothing but conversions, the builtins len, cap, min, max, real, imag and complex, and the APIs of such families, receives from no channel, assigns only to variables that the statement declares, and ranges over no channel and no function.",
+    "The statement's family is the family of its first call, in source order, that such a family lists. Every site inside the statement, its own deletion included, is suppressed with that family.",
+    "An if or switch statement that meets every condition but the header's keeps its deletion and the sites of each part of its header that has an effect. The condition, the tag and the expressions of the cases only choose which body runs, so each of them that has no effect is suppressed with the family of the first call of the bodies, in source order, that such a family lists. A loop's condition decides how often its header runs, so a loop gets no such suppression."
+  ]
+}

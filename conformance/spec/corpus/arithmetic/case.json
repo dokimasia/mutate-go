@@ -1,0 +1,19 @@
+{
+  "case": "arithmetic",
+  "proves": "Each arithmetic operator and compound assignment has one aor mutant, and a test that checks a result kills the mutants that change it. The remainder is not checked, so its mutant survives.",
+  "fixture": "ops applies +, -, *, / and % to two numbers and returns the five results. step adds with += and doubles with *=. The tests check every result of ops but the remainder, and the result of step.",
+  "mutants": [
+    { "scope": "ops", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "ops", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "ops", "kind": "aor", "nth": 1, "verdict": "killed" },
+    { "scope": "ops", "kind": "aor", "nth": 2, "verdict": "killed" },
+    { "scope": "ops", "kind": "aor", "nth": 3, "verdict": "killed" },
+    { "scope": "ops", "kind": "aor", "nth": 4, "verdict": "survived" },
+    { "scope": "step", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "step", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "step", "kind": "aor", "nth": 1, "verdict": "killed" },
+    { "scope": "step", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "step", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

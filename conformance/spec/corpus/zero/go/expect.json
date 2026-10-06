@@ -1,0 +1,188 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "find",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "508b293917bcc3d4",
+      "file": "zero.go",
+      "start": {
+        "line": 11,
+        "column": 2
+      },
+      "end": {
+        "line": 15,
+        "column": 3
+      },
+      "original": "for _, p := range ps { if p.x == x { return p, true } }",
+      "replacement": ""
+    },
+    {
+      "scope": "find",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "3c5c3a3c0b109190",
+      "file": "zero.go",
+      "start": {
+        "line": 12,
+        "column": 3
+      },
+      "end": {
+        "line": 14,
+        "column": 4
+      },
+      "original": "if p.x == x { return p, true }",
+      "replacement": ""
+    },
+    {
+      "scope": "find",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "ef46998483c610b8",
+      "file": "zero.go",
+      "start": {
+        "line": 12,
+        "column": 6
+      },
+      "end": {
+        "line": 12,
+        "column": 14
+      },
+      "original": "p.x == x",
+      "replacement": "true"
+    },
+    {
+      "scope": "find",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "cff6a3d35ff1891b",
+      "file": "zero.go",
+      "start": {
+        "line": 12,
+        "column": 6
+      },
+      "end": {
+        "line": 12,
+        "column": 14
+      },
+      "original": "p.x == x",
+      "replacement": "false"
+    },
+    {
+      "scope": "find",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "25987723f9a37727",
+      "file": "zero.go",
+      "start": {
+        "line": 13,
+        "column": 4
+      },
+      "end": {
+        "line": 13,
+        "column": 18
+      },
+      "original": "return p, true",
+      "replacement": "return point{}, false"
+    },
+    {
+      "scope": "first",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "896db511a1463ab0",
+      "file": "zero.go",
+      "start": {
+        "line": 27,
+        "column": 2
+      },
+      "end": {
+        "line": 29,
+        "column": 3
+      },
+      "original": "if len(xs) > 0 { return xs[0] }",
+      "replacement": ""
+    },
+    {
+      "scope": "first",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "223caf706117e95f",
+      "file": "zero.go",
+      "start": {
+        "line": 27,
+        "column": 5
+      },
+      "end": {
+        "line": 27,
+        "column": 16
+      },
+      "original": "len(xs) > 0",
+      "replacement": "len(xs) >= 0"
+    },
+    {
+      "scope": "first",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7b15150ad11fdad6",
+      "file": "zero.go",
+      "start": {
+        "line": 27,
+        "column": 5
+      },
+      "end": {
+        "line": 27,
+        "column": 16
+      },
+      "original": "len(xs) > 0",
+      "replacement": "false"
+    },
+    {
+      "scope": "first",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "316ce7bf7b25a958",
+      "file": "zero.go",
+      "start": {
+        "line": 28,
+        "column": 3
+      },
+      "end": {
+        "line": 28,
+        "column": 15
+      },
+      "original": "return xs[0]",
+      "replacement": "return *new(T)"
+    },
+    {
+      "scope": "empty",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "6ac504248e185061",
+      "file": "zero.go",
+      "start": {
+        "line": 35,
+        "column": 2
+      },
+      "end": {
+        "line": 35,
+        "column": 16
+      },
+      "original": "return []int{}",
+      "replacement": "return nil"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

@@ -1,0 +1,53 @@
+{
+  "language": "go",
+  "suite": [
+    "conformance"
+  ],
+  "mutants": [
+    {
+      "scope": "Scale",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2c4d50ec7304e4ec",
+      "file": "scale.go",
+      "start": {
+        "line": 7,
+        "column": 2
+      },
+      "end": {
+        "line": 7,
+        "column": 19
+      },
+      "original": "return x * factor",
+      "replacement": "return 0",
+      "tests": [
+        "TestScaleByOne"
+      ]
+    },
+    {
+      "scope": "Scale",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e4f9fa08024e20cc",
+      "file": "scale.go",
+      "start": {
+        "line": 7,
+        "column": 9
+      },
+      "end": {
+        "line": 7,
+        "column": 19
+      },
+      "original": "x * factor",
+      "replacement": "x / factor",
+      "tests": [
+        "fixture/conformance: TestScale"
+      ]
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

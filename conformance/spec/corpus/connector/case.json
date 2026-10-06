@@ -1,0 +1,16 @@
+{
+  "case": "connector",
+  "proves": "A connector has a left mutant, a right mutant, and false for && or true for ||. Its operands have no negation. The right operand alone passes the tests of &&, because no test has a false left operand.",
+  "fixture": "both returns a && b, and either returns a || b. The test of both checks both true, and a true with b false. The test of either checks each operand true alone, and neither.",
+  "mutants": [
+    { "scope": "both", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "both", "kind": "lcr-left", "nth": 0, "verdict": "killed" },
+    { "scope": "both", "kind": "lcr-right", "nth": 0, "verdict": "survived" },
+    { "scope": "both", "kind": "lcr-false", "nth": 0, "verdict": "killed" },
+    { "scope": "either", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "either", "kind": "lcr-left", "nth": 0, "verdict": "killed" },
+    { "scope": "either", "kind": "lcr-right", "nth": 0, "verdict": "killed" },
+    { "scope": "either", "kind": "lcr-true", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

@@ -1,0 +1,122 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "fill",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2adb27298f5783bf",
+      "file": "fill.go",
+      "start": {
+        "line": 6,
+        "column": 2
+      },
+      "end": {
+        "line": 8,
+        "column": 3
+      },
+      "original": "for i := 0; i != n; i++ { xs = append(xs, 0) }",
+      "replacement": ""
+    },
+    {
+      "scope": "fill",
+      "kind": "ror-true",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "46e2e4c881107d79",
+      "file": "fill.go",
+      "start": {
+        "line": 6,
+        "column": 14
+      },
+      "end": {
+        "line": 6,
+        "column": 20
+      },
+      "original": "i != n",
+      "replacement": "true",
+      "tests": [
+        "TestFill"
+      ]
+    },
+    {
+      "scope": "fill",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "ad9a2c49575a61a9",
+      "file": "fill.go",
+      "start": {
+        "line": 6,
+        "column": 14
+      },
+      "end": {
+        "line": 6,
+        "column": 20
+      },
+      "original": "i != n",
+      "replacement": "false"
+    },
+    {
+      "scope": "fill",
+      "kind": "uoi-incdec",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "ba40232c35ba5bb7",
+      "file": "fill.go",
+      "start": {
+        "line": 6,
+        "column": 22
+      },
+      "end": {
+        "line": 6,
+        "column": 25
+      },
+      "original": "i++",
+      "replacement": "i--",
+      "tests": [
+        "TestFill"
+      ]
+    },
+    {
+      "scope": "fill",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "acc1e7dea8900b03",
+      "file": "fill.go",
+      "start": {
+        "line": 7,
+        "column": 3
+      },
+      "end": {
+        "line": 7,
+        "column": 21
+      },
+      "original": "xs = append(xs, 0)",
+      "replacement": ""
+    },
+    {
+      "scope": "fill",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "39aa991b4b283150",
+      "file": "fill.go",
+      "start": {
+        "line": 9,
+        "column": 2
+      },
+      "end": {
+        "line": 9,
+        "column": 11
+      },
+      "original": "return xs",
+      "replacement": "return nil"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

@@ -1,0 +1,62 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "blocks",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "6c6234ea69cb43fd",
+      "file": "blocks.go",
+      "start": {
+        "line": 8,
+        "column": 2
+      },
+      "end": {
+        "line": 8,
+        "column": 17
+      },
+      "original": "return n * size",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "blocks",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "cb4c4e4f765ea926",
+      "file": "blocks.go",
+      "start": {
+        "line": 8,
+        "column": 9
+      },
+      "end": {
+        "line": 8,
+        "column": 17
+      },
+      "original": "n * size",
+      "replacement": "n / size"
+    }
+  ],
+  "skipped": [
+    {
+      "file": "blocks.go",
+      "start": {
+        "line": 4,
+        "column": 14
+      },
+      "end": {
+        "line": 4,
+        "column": 22
+      },
+      "reason": "constant expression"
+    }
+  ],
+  "generated": [
+    {
+      "file": "generated.go",
+      "mutants": 2
+    }
+  ],
+  "errors": []
+}

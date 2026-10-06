@@ -1,0 +1,10 @@
+{
+  "case": "failing-suite",
+  "proves": "A suite that fails with no mutant active is the run error control-failed, and no mutant runs.",
+  "fixture": "inc adds one. Its test expects two more.",
+  "mutants": [
+    { "scope": "inc", "kind": "sbr-zero", "nth": 0, "verdict": "not-run" },
+    { "scope": "inc", "kind": "aor", "nth": 0, "verdict": "not-run" }
+  ],
+  "errors": ["control-failed"]
+}

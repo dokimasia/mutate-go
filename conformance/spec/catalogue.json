@@ -1,0 +1,121 @@
+{
+  "key": "dokimi-mutate-key/1",
+  "annotation": "dokimi:mutate-skip",
+  "include": "dokimi:mutate-include",
+  "classes": [
+    {
+      "id": "aor",
+      "name": "Arithmetic operator replacement",
+      "kinds": ["aor"]
+    },
+    {
+      "id": "ror",
+      "name": "Relational operator replacement",
+      "kinds": ["ror-boundary", "ror-true", "ror-false"]
+    },
+    {
+      "id": "lcr",
+      "name": "Logical connector replacement",
+      "kinds": ["lcr-left", "lcr-right", "lcr-true", "lcr-false"]
+    },
+    {
+      "id": "uoi",
+      "name": "Unary operator insertion",
+      "kinds": ["uoi-incdec", "uoi-not", "uoi-minus"]
+    },
+    {
+      "id": "sbr",
+      "name": "Statement removal",
+      "kinds": ["sbr-delete", "sbr-zero"]
+    }
+  ],
+  "kinds": [
+    {
+      "id": "aor",
+      "class": "aor",
+      "description": "Replaces + with -, - with +, * with /, / with * and % with *, in an expression or a compound assignment of numbers."
+    },
+    {
+      "id": "ror-boundary",
+      "class": "ror",
+      "description": "Replaces < with <=, <= with <, > with >= and >= with >."
+    },
+    {
+      "id": "ror-true",
+      "class": "ror",
+      "description": "Replaces a comparison with <=, >=, == or != with true. Both operands are still evaluated."
+    },
+    {
+      "id": "ror-false",
+      "class": "ror",
+      "description": "Replaces a comparison with <, >, == or != with false. Both operands are still evaluated."
+    },
+    {
+      "id": "lcr-left",
+      "class": "lcr",
+      "description": "Replaces a && b or a || b with a. The right operand is not evaluated."
+    },
+    {
+      "id": "lcr-right",
+      "class": "lcr",
+      "description": "Replaces a && b or a || b with b. The left operand is not evaluated."
+    },
+    {
+      "id": "lcr-true",
+      "class": "lcr",
+      "description": "Replaces a || b with true. Neither operand is evaluated."
+    },
+    {
+      "id": "lcr-false",
+      "class": "lcr",
+      "description": "Replaces a && b with false. Neither operand is evaluated."
+    },
+    {
+      "id": "uoi-incdec",
+      "class": "uoi",
+      "description": "Replaces x++ with x-- and x-- with x++."
+    },
+    {
+      "id": "uoi-not",
+      "class": "uoi",
+      "description": "Replaces a boolean operand x with !x, and !x with x."
+    },
+    {
+      "id": "uoi-minus",
+      "class": "uoi",
+      "description": "Replaces -x with x, where x is not a constant."
+    },
+    {
+      "id": "sbr-delete",
+      "class": "sbr",
+      "description": "Removes a statement."
+    },
+    {
+      "id": "sbr-zero",
+      "class": "sbr",
+      "description": "Replaces the values a return statement returns with the zero value of each result type."
+    }
+  ],
+  "families": [
+    {
+      "id": "logging",
+      "description": "Calls that write log records, and their arguments."
+    },
+    {
+      "id": "timing",
+      "description": "Calls that sleep, set a deadline or timeout, define a backoff, or wait for a service to become ready, their arguments, and calls of the cancel function that such a call returns."
+    },
+    {
+      "id": "flags",
+      "description": "Calls that register a configuration flag, and their arguments."
+    },
+    {
+      "id": "capacity",
+      "description": "Arguments that only size an allocation: a capacity or a size hint."
+    },
+    {
+      "id": "helper",
+      "description": "Calls that mark a function as a test helper, which change only the location that a failure reports."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "case": "hang",
+  "proves": "A mutant that makes a counting loop endless is timed-out, and the record names the test that was running.",
+  "fixture": "sum adds the numbers from 1 to n in a loop. A loop condition that is always true, and an increment that becomes a decrement, never end the loop.",
+  "mutants": [
+    { "scope": "sum", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "sum", "kind": "ror-boundary", "nth": 0, "verdict": "killed" },
+    { "scope": "sum", "kind": "ror-true", "nth": 0, "verdict": "timed-out" },
+    { "scope": "sum", "kind": "uoi-incdec", "nth": 0, "verdict": "timed-out" },
+    { "scope": "sum", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "sum", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "sum", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

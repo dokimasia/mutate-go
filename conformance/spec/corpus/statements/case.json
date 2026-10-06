@@ -1,0 +1,13 @@
+{
+  "case": "statements",
+  "proves": "A loop, an assignment and a return are statement sites, and a short variable declaration is not. The deletion of an assignment whose effect no test reads survives. The deletion of the loop's only read of its variable runs, and the test kills it.",
+  "fixture": "total sums a list in a loop, stores the sum in a package variable, and returns it. The test checks the result and not the variable.",
+  "mutants": [
+    { "scope": "total", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "total", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "total", "kind": "sbr-delete", "nth": 1, "verdict": "killed" },
+    { "scope": "total", "kind": "sbr-delete", "nth": 2, "verdict": "survived" },
+    { "scope": "total", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}
