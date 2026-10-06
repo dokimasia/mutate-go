@@ -1,0 +1,90 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Every job runs the toolchain that setup-go installs, and the tests run the
+# same go command.
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  # Every test on the latest Go release, and every statement covered.
+  cover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+      - run: make cover
+  # The module's go line is 1.21, so every test also runs on Go 1.21.0, the
+  # oldest toolchain that the line admits. Some files compile only for
+  # toolchains before Go 1.25, so their coverage counts here.
+  cover-min:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.21.0
+          cache: false
+      - run: make cover
+  # The workers, the limits of each run and the progress lines run on
+  # goroutines of their own.
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+      - run: make race
+  # The vendored definition matches the manifest beside it. A difference
+  # from mutate-spec fails only a change that touches the copy: falling
+  # behind is allowed, and committing a copy that matches no upstream is not.
+  spec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Did this change touch the vendored copy?
+        id: touched
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
+            echo "strict=" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$base" HEAD -- conformance/spec | grep -q .; then
+            echo "strict=--strict" >> "$GITHUB_OUTPUT"
+          else
+            echo "strict=" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check the vendored definition
+        run: ./tools/spec-check.sh conformance/spec ${{ steps.touched.outputs.strict }}
+  # The linters are pinned, so a release cannot change what this job checks
+  # between two runs of one commit.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+      - run: npm install --global markdownlint-cli2@0.23.3
+      - run: make lint

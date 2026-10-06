@@ -1,0 +1,145 @@
+# golangci-lint configuration for mutate-go.
+#
+# Reference: https://golangci-lint.run/usage/configuration/
+#
+# The set below is assert-go's baseline. Every linter named is a "no
+# false-positive" check or a high-signal modernization rule.
+
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+  tests: true
+
+output:
+  show-stats: true
+  sort-order:
+    - linter
+    - severity
+    - file
+
+linters:
+  default: none
+  enable:
+    # Correctness. copyloopvar is not enabled: the module's go line is
+    # 1.21, where the iterations of a loop share its variable, and the copy
+    # that copyloopvar reports is required.
+    - errcheck
+    - errorlint
+    - govet
+    - nilerr
+    - staticcheck
+    - unused
+    - wastedassign
+    # Modernization
+    - modernize
+    - unparam
+    # Style
+    - dupl
+    - dupword
+    - gocritic
+    - misspell
+    - revive
+    - usestdlibvars
+    # Concurrency
+    - asasalint
+    - contextcheck
+    - errname
+    # Test hygiene
+    - testpackage
+    - thelper
+    - tparallel
+    - usetesting
+
+  settings:
+    # The tests compare listings of Go source, whose zero values repeat nil,
+    # as in return nil, nil.
+    dupword:
+      ignore:
+        - "nil,"
+
+    gocritic:
+      enabled-tags: [diagnostic]
+      disabled-checks:
+        - ifElseChain
+
+    # Every test file declares the package x_test, so a test calls only
+    # what its package exports. The pattern matches no file name, and an
+    # empty pattern would match every one. The tests of the command are in
+    # package main, which testpackage allows by default.
+    testpackage:
+      skip-regexp: "^$"
+
+    revive:
+      severity: warning
+      rules:
+        # thelper requires the test first in a test helper, so a helper
+        # that takes a context takes it second.
+        - name: context-as-argument
+          arguments:
+            - allowTypesBefore: "*testing.T"
+        - name: var-naming
+        - name: package-comments
+        - name: receiver-naming
+        - name: error-return
+        - name: error-naming
+        - name: error-strings
+        - name: errorf
+        - name: if-return
+        - name: indent-error-flow
+        - name: early-return
+        - name: unused-receiver
+
+    govet:
+      enable-all: true
+
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      # fieldalignment is noise outside hot-path structs.
+      - linters: [govet]
+        text: "fieldalignment:"
+      # A spec mirrors the behaviour of its source file, and the fixtures
+      # of two specs repeat the same small packages.
+      - linters: [dupl]
+        path: _test\.go
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+
+  # The vendored definition must keep the bytes that its manifest states,
+  # and the fixture of the corpus case identity writes receivers in
+  # parentheses, which gofmt removes.
+  exclusions:
+    paths:
+      - conformance/spec
+
+  settings:
+    golines:
+      max-len: 120
+    gofumpt: {}
+    # Match what `ergon fmt` writes, which puts this module's own imports
+    # in a group of their own.
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(go.dokimi.dev/mutate)
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  fix: false
+
+severity:
+  default: error

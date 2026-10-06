@@ -1,0 +1,45 @@
+{
+  "languages": {
+    "Go": {
+      "format_on_save": "on",
+      "formatter": {
+        "external": {
+          "command": "golangci-lint",
+          "arguments": ["fmt", "--stdin"]
+        }
+      },
+      "preferred_line_length": 120,
+      "hard_tabs": true
+    }
+  },
+  "lsp": {
+    "gopls": {
+      "initialization_options": {
+        "staticcheck": true,
+        "gofumpt": true,
+        "usePlaceholders": true,
+        "analyses": {
+          "nilness": true,
+          "unusedparams": true,
+          "unusedwrite": true,
+          "useany": true,
+          "shadow": false
+        },
+        "hints": {
+          "assignVariableTypes": false,
+          "compositeLiteralFields": true,
+          "constantValues": true,
+          "functionTypeParameters": true,
+          "parameterNames": false,
+          "rangeVariableTypes": false
+        },
+        "codelenses": {
+          "generate": true,
+          "test": true,
+          "tidy": true,
+          "upgrade_dependency": true
+        }
+      }
+    }
+  }
+}
