@@ -16,7 +16,9 @@ import (
 
 // The lines of a unified diff that ParseDiff reads.
 const (
-	// newHeader starts the header that names a file's new version.
+	// oldHeader and newHeader start the headers that name a file's old and
+	// new versions.
+	oldHeader = "--- "
 	newHeader = "+++ "
 	// hunkStart starts the header of a hunk, @@ -start,count +start,count @@,
 	// and hunkEnd is its last field.
@@ -60,6 +62,15 @@ const (
 // with more lines of a version than its header states, a line of a hunk
 // without a line's prefix, a diff that ends inside a hunk, and a file that
 // does not read.
+//
+// A line of a version directly after a hunk's last line, or after the note
+// of a missing final line break there, is one line more than the hunk's
+// header states, and ParseDiff returns an error for it. These lines are
+// lines of a version:
+//
+//   - a line that starts with a space, + or -, other than a file's header
+//   - an empty line, which a tool writes for a line that both versions have
+//   - a note of a missing final line break
 func ParseDiff(text string) ([]Lines, error) {
 	d := &diff{files: map[string][]string{}, selected: map[string]map[int]bool{}}
 	// The line break that ends the diff ends its last line, and starts none.
@@ -95,8 +106,11 @@ type diff struct {
 }
 
 // hunk reads the hunk whose header is lines[at], and returns the index of
-// its last line. It selects the lines that the hunk adds, and the lines of
-// the file before and after each run of removed lines.
+// its last line, or of the note of a missing final line break that follows
+// that line. It selects the lines that the hunk adds, and the lines of the
+// file before and after each run of removed lines. A line of a version after
+// the hunk is an error, as a line of a version past either count inside it
+// is.
 //
 // n is the number of the new version's next line. The header's range fits
 // an int, so n is between 1 and the range's end plus 1: a line of the new
@@ -159,7 +173,36 @@ func (d *diff) hunk(lines []string, at int) (int, error) {
 			return 0, err
 		}
 	}
+	// The note of a missing final line break can follow the hunk's last
+	// line. A header, the metadata of the next file or the end of the diff
+	// follows them, and a line of a version there is a line more than the
+	// header states.
+	if i+1 < len(lines) && strings.HasPrefix(lines[i+1], string(noteLine)) {
+		i++
+	}
+	if i+1 < len(lines) && versionLine(lines[i+1]) {
+		return 0, fmt.Errorf("selection: the hunk %q has more lines than its header states", lines[at])
+	}
 	return i, nil
+}
+
+// versionLine reports whether line can be a line of a hunk: an empty line,
+// which is a line that both versions have and whose space a tool stripped,
+// a line that starts with the prefix of a line of a version and does not
+// start a file's header, or a note of a missing final line break.
+func versionLine(line string) bool {
+	if line == "" {
+		return true
+	}
+	switch line[0] {
+	case keptLine, noteLine:
+		return true
+	case addedLine:
+		return !strings.HasPrefix(line, newHeader)
+	case removedLine:
+		return !strings.HasPrefix(line, oldHeader)
+	}
+	return false
 }
 
 // file returns the lines of the file whose hunks the diff reads, without

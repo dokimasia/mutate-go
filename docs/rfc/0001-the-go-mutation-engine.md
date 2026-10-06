@@ -296,6 +296,13 @@ file as cargo-mutants' `--in-diff` selects them:
   because the diff is older or newer than the checkout. So does a hunk with
   more lines of a version than its header counts, and a header whose range
   ends past the largest `int`.
+- A hunk ends after the lines that its header counts, and after the note
+  of a missing final line break that can follow them. The next line starts
+  a header or the metadata of a file. These lines stop the command there,
+  as lines past the hunk's counts:
+  - a line that starts with a space, `+` or `-` and does not start a header
+  - an empty line, which a tool writes for a line that both versions have
+  - a second note
 - A package whose files the selection does not touch runs none of its
   mutants. Its record's `selection` is an empty list, and each of its
   mutants is `not-selected`.

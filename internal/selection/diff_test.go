@@ -154,6 +154,19 @@ func TestDiff(t *testing.T) {
 				"diff --git a/logo.png b/logo.png\nBinary files a/logo.png and b/logo.png differ\n",
 				"",
 			},
+			{
+				"reads the metadata of the next file after a hunk's last line",
+				"diff --git a/sum.go b/sum.go\nindex 1111111..2222222 100644\n--- a/sum.go\n+++ %[1]s\n@@ -5 +5 @@\n" +
+					"-\ttotal -= b\n+\ttotal += b\ndiff --git a/other.go b/other.go\nindex 3333333..4444444 100644\n" +
+					"--- a/other.go\n+++ %[2]s\n@@ -1 +1 @@\n-package old\n+package fixture\n",
+				"sum.go:4-5\nother.go:1-1\n",
+			},
+			{
+				"reads the old version's header of the next file after a hunk's last line",
+				"+++ %[2]s\n@@ -1 +1 @@\n-package old\n+package fixture\n--- a/sum.go\n+++ %[1]s\n@@ -5 +5 @@\n" +
+					"-\ttotal -= b\n+\ttotal += b\n",
+				"other.go:1-1\nsum.go:4-5\n",
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -251,6 +264,30 @@ func TestDiff(t *testing.T) {
 				"+++ %[1]s\n@@ -1,0 +1,1 @@\n-package fixture\n+package fixture\n", "more lines than its header states",
 			},
 			{
+				"returns an error for a line that both versions have after a hunk's last line",
+				"+++ %[1]s\n@@ -1 +1 @@\n-package old\n+package fixture\n \n", "more lines than its header states",
+			},
+			{
+				"returns an error for an added line after a hunk's last line",
+				"+++ %[1]s\n@@ -1 +1 @@\n-package old\n+package fixture\n+// more\n",
+				"more lines than its header states",
+			},
+			{
+				"returns an error for a removed line after a hunk's last line",
+				"+++ %[1]s\n@@ -1 +1 @@\n-package old\n+package fixture\n-// less\n",
+				"more lines than its header states",
+			},
+			{
+				"returns an error for an empty line after a hunk's last line",
+				"+++ %[1]s\n@@ -1 +1 @@\n-package old\n+package fixture\n\n", "more lines than its header states",
+			},
+			{
+				"returns an error for a second note after a hunk's last line",
+				"+++ %[1]s\n@@ -1 +1 @@\n-package old\n+package fixture\n\\ No newline at end of file\n" +
+					"\\ No newline at end of file\n",
+				"more lines than its header states",
+			},
+			{
 				"returns an error for a new range of lines at line 0",
 				"+++ %[1]s\n@@ -0,0 +0,1 @@\n+a\n",
 				"does not parse",
@@ -310,6 +347,7 @@ func FuzzDiff(f *testing.F) {
 		"@@ -0,0 +1,7 @@\n+package fixture\n+\n",
 		"@@ -1 +9223372036854775807,0 @@\n-a\n",
 		"@@ -1,2 +1,0 @@\n-a\n\\ No newline at end of file\n+b\n",
+		"@@ -1 +1 @@\n-package old\n+package fixture\n\\ No newline at end of file\n+// more\n",
 	} {
 		f.Add(seed)
 	}
