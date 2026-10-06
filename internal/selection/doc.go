@@ -22,6 +22,6 @@
 //
 // # Dependency position
 //
-// Imports fmt, maps, os, path/filepath, slices, strconv and strings from
-// the standard library. It imports no package from this module.
+// Imports fmt, maps, math, os, path/filepath, slices, strconv and strings
+// from the standard library. It imports no package from this module.
 package selection

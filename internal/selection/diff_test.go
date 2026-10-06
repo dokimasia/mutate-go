@@ -24,6 +24,14 @@ const sumFile = "package fixture\n\nfunc sum(a, b int) int {\n\ttotal := a\n\tto
 // fileMode is the mode of the files that the tests write.
 const fileMode = 0o644
 
+// docFile is a file of the package, which a diff names relative to the
+// test's working directory, the package's directory.
+const docFile = "doc.go"
+
+// newHeader starts the header that names a file's new version. FuzzDiff
+// skips an input that contains one, so every hunk reads the fuzzed file.
+const newHeader = "+++ "
+
 // diffFiles writes each of files into a new directory and returns the
 // absolute path of each, by name.
 func diffFiles(t *testing.T, files map[string]string) map[string]string {
@@ -68,7 +76,8 @@ func TestDiff(t *testing.T) {
 		tests := []struct {
 			name string
 			// give is the diff, with %[1]s for the path of sum.go, %[2]s for the
-			// path of other.go, and %[3]s for the quoted path of sum.go after b/.
+			// path of other.go, %[3]s for the quoted path of sum.go after b/,
+			// and %[4]s for the path of an empty file.
 			give string
 			want string
 		}{
@@ -83,13 +92,23 @@ func TestDiff(t *testing.T) {
 				"sum.go:4-5\n",
 			},
 			{
-				"returns the line before removed lines that end a hunk without context",
+				"returns the lines on either side of removed lines in a hunk without context",
 				"--- a/sum.go\n+++ b/%[1]s\n@@ -6,2 +5,0 @@\n-\ttotal *= 2\n-\ttotal *= 3\n",
-				"sum.go:5-5\n",
+				"sum.go:5-6\n",
 			},
 			{
-				"returns no line before removed lines at the top of a file",
+				"returns the line after removed lines at the top of a file",
 				"--- a/sum.go\n+++ b/%[1]s\n@@ -1,1 +0,0 @@\n-// a comment\n",
+				"sum.go:1-1\n",
+			},
+			{
+				"returns the line before removed lines at the end of a file",
+				"--- a/sum.go\n+++ b/%[1]s\n@@ -8,1 +7,0 @@\n-// a comment\n",
+				"sum.go:7-7\n",
+			},
+			{
+				"returns no line beside removed lines that empty a file",
+				"--- a/empty.go\n+++ b/%[4]s\n@@ -1,1 +0,0 @@\n-package fixture\n",
 				"",
 			},
 			{
@@ -139,8 +158,12 @@ func TestDiff(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				paths := diffFiles(t, map[string]string{"sum.go": sumFile, "other.go": "package fixture"})
-				text := fmt.Sprintf(tt.give, paths["sum.go"], paths["other.go"], strconv.Quote("b/"+paths["sum.go"]))
+				paths := diffFiles(
+					t,
+					map[string]string{"sum.go": sumFile, "other.go": "package fixture", "empty.go": ""},
+				)
+				text := fmt.Sprintf(tt.give, paths["sum.go"], paths["other.go"], strconv.Quote("b/"+paths["sum.go"]),
+					paths["empty.go"])
 				got, err := selection.ParseDiff(text)
 				assert.NoError(t, err, "the diff parses")
 				assert.NotNil(t, got, "a diff selects an empty list where it selects no line")
@@ -181,9 +204,9 @@ func TestDiff(t *testing.T) {
 			t.Parallel()
 			wd, err := os.Getwd()
 			assert.NoError(t, err, "the working directory reads")
-			got, err := selection.ParseDiff("+++ b/sub/gone.go\n@@ -2,1 +1,0 @@\n-\treturn\n")
-			assert.NoError(t, err, "a diff that removes a line reads no file")
-			assert.Equal(t, got, []selection.Lines{{Path: filepath.Join(wd, "sub", "gone.go"), First: 1, Last: 1}},
+			got, err := selection.ParseDiff("+++ b/" + docFile + "\n@@ -2,1 +1,0 @@\n-// a line\n")
+			assert.NoError(t, err, "the diff reads the package's own file")
+			assert.Equal(t, got, []selection.Lines{{Path: filepath.Join(wd, docFile), First: 1, Last: 2}},
 				"the path is the working directory's")
 		})
 
@@ -208,6 +231,26 @@ func TestDiff(t *testing.T) {
 			{"returns an error for a new count that is not a number", "+++ %[1]s\n@@ -1 +1,y @@\n", "does not parse"},
 			{"returns an error for a negative count", "+++ %[1]s\n@@ -1,-1 +1 @@\n", "does not parse"},
 			{
+				"returns an error for a range whose end does not fit an int",
+				"+++ %[1]s\n@@ -1 +9223372036854775807,1 @@\n", "does not parse",
+			},
+			{
+				"returns an error for an empty range whose next line does not fit an int",
+				"+++ %[1]s\n@@ -1 +9223372036854775807,0 @@\n-package fixture\n", "does not parse",
+			},
+			{
+				"returns an error for a line that both versions have past the old count",
+				"+++ %[1]s\n@@ -1,1 +1,2 @@\n package fixture\n \n", "more lines than its header states",
+			},
+			{
+				"returns an error for an added line past the new count",
+				"+++ %[1]s\n@@ -1,2 +1,0 @@\n-package fixture\n+package fixture\n", "more lines than its header states",
+			},
+			{
+				"returns an error for a removed line past the old count",
+				"+++ %[1]s\n@@ -1,0 +1,1 @@\n-package fixture\n+package fixture\n", "more lines than its header states",
+			},
+			{
 				"returns an error for a new range of lines at line 0",
 				"+++ %[1]s\n@@ -0,0 +0,1 @@\n+a\n",
 				"does not parse",
@@ -222,12 +265,24 @@ func TestDiff(t *testing.T) {
 				"ends inside the hunk",
 			},
 			{
+				"returns an error for a diff whose final line break ends inside a hunk",
+				"+++ %[1]s\n@@ -1,2 +1,2 @@\n package fixture\n", "ends inside the hunk",
+			},
+			{
 				"returns an error for a line without a prefix", "+++ %[1]s\n@@ -1 +1 @@\n*package fixture\n",
 				"has no line's prefix",
 			},
 			{
 				"returns an error for a file that does not read", "+++ %[1]s.missing\n@@ -1 +1 @@\n package fixture\n",
 				"no such file",
+			},
+			{
+				"returns an error for a file that does not read before its removed lines",
+				"+++ %[1]s.missing\n@@ -2,1 +1,0 @@\n-package fixture\n", "no such file",
+			},
+			{
+				"returns an error for a file that does not read after removed lines at its top",
+				"+++ %[1]s.missing\n@@ -1,1 +0,0 @@\n-package fixture\n", "no such file",
 			},
 		}
 		for _, tt := range errs {
@@ -240,6 +295,39 @@ func TestDiff(t *testing.T) {
 					HasPrefix("selection: ", "the error starts with the package's name").
 					Contains(tt.want, "and states the cause")
 			})
+		}
+	})
+}
+
+// FuzzDiff parses hunks of any text under a header of sumFile. ParseDiff
+// returns an error or a selection of lines that the file has, and never
+// panics.
+func FuzzDiff(f *testing.F) {
+	for _, seed := range []string{
+		"@@ -3,3 +3,4 @@\n func sum(a, b int) int {\n \ttotal := a\n+\ttotal += b\n \treturn total\n",
+		"@@ -6,2 +5,0 @@\n-\ttotal *= 2\n-\ttotal *= 3\n",
+		"@@ -1,1 +0,0 @@\n-// a comment\n",
+		"@@ -0,0 +1,7 @@\n+package fixture\n+\n",
+		"@@ -1 +9223372036854775807,0 @@\n-a\n",
+		"@@ -1,2 +1,0 @@\n-a\n\\ No newline at end of file\n+b\n",
+	} {
+		f.Add(seed)
+	}
+	path := filepath.Join(f.TempDir(), "sum.go")
+	assert.NoError(f, os.WriteFile(path, []byte(sumFile), fileMode), "sum.go is written")
+	lines := strings.Count(sumFile, "\n")
+	f.Fuzz(func(t *testing.T, hunks string) {
+		if strings.Contains(hunks, newHeader) {
+			t.Skip("a header would name another file")
+		}
+		got, err := selection.ParseDiff(newHeader + path + "\n" + hunks)
+		if err != nil {
+			return
+		}
+		for _, l := range got {
+			assert.Equal(t, l.Path, path, "the selection names the fuzzed file")
+			assert.InRange(t, l.First, 1, float64(lines), "the range starts at a line of the file")
+			assert.InRange(t, l.Last, float64(l.First), float64(lines), "and ends at a later line of the file")
 		}
 	})
 }

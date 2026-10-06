@@ -6,6 +6,7 @@ package selection
 import (
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -41,10 +42,13 @@ const (
 // ParseDiff returns the selection that the unified diff text states for
 // the new version of each file, such as the output of git diff: each line
 // that the diff adds, and the lines on either side of each run of lines
-// that it removes, as cargo-mutants' --in-diff selects them. The path of a
-// new version, after its b/ prefix, is relative to the working directory. A
-// file that the diff deletes selects no line, and a diff that selects no
-// line returns an empty selection, which selects none.
+// that it removes, as cargo-mutants' --in-diff selects them. The lines
+// beside a run of removed lines are selected whether the hunk shows them as
+// context or not, so a diff without context, such as git diff -U0's,
+// selects the same lines. The path of a new version, after its b/ prefix,
+// is relative to the working directory. A file that the diff deletes
+// selects no line, and a diff that selects no line returns an empty
+// selection, which selects none.
 //
 // # Errors
 //
@@ -52,11 +56,14 @@ const (
 // an error when a line that the diff adds or keeps is not the file's line
 // at its number, because the diff is then older or newer than the file. It
 // also returns an error for a hunk before the first file header, a hunk
-// header that does not parse, a line of a hunk without a line's prefix, a
-// diff that ends inside a hunk, and a file that does not read.
+// header that does not parse or whose range does not fit an int, a hunk
+// with more lines of a version than its header states, a line of a hunk
+// without a line's prefix, a diff that ends inside a hunk, and a file that
+// does not read.
 func ParseDiff(text string) ([]Lines, error) {
 	d := &diff{files: map[string][]string{}, selected: map[string]map[int]bool{}}
-	lines := strings.Split(text, "\n")
+	// The line break that ends the diff ends its last line, and starts none.
+	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
 	header := false
 	for i := 0; i < len(lines); i++ {
 		switch line := lines[i]; {
@@ -88,15 +95,18 @@ type diff struct {
 }
 
 // hunk reads the hunk whose header is lines[at], and returns the index of
-// its last line. It selects the lines that the hunk adds, the line before
-// each run of removed lines, and the line after it when the hunk keeps
-// that line.
+// its last line. It selects the lines that the hunk adds, and the lines of
+// the file before and after each run of removed lines.
+//
+// n is the number of the new version's next line. The header's range fits
+// an int, so n is between 1 and the range's end plus 1: a line of the new
+// version is one of the range's lines, and the line after an empty range
+// is the line after its start.
 func (d *diff) hunk(lines []string, at int) (int, error) {
 	oldCount, start, newCount, err := hunkHeader(lines[at])
 	if err != nil {
 		return 0, err
 	}
-	// An empty new range starts after the line that its header names.
 	n := start
 	if newCount == 0 {
 		n++
@@ -113,7 +123,12 @@ func (d *diff) hunk(lines []string, at int) (int, error) {
 		if body == "" {
 			body = string(keptLine)
 		}
-		switch body[0] {
+		kind := body[0]
+		if kind == keptLine && (oldCount == 0 || newCount == 0) || kind == addedLine && newCount == 0 ||
+			kind == removedLine && oldCount == 0 {
+			return 0, fmt.Errorf("selection: the hunk %q has more lines than its header states", lines[at])
+		}
+		switch kind {
 		case keptLine:
 			if err := d.keep(n, body[1:], afterRemoved); err != nil {
 				return 0, err
@@ -125,8 +140,10 @@ func (d *diff) hunk(lines []string, at int) (int, error) {
 			}
 			n, newCount, afterRemoved = n+1, newCount-1, false
 		case removedLine:
-			if !afterRemoved && n > 1 {
-				d.mark(n - 1)
+			if !afterRemoved {
+				if err := d.beside(n - 1); err != nil {
+					return 0, err
+				}
 			}
 			oldCount, afterRemoved = oldCount-1, true
 		case noteLine:
@@ -135,20 +152,40 @@ func (d *diff) hunk(lines []string, at int) (int, error) {
 			return 0, fmt.Errorf("selection: the line %q of the hunk %q has no line's prefix", lines[i], lines[at])
 		}
 	}
+	if afterRemoved {
+		// The removed lines end the hunk, so the file's next line, which a
+		// hunk without context does not show, follows them.
+		if err := d.beside(n); err != nil {
+			return 0, err
+		}
+	}
 	return i, nil
 }
 
+// file returns the lines of the file whose hunks the diff reads, without
+// their line breaks, and reads the file the first time.
+func (d *diff) file() ([]string, error) {
+	if file, ok := d.files[d.path]; ok {
+		return file, nil
+	}
+	data, err := os.ReadFile(d.path)
+	if err != nil {
+		return nil, fmt.Errorf("selection: %w", err)
+	}
+	file := []string{}
+	for line := range strings.Lines(string(data)) {
+		file = append(file, strings.TrimSuffix(line, "\n"))
+	}
+	d.files[d.path] = file
+	return file, nil
+}
+
 // keep checks that line n of the file is text, and selects it when
-// selected is true.
+// selected is true. n is at least 1.
 func (d *diff) keep(n int, text string, selected bool) error {
-	file, ok := d.files[d.path]
-	if !ok {
-		data, err := os.ReadFile(d.path)
-		if err != nil {
-			return fmt.Errorf("selection: %w", err)
-		}
-		file = strings.Split(string(data), "\n")
-		d.files[d.path] = file
+	file, err := d.file()
+	if err != nil {
+		return err
 	}
 	if n > len(file) || file[n-1] != text {
 		return fmt.Errorf("selection: the diff states line %d of %s otherwise than the file, so it is out of date",
@@ -160,11 +197,26 @@ func (d *diff) keep(n int, text string, selected bool) error {
 	return nil
 }
 
-// mark selects line n of the file whose hunks the diff reads.
-func (d *diff) mark(n int) {
-	if d.path == "" {
-		return
+// beside selects line n, a line before or after a run of removed lines,
+// when the file has it. Removed lines at the start or the end of a file
+// have no line on that side, and a file that the diff deletes has none.
+func (d *diff) beside(n int) error {
+	if d.path == "" || n < 1 {
+		return nil
 	}
+	file, err := d.file()
+	if err != nil {
+		return err
+	}
+	if n <= len(file) {
+		d.mark(n)
+	}
+	return nil
+}
+
+// mark selects line n of the file whose hunks the diff reads, a file that
+// the diff does not delete.
+func (d *diff) mark(n int) {
 	if d.selected[d.path] == nil {
 		d.selected[d.path] = map[int]bool{}
 		d.order = append(d.order, d.path)
@@ -225,8 +277,10 @@ func hunkHeader(line string) (oldCount, start, newCount int, err error) {
 }
 
 // hunkRange parses start,count, or start alone with a count of 1, and
-// reports whether both are numbers of at least 0 and a range of at least
-// one line starts at line 1 or later. Only an empty range starts at 0.
+// reports whether both are numbers of at least 0, a range of at least one
+// line starts at line 1 or later, and the number of the line after the
+// range's last line, or after the start of an empty range, fits an int.
+// Only an empty range starts at 0.
 func hunkRange(r string) (start, count int, ok bool) {
 	first, rest, comma := strings.Cut(r, ",")
 	start, err := strconv.Atoi(first)
@@ -234,5 +288,6 @@ func hunkRange(r string) (start, count int, ok bool) {
 	if comma && err == nil {
 		count, err = strconv.Atoi(rest)
 	}
-	return start, count, err == nil && count >= 0 && (start >= 1 || start == 0 && count == 0)
+	return start, count, err == nil && count >= 0 && (start >= 1 || start == 0 && count == 0) &&
+		start <= math.MaxInt-max(count, 1)
 }

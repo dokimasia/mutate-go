@@ -286,12 +286,16 @@ file as cargo-mutants' `--in-diff` selects them:
 
 - Each line that the diff adds is selected, and so are the lines on either
   side of each run of lines that it removes, where the new version has
-  them. A file that the diff deletes selects no line.
+  them. A hunk need not show those lines as context, so a diff without
+  context, such as the output of `git diff -U0`, selects the same lines. A
+  file that the diff deletes selects no line.
 - The path of each new version, after its `b/` prefix, is relative to the
   working directory, as a path of `-lines` is.
 - The engine reads each file that the diff states. A line that the diff
   adds or keeps, and that the file states otherwise, stops the command,
-  because the diff is older or newer than the checkout.
+  because the diff is older or newer than the checkout. So does a hunk with
+  more lines of a version than its header counts, and a header whose range
+  ends past the largest `int`.
 - A package whose files the selection does not touch runs none of its
   mutants. Its record's `selection` is an empty list, and each of its
   mutants is `not-selected`.
