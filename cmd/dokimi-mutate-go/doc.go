@@ -104,7 +104,8 @@
 // Exit status:
 //
 //	0  Every counted mutant was detected, and every run completed.
-//	1  A package has a mutant that survived or that no test covers.
+//	1  A package has a mutant that survived or that no test covers, in
+//	   its sample when -sample ended its run.
 //	2  The command line or an input is invalid.
 //	3  A run failed, such as a package that does not build, tests that
 //	   fail without a mutant, or a run that -timeout ended. The command

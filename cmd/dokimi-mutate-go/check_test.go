@@ -16,6 +16,7 @@ import (
 	"go.dokimi.dev/mutate/internal/load"
 	"go.dokimi.dev/mutate/internal/record"
 	"go.dokimi.dev/mutate/internal/run"
+	"go.dokimi.dev/mutate/internal/spec"
 )
 
 // testSession returns a session whose runs have the environment env and
@@ -123,5 +124,57 @@ func TestCheck(t *testing.T) {
 			assert.Equal(t, got, exitFailed, "a listing without its directory fails")
 			assert.HasPrefix(t, errs.String(), name+": fixture: run: ", "the note states the error")
 		})
+	})
+
+	t.Run("exitStatus", func(t *testing.T) {
+		t.Parallel()
+		limit := 1
+		tests := []struct {
+			name string
+			give *record.Record
+			want int
+		}{
+			{
+				name: "returns exitDetected for a sample whose mutants the tests detect",
+				give: &record.Record{
+					Mutants: []record.Mutant{
+						{Key: "a", Verdict: spec.Killed},
+						{Key: "b", Verdict: spec.NotRun},
+						{Key: "c", Verdict: spec.NoCoverage},
+					},
+					Sample: &record.Sample{Before: "b", Limit: &limit, Detected: 1},
+				},
+				want: exitDetected,
+			},
+			{
+				name: "returns exitUndetected for a sample with a mutant that no test covers",
+				give: &record.Record{
+					Mutants: []record.Mutant{{Key: "a", Verdict: spec.NoCoverage}, {Key: "b", Verdict: spec.NotRun}},
+					Sample:  &record.Sample{Before: "b", Limit: &limit, Undetected: 1},
+				},
+				want: exitUndetected,
+			},
+			{
+				name: "returns exitUndetected for a mutant that no test covers in a run without a sample",
+				give: &record.Record{
+					Mutants: []record.Mutant{{Key: "a", Verdict: spec.Killed}, {Key: "b", Verdict: spec.NoCoverage}},
+				},
+				want: exitUndetected,
+			},
+			{
+				name: "returns exitFailed for a sample that the deadline ended",
+				give: &record.Record{
+					Mutants: []record.Mutant{{Key: "a", Verdict: spec.Killed}, {Key: "b", Verdict: spec.NotRun}},
+					Sample:  &record.Sample{Before: "b", Detected: 1},
+				},
+				want: exitFailed,
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				assert.Equal(t, exitStatus(tt.give), tt.want, "the status follows the counted mutants")
+			})
+		}
 	})
 }

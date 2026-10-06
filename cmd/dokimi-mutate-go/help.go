@@ -78,7 +78,8 @@ func help(w io.Writer, computed map[string]string) {
 	paragraph(&b, "Progress lines and errors go to standard error.")
 	b.WriteString("Exit status:\n\n" +
 		flagIndent + "0  Every counted mutant was detected, and every run completed.\n" +
-		flagIndent + "1  A package has a mutant that survived or that no test covers.\n" +
+		flagIndent + "1  A package has a mutant that survived or that no test covers, in\n" +
+		flagIndent + "   its sample when -" + flagSample + " ended its run.\n" +
 		flagIndent + "2  The command line or an input is invalid.\n" +
 		flagIndent + "3  A run failed, such as a package that does not build, tests that\n" +
 		flagIndent + "   fail without a mutant, or a run that -" + flagTimeout + " ended. The command\n" +

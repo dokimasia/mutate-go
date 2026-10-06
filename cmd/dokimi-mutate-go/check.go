@@ -9,7 +9,6 @@ import (
 	"go.dokimi.dev/mutate/internal/load"
 	"go.dokimi.dev/mutate/internal/record"
 	"go.dokimi.dev/mutate/internal/run"
-	"go.dokimi.dev/mutate/internal/spec"
 )
 
 // The command's exit statuses. When more than one applies, the command
@@ -37,11 +36,10 @@ type session struct {
 }
 
 // check runs mutation testing on pkg with procs threads, and returns the
-// exit status of its run: exitFailed for a run that fails, that returns an
-// error or whose record does not write, exitUndetected for a run with a
-// mutant that survived or that no test covers, and exitDetected otherwise.
-// It writes each listed mutant's line when the mutant's verdict is final,
-// and the run's result when the run ends.
+// exit status of its run: exitFailed for a run that returns an error or
+// whose record does not write, and the status that exitStatus states
+// otherwise. It writes each listed mutant's line when the mutant's verdict
+// is final, and the run's result when the run ends.
 func (s *session) check(ctx context.Context, pkg load.Listed, procs int) int {
 	cfg := s.cfg
 	cfg.Dir, cfg.Procs = pkg.Dir, procs
@@ -57,22 +55,13 @@ func (s *session) check(ctx context.Context, pkg load.Listed, procs int) int {
 		return exitFailed
 	}
 	s.out.result(rec)
-	status := exitDetected
-	for _, m := range rec.Mutants {
-		if definition.Protocol.Class(m.Verdict) == spec.Undetected {
-			status = exitUndetected
-		}
-	}
 	if s.records != "" {
 		if _, err := rec.Write(s.records); err != nil {
 			s.out.errorf("%v", err)
 			return exitFailed
 		}
 	}
-	if rec.Failed() {
-		return exitFailed
-	}
-	return status
+	return exitStatus(rec)
 }
 
 // list lists the mutants of pkg with procs threads, and returns the exit
@@ -90,6 +79,26 @@ func (s *session) list(ctx context.Context, pkg load.Listed, procs int) int {
 	s.out.listing(rec)
 	if len(rec.Errors) > 0 {
 		return exitFailed
+	}
+	return exitDetected
+}
+
+// exitStatus returns the exit status of the run whose record is rec:
+// exitFailed for a run that fails, exitUndetected for a run with a mutant
+// that survived or that no test covers, and exitDetected otherwise. A run
+// that the limit of -sample ended exits by its sample, whose mutants the
+// score counts, so a mutant without coverage after the sample does not
+// change the status.
+func exitStatus(rec *record.Record) int {
+	if rec.Failed() {
+		return exitFailed
+	}
+	_, undetected := rec.Tally(definition.Protocol, "")
+	if rec.Sample != nil && rec.Sample.Limit != nil {
+		undetected = rec.Sample.Undetected
+	}
+	if undetected > 0 {
+		return exitUndetected
 	}
 	return exitDetected
 }
