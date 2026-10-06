@@ -213,6 +213,8 @@ Steps sbr-zero 0: killed [TestSteps]
 					away.Do(func() { moveErr = os.Rename(dir, moved) })
 				case spec.Error:
 					back.Do(func() { backErr = os.Rename(moved, dir) })
+				default:
+					// Every other verdict leaves the directory where it is.
 				}
 			}})
 			assert.NoError(t, moveErr, "the directory moves away")

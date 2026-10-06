@@ -208,8 +208,9 @@ func comparison(m *enumerate.Mutant) string {
 		return "true"
 	case spec.RORFalse:
 		return "false"
+	default:
+		return "x " + m.Op.String() + " y"
 	}
-	return "x " + m.Op.String() + " y"
 }
 
 // step returns the operator that an increment or a decrement applies.

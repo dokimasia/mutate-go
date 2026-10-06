@@ -421,6 +421,7 @@ suppressed mutant with its reason, and the score leaves it out.
 | `make fmt` | Formats the Go sources |
 | `make spec-sync` | Copies mutate-spec's definition into `conformance/spec`, checks it against its manifest, and copies the files that the engine embeds into `internal/spec` |
 | `make spec-check` | Checks the vendored definition against its manifest, and reports whether it is behind mutate-spec |
+| `make mutate` | Runs the engine of the working tree on the module's own packages. `MUTATE_FLAGS` passes flags, such as `MUTATE_FLAGS=-list` |
 
 `conformance/spec` contains the vendored copy of mutate-spec's definition
 and the Go fixtures of its corpus. The test of `conformance` runs every case

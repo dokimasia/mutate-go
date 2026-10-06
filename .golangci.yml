@@ -27,6 +27,7 @@ linters:
     - copyloopvar
     - errcheck
     - errorlint
+    - exhaustive
     - govet
     - nilerr
     - staticcheck
@@ -39,6 +40,7 @@ linters:
     - dupl
     - dupword
     - gocritic
+    - goconst
     - misspell
     - revive
     - usestdlibvars
@@ -63,6 +65,13 @@ linters:
       enabled-tags: [diagnostic]
       disabled-checks:
         - ifElseChain
+
+    # A switch over a vocabulary of the definition, such as the verdicts or
+    # the kinds, lists every value or has a default clause, as in core.
+    exhaustive:
+      default-signifies-exhaustive: true
+      check:
+        - switch
 
     # Every test file declares the package x_test, so a test calls only
     # what its package exports. The pattern matches no file name, and an
@@ -104,8 +113,11 @@ linters:
       - linters: [govet]
         text: "fieldalignment:"
       # A spec mirrors the behaviour of its source file, and the fixtures
-      # of two specs repeat the same small packages.
-      - linters: [dupl]
+      # of two specs repeat the same small packages. The fixtures and the
+      # messages of the tests repeat their file names and expected text,
+      # and the constants that a test pins have their own blocks, as in
+      # core.
+      - linters: [dupl, goconst]
         path: _test\.go
 
 formatters:

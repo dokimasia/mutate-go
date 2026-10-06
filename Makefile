@@ -1,11 +1,15 @@
 # The gate of mutate-go. CI runs the same targets, and `make check` runs
 # them all. `make help` lists every target with its `## ` annotation.
 
-.PHONY: help fmt build lint lint-go lint-md test race cover check spec-sync spec-check
+.PHONY: help fmt build lint lint-go lint-md test race cover check spec-sync spec-check mutate
 
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
 MARKDOWNLINT ?= markdownlint-cli2
+
+# MUTATE_FLAGS are the flags of the run of make mutate, such as -list, or
+# -workers 4 -record out.
+MUTATE_FLAGS ?=
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "; printf "Targets:\n"} \
@@ -45,5 +49,8 @@ spec-sync: ## Refresh the vendored definition from mutate-spec, and the files th
 
 spec-check: ## Check that the vendored definition is intact, and report whether it is behind
 	./tools/spec-check.sh conformance/spec
+
+mutate: ## Run the engine of the working tree on the module's own packages
+	$(GO) run ./cmd/dokimi-mutate-go $(MUTATE_FLAGS) ./...
 
 .DEFAULT_GOAL := help

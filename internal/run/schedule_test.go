@@ -113,6 +113,9 @@ func TestSchedule(t *testing.T) {
 						"the record states the caller's limit")
 				case spec.Killed, spec.Survived:
 					ran = append(ran, m.Key)
+				default:
+					// Unused's mutants have no coverage, and neither run nor
+					// wait.
 				}
 			}
 			assert.Length(t, ran, 2, "two mutants run")
