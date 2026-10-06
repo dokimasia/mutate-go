@@ -37,6 +37,7 @@
 // Imports context, crypto/sha256, encoding/hex, fmt, io/fs, os,
 // path/filepath, runtime, runtime/debug, slices, strconv, strings, sync,
 // syscall and time from the standard library, and internal/enumerate,
-// internal/load, internal/memory, internal/record, internal/render,
-// internal/selection, internal/spec and internal/testbin from this module.
+// internal/load, internal/memory, internal/process, internal/record,
+// internal/render, internal/selection, internal/spec and internal/testbin
+// from this module.
 package run

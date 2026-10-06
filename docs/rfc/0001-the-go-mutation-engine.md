@@ -455,6 +455,12 @@ path in place of `.`.
   message, or that only the instrumented build fails. A build that the
   caller cancels states no run error.
 
+Every go command that the engine runs, the build included, runs in a
+process group of its own, and the caller's cancellation sends `SIGKILL` to
+the group. A go command that runs through a wrapper script then ends with
+every process that the wrapper started, and the engine waits at most 5 s
+for the command's output after the group ended.
+
 Every run of a test binary runs in its package's directory with a fresh
 `TMPDIR`, in a process group of its own, with these flags:
 
@@ -481,6 +487,12 @@ this way:
 
 The engine also enforces the limits from outside the binary:
 
+- **Exit.** A run ends when the test binary exits, whatever its output
+  does. The engine then sends `SIGKILL` to the process group, which ends
+  each process that a test started and left, so such a process neither
+  delays the run nor turns its verdict into a timeout. The engine reads the
+  rest of the output for at most 5 s, the bound for a process that left the
+  group and keeps the output open.
 - **Deadline.** 5 s after the deadline, the engine sends `SIGKILL` to the
   process group. This stops a hang that the testing package's timer cannot
   stop, such as one during package initialization.

@@ -38,8 +38,8 @@ const (
 	// environment writes its working directory and the variables of its
 	// temporary directory.
 	environment = "environment"
-	// orphan starts a copy of itself that hangs, writes the copy's process
-	// ID into the file of pidFileVar, and exits.
+	// orphan starts a copy of itself that hangs and keeps its output open,
+	// writes the copy's process ID into the file of pidFileVar, and exits.
 	orphan = "orphan"
 )
 
@@ -84,7 +84,7 @@ func fake(mode string) int {
 	case orphan:
 		self, _ := os.Executable()
 		child := exec.Command(self)
-		child.Env = append(os.Environ(), fakeVar+"="+hangs)
+		child.Env, child.Stdout = append(os.Environ(), fakeVar+"="+hangs), os.Stdout
 		if child.Start() != nil {
 			return 1
 		}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.dokimi.dev/mutate/internal/memory"
+	"go.dokimi.dev/mutate/internal/process"
 )
 
 // BackupDelay is how long after a run's deadline Run ends the run's process
@@ -23,7 +24,8 @@ const BackupDelay = 5 * time.Second
 const pollInterval = 25 * time.Millisecond
 
 // readDelay is how long Run waits for a run's output to end after the test
-// binary exited. A process that the binary started can hold the output open.
+// binary exited and Run ended its group. A process that the binary started
+// and that left the group can keep the output open.
 const readDelay = 5 * time.Second
 
 // The variables that name a run's temporary directory, for Unix and for
@@ -101,8 +103,12 @@ type Result struct {
 // TEMP name and that Run removes afterwards. It ends the process group
 // cfg.Backup after cfg.Timeout, when the run's resident memory crosses
 // cfg.Ceiling where that is positive, when ctx is done, and under
-// cfg.StopAtFailure at the first failed test. It ends the processes that
-// the binary started and left when the binary exits.
+// cfg.StopAtFailure at the first failed test.
+//
+// The run ends when the binary exits, whatever its output does. Run then
+// ends the processes that the binary started and left in its group, and
+// reads the rest of the output, for readDelay at most, because a process
+// that left the group can keep the output open.
 //
 // A run that does not start, because its temporary directory or its
 // process does not start, states the error in the result and nothing else.
@@ -114,14 +120,12 @@ func Run(ctx context.Context, cfg Config) *Result {
 	cmd := exec.Command(cfg.Binary, cfg.Args...)
 	cmd.Dir = cfg.Dir
 	reader, writer := io.Pipe()
-	cmd.Stdout, cmd.Stderr = writer, writer
-	cmd.WaitDelay = readDelay
-	isolate(cmd)
+	var g *process.Group
 	tmp, err := os.MkdirTemp(cfg.Work, tmpPattern)
 	if err == nil {
 		defer os.RemoveAll(tmp)
 		cmd.Env = Setenv(cfg.Env, tmpdirVar+"="+tmp, tmpVar+"="+tmp, tempVar+"="+tmp)
-		err = cmd.Start()
+		g, err = process.Start(cmd, writer, writer)
 	}
 	if err != nil {
 		return &Result{Err: err}
@@ -135,7 +139,7 @@ func Run(ctx context.Context, cfg Config) *Result {
 		defer mu.Unlock()
 		if !exited && res.Ended == Exited {
 			res.Ended = why
-			killTree(cmd.Process)
+			g.Kill()
 		}
 	}
 	var failed func()
@@ -166,7 +170,7 @@ func Run(ctx context.Context, cfg Config) *Result {
 			}
 		}
 	}()
-	_ = cmd.Wait()
+	_ = g.Wait()
 	res.Seconds = time.Since(start).Seconds()
 	res.State = cmd.ProcessState
 	kill.Stop()
@@ -174,10 +178,8 @@ func Run(ctx context.Context, cfg Config) *Result {
 	<-watched
 	mu.Lock()
 	exited = true
-	// The processes that the test binary started and left belong to the
-	// run.
-	killTree(cmd.Process)
 	mu.Unlock()
+	g.Drain(readDelay)
 	_ = writer.Close()
 	res.Output = <-scanned
 	return res

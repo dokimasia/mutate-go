@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"go.dokimi.dev/assert"
 
@@ -65,6 +66,18 @@ func TestGo(t *testing.T) {
 			assert.That(t, err.Error()).
 				HasPrefix("go nonexistent-command: exit status 2\n", "the error states the call and its status").
 				Contains("unknown command", "and the go command's message")
+		})
+
+		t.Run("ends a go command that runs through a wrapper script when the context ends", func(t *testing.T) {
+			t.Parallel()
+			env, _ := fakeGo(t)
+			bounded, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+			defer cancel()
+			assert.CompletesWithin(t, 30*time.Second, func(context.Context) error {
+				_, err := load.Go(bounded, t.TempDir(), env, "hang")
+				assert.HasError(t, err, "the ended command fails")
+				return nil
+			}, "the wrapper and the child that keeps its output open end with the context")
 		})
 
 		t.Run("returns an error when PATH names no go command", func(t *testing.T) {

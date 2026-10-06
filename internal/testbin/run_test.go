@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -31,6 +33,15 @@ const (
 // ceiling is the memory ceiling of a run of the fake test binary that
 // grows to 256 MiB.
 const ceiling = 128 << 20
+
+// windowsOS is the GOOS of Windows, where Run ends the binary alone.
+const windowsOS = "windows"
+
+// orphanDeadline is the deadline of a run whose binary leaves a process
+// that keeps the output open. It is shorter than the 5 s for which Run reads
+// output after an exit, and longer than the 1 s that a binary of the race
+// detector sleeps when it exits.
+const orphanDeadline = 3 * time.Second
 
 // runFake runs the fake test binary with the behaviour mode and cfg, whose
 // Binary, Work and Env it sets, within the time ended.
@@ -102,6 +113,31 @@ func TestRun(t *testing.T) {
 			defer cancel()
 			res := runFake(t, ctx, hangs, testbin.Config{Timeout: longDeadline})
 			expect.Equal(t, res.Ended, testbin.Cancelled, "the run ends with the caller's context")
+		})
+
+		t.Run("ends the run at the binary's exit while its child keeps the output open", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS == windowsOS {
+				t.Skip("Run ends the binary alone on Windows")
+			}
+			pidFile := filepath.Join(t.TempDir(), "pid")
+			cfg := testbin.Config{
+				Env:     []string{pidFileVar + "=" + pidFile},
+				Timeout: orphanDeadline,
+				Backup:  shortBackup,
+			}
+			res := runFake(t, context.Background(), orphan, cfg)
+			expect.Equal(t, res.Ended, testbin.Exited, "the run ends with the binary, before its deadline")
+			expect.Equal(t, res.State.ExitCode(), 0, "with the binary's status")
+			expect.InRange(t, res.Seconds, 0, orphanDeadline.Seconds(), "within the deadline")
+			data, err := os.ReadFile(pidFile)
+			assert.NoError(t, err, "the binary writes its child's process ID")
+			pid, err := strconv.Atoi(string(data))
+			assert.NoError(t, err, "the process ID is a number")
+			assert.EventuallyTrue(t, 5*time.Second, func() bool {
+				p, err := os.FindProcess(pid)
+				return err != nil || p.Signal(syscall.Signal(0)) != nil
+			}, "the child that the binary left no longer exists")
 		})
 
 		t.Run("ends the run when its resident memory crosses the ceiling", func(t *testing.T) {

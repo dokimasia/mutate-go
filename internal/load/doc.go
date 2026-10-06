@@ -25,6 +25,6 @@
 //
 // Imports bytes, cmp, context, encoding/json, errors, fmt, go/ast,
 // go/importer, go/parser, go/token, go/types, go/version, io, os, os/exec,
-// path/filepath, reflect, runtime, slices, strconv and strings from the
-// standard library. It imports no package from this module.
+// path/filepath, reflect, runtime, slices, strconv, strings and time from
+// the standard library, and internal/process from this module.
 package load

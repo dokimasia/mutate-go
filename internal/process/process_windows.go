@@ -1,7 +1,7 @@
 // Copyright ThesmOS B.V. 2026
 // SPDX-License-Identifier: MIT
 
-package testbin
+package process
 
 import (
 	"os"
@@ -15,7 +15,7 @@ const ExeSuffix = ".exe"
 // a process tree on Windows.
 func isolate(*exec.Cmd) {}
 
-// killTree kills p alone.
-func killTree(p *os.Process) {
+// kill kills p alone. A process that ended is no error.
+func kill(p *os.Process) {
 	_ = p.Kill()
 }

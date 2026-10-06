@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"go.dokimi.dev/mutate/internal/load"
+	"go.dokimi.dev/mutate/internal/process"
 	"go.dokimi.dev/mutate/internal/spec"
-	"go.dokimi.dev/mutate/internal/testbin"
 )
 
 // The arguments of the go commands that build a test binary and read a
@@ -61,7 +61,7 @@ func (r *runner) build(ctx context.Context, err error) string {
 		if p.target != "" {
 			name = suiteBinary + strconv.Itoa(i)
 		}
-		p.bin = filepath.Join(r.work, name+binarySuffix+testbin.ExeSuffix)
+		p.bin = filepath.Join(r.work, name+binarySuffix+process.ExeSuffix)
 		if err = r.compile(ctx, r.goEnv, p, p.bin, overlay); err != nil {
 			return r.buildFailed(ctx, p, err)
 		}

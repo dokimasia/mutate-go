@@ -49,13 +49,16 @@ const (
 // fakeScript is the fake go command. It appends its arguments to the file
 // calls of the directory FAKE_GO, prints that directory's env.json for go
 // env, its list.json for go list and its working directory's PWD for go
-// pwd, and fails for any other command.
+// pwd, waits on a child that sleeps and keeps its output open for go hang,
+// as a wrapper script waits on the go command, and fails for any other
+// command.
 const fakeScript = "#!/bin/sh\n" +
 	"[ -n \"$FAKE_GO\" ] && printf '%s\\n' \"$*\" >> \"$FAKE_GO/" + callsFile + "\"\n" +
 	"case \"$1\" in\n" +
 	"env) cat \"$FAKE_GO/" + envFile + "\" ;;\n" +
 	"list) cat \"$FAKE_GO/" + listFile + "\" ;;\n" +
 	"pwd) echo \"$PWD\" ;;\n" +
+	"hang) sleep 60 & wait ;;\n" +
 	"*) echo \"unexpected go $1\" >&2; exit 2 ;;\n" +
 	"esac\n"
 
