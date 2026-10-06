@@ -34,18 +34,18 @@ func TestLines(t *testing.T) {
 	t.Run("ParseEntry", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("returns the absolute path and the range of an entry", func(t *testing.T) {
+		t.Run("returns the path as the entry writes it and the range", func(t *testing.T) {
 			t.Parallel()
 			prop.ForAll(
 				t,
-				"an entry file:first-last parses to the file's absolute path and the range",
+				"an entry file:first-last parses to the file and the range",
 				func(c *prop.Case) {
 					file := c.Draw(fileName, "file")
 					first := c.Draw(line, "first")
 					last := c.Draw(prop.Integer(first, first+100), "last")
 					got, err := selection.ParseEntry(fmt.Sprintf("%s:%d-%d", file, first, last))
 					assert.NoError(c, err, "a range from line 1 or later to its start or later parses")
-					assert.Equal(c, got, selection.Lines{Path: filepath.Join(wd, file), First: first, Last: last},
+					assert.Equal(c, got, selection.Lines{Path: file, First: first, Last: last},
 						"the file ends at the entry's last colon")
 				},
 			)
@@ -85,6 +85,24 @@ func TestLines(t *testing.T) {
 		}
 	})
 
+	t.Run("Abs", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns a relative path joined to the working directory", func(t *testing.T) {
+			t.Parallel()
+			got := selection.Lines{Path: filepath.Join("sub", "b.go"), First: 6, Last: 9}.Abs()
+			assert.Equal(t, got, selection.Lines{Path: filepath.Join(wd, "sub", "b.go"), First: 6, Last: 9},
+				"the path is the working directory's and the range is unchanged")
+		})
+
+		t.Run("returns an absolute path cleaned", func(t *testing.T) {
+			t.Parallel()
+			abs := filepath.Join(wd, "sub", "b.go")
+			got := selection.Lines{Path: abs + string(filepath.Separator), First: 1, Last: 1}.Abs()
+			assert.Equal(t, got.Path, abs, "the path does not move")
+		})
+	})
+
 	t.Run("ParseList", func(t *testing.T) {
 		t.Parallel()
 
@@ -95,7 +113,7 @@ func TestLines(t *testing.T) {
 			assert.Equal(t, got, []selection.Lines{
 				{Path: filepath.Join(wd, "a.go"), First: 5, Last: 5},
 				{Path: filepath.Join(wd, "sub", "b.go"), First: 6, Last: 9},
-			}, "each entry is a range in the list's order")
+			}, "each entry is a range in the list's order, with its path joined to the working directory")
 		})
 
 		t.Run("returns no selection for an empty list", func(t *testing.T) {

@@ -365,6 +365,146 @@ call sbr-zero 0: return *p.self() -> "return point{}"
 `, "only the return of a value that is no zero value has the mutant")
 		})
 
+		t.Run("makes a zero mutant of a return of a value that is no interface as an interface", func(t *testing.T) {
+			t.Parallel()
+			r := all(t, map[string]string{"boxed.go": `package fixture
+
+type pair struct {
+	label any
+	n     int
+}
+
+func answer() any { return 0 }
+
+func empty() any { return "" }
+
+func none() error { return nil }
+
+func boxed() any { return *new(any) }
+
+func labelled() pair { return pair{label: ""} }
+
+func positional() pair { return pair{nil, 0} }
+
+func list() [2]any { return [2]any{nil, false} }
+
+func generic[T any]() T { return *new(T) }
+
+func split() (any, error) { return nil, nil }
+
+func forward() (any, error) { return split() }
+`})
+			assert.Equal(t, listing(r, string(spec.SBRZero)), `answer sbr-zero 0: return 0 -> "return nil"
+empty sbr-zero 0: return "" -> "return nil"
+labelled sbr-zero 0: return pair{label: ""} -> "return pair{}"
+list sbr-zero 0: return [2]any{nil, false} -> "return [2]any{}"
+forward sbr-zero 0: return split() -> "return nil, nil"
+`, "a 0, an empty string and false in an interface are no nil interface, and a call's results are no zero value")
+		})
+
+		t.Run("makes no zero mutant of a return of a variable that no use writes", func(t *testing.T) {
+			t.Parallel()
+			r := all(t, map[string]string{"unwritten.go": `package fixture
+
+import "strconv"
+
+type point struct{ x, y int }
+
+func (p *point) shift() { p.x++ }
+
+func (p point) sum() int { return p.x + p.y }
+
+func index[T any](s []T, i int) (T, bool) {
+	if i < len(s) {
+		return s[i], true
+	}
+	var zero T
+	return zero, false
+}
+
+func values() (point, error, [2]int) {
+	var (
+		p   point
+		err error
+		a   [2]int
+	)
+	_, _, _ = p.sum(), len(a), a[0]
+	return p, err, a
+}
+
+func boxed() any {
+	var n int
+	return n
+}
+
+var global int
+
+func pkg() int { return global }
+
+func assign() int { var n int; n = 1; return n }
+
+func compound() int { var n int; n += 1; return n }
+
+func paren() int { var n int; (n) = 1; return n }
+
+func field() point { var p point; p.x = 1; return p }
+
+func element() [2]int { var a [2]int; a[0] = 1; return a }
+
+func declare(s string) (int, error) { var n int; n, err := strconv.Atoi(s); return n, err }
+
+func increment() int { var n int; n++; return n }
+
+func ranged(xs []int) int { var x int; for _, x = range xs {}; return x }
+
+func address() int { var n int; p := &n; *p = 1; return n }
+
+func slice() [2]byte { var a [2]byte; copy(a[:], "ab"); return a }
+
+func method() point { var p point; p.shift(); return p }
+
+func value() point { var p point; f := p.shift; f(); return p }
+
+func pointer() *int { var p *int; *p = 1; return p }
+
+func closure() int { var n int; func() { n = 1 }(); return n }
+
+func later(xs []int) int {
+	var x int
+	for i, v := range xs {
+		if i > 0 {
+			return x
+		}
+		x = v
+	}
+	return 0
+}
+
+func fresh() *point { return &point{} }
+`})
+			assert.Equal(t, listing(r, string(spec.SBRZero)), `point.sum sbr-zero 0: return p.x + p.y -> "return 0"
+index sbr-zero 0: return s[i], true -> "return *new(T), false"
+boxed sbr-zero 0: return n -> "return nil"
+pkg sbr-zero 0: return global -> "return 0"
+assign sbr-zero 0: return n -> "return 0"
+compound sbr-zero 0: return n -> "return 0"
+paren sbr-zero 0: return n -> "return 0"
+field sbr-zero 0: return p -> "return point{}"
+element sbr-zero 0: return a -> "return [2]int{}"
+declare sbr-zero 0: return n, err -> "return 0, nil"
+increment sbr-zero 0: return n -> "return 0"
+ranged sbr-zero 0: return x -> "return 0"
+address sbr-zero 0: return n -> "return 0"
+slice sbr-zero 0: return a -> "return [2]byte{}"
+method sbr-zero 0: return p -> "return point{}"
+value sbr-zero 0: return p -> "return point{}"
+pointer sbr-zero 0: return p -> "return nil"
+closure sbr-zero 0: return n -> "return 0"
+later sbr-zero 0: return x -> "return 0"
+fresh sbr-zero 0: return &point{} -> "return nil"
+`, "a return of a local variable that a use writes is a site, and one of a variable that no use writes is not")
+		})
+
 		t.Run("makes a zero mutant of a return of the value that new of an expression points to", func(t *testing.T) {
 			t.Parallel()
 			r := all(t, map[string]string{
@@ -599,6 +739,25 @@ positions uoi-not 1: present -> "!present"
 positions uoi-not 2: *q -> "!*q"
 positions uoi-not 3: !w -> "w"
 `, "a value of bool is negated where the negation compiles and changes the program")
+		})
+
+		t.Run("negates a boolean in parentheses only where the boolean without them is negated", func(t *testing.T) {
+			t.Parallel()
+			r := all(t, map[string]string{"parens.go": `package fixture
+
+func parens(b *bool, ok bool, m map[int]bool) (*bool, bool) {
+	(*b) = true
+	(ok) = m[1]
+	p := &(ok)
+	_ = map[bool]int{(ok): 1}
+	_ = !(ok)
+	return p, ((ok))
+}
+`})
+			assert.Equal(t, listing(r, string(spec.UOINot)), `parens uoi-not 0: m[1] -> "!m[1]"
+parens uoi-not 1: !(ok) -> "(ok)"
+parens uoi-not 2: ok -> "!ok"
+`, "an assignment's target, an operand of & or ! and a key keep their position in parentheses")
 		})
 
 		t.Run("keeps the statements that a deletion would break", func(t *testing.T) {

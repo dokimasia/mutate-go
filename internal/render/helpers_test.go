@@ -288,12 +288,17 @@ func semanticsFiles() map[string]string {
 }
 
 // fixture writes files into a new directory, with the module file module
-// unless files has one, and loads and enumerates the package there.
+// unless files has one, and loads and enumerates the package there. It only
+// reads files, so parallel tests can share one map.
 func fixture(t *testing.T, files map[string]string) (*load.Package, *enumerate.Result) {
 	t.Helper()
 	dir := t.TempDir()
 	if _, ok := files[goMod]; !ok {
-		files[goMod] = module
+		assert.NoError(
+			t,
+			os.WriteFile(filepath.Join(dir, goMod), []byte(module), fileMode),
+			"the module file is written",
+		)
 	}
 	for name, text := range files {
 		assert.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(text), fileMode), name+" is written")

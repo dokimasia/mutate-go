@@ -93,7 +93,7 @@ func Plain(p *load.Package, m *enumerate.Mutant) *Program {
 	case spec.SBRDelete:
 		head = "if false { " + source(s.Node) + " }"
 	case spec.SBRZero:
-		head = "if true { return " + strings.Join(s.Zeros, ", ") + " }; " + source(s.Node)
+		head = "if true { return " + oneLine([]byte(strings.Join(s.Zeros, ", "))) + " }; " + source(s.Node)
 	}
 	breaks := bytes.Count(text[start:end], []byte("\n")) - strings.Count(head+body, "\n")
 	change := head + strings.Repeat("\n", max(0, breaks)) + body

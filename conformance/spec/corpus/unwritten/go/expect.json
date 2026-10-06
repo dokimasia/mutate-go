@@ -1,0 +1,602 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "point.shift",
+      "kind": "uoi-incdec",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0f91bccaafee7e3a",
+      "file": "unwritten.go",
+      "start": {
+        "line": 12,
+        "column": 2
+      },
+      "end": {
+        "line": 12,
+        "column": 7
+      },
+      "original": "p.x++",
+      "replacement": "p.x--"
+    },
+    {
+      "scope": "index",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d1a041bedff6905b",
+      "file": "unwritten.go",
+      "start": {
+        "line": 19,
+        "column": 2
+      },
+      "end": {
+        "line": 21,
+        "column": 3
+      },
+      "original": "if i < len(s) { return s[i], true }",
+      "replacement": ""
+    },
+    {
+      "scope": "index",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4d36c023f4db1006",
+      "file": "unwritten.go",
+      "start": {
+        "line": 19,
+        "column": 5
+      },
+      "end": {
+        "line": 19,
+        "column": 15
+      },
+      "original": "i < len(s)",
+      "replacement": "i <= len(s)"
+    },
+    {
+      "scope": "index",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "1ce3ebb74b1d84ce",
+      "file": "unwritten.go",
+      "start": {
+        "line": 19,
+        "column": 5
+      },
+      "end": {
+        "line": 19,
+        "column": 15
+      },
+      "original": "i < len(s)",
+      "replacement": "false"
+    },
+    {
+      "scope": "index",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "27fa3a89bf82c635",
+      "file": "unwritten.go",
+      "start": {
+        "line": 20,
+        "column": 3
+      },
+      "end": {
+        "line": 20,
+        "column": 20
+      },
+      "original": "return s[i], true",
+      "replacement": "return *new(T), false"
+    },
+    {
+      "scope": "assigned",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "51e13b66e36353a2",
+      "file": "unwritten.go",
+      "start": {
+        "line": 36,
+        "column": 2
+      },
+      "end": {
+        "line": 36,
+        "column": 7
+      },
+      "original": "n = 3",
+      "replacement": ""
+    },
+    {
+      "scope": "assigned",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "70ae5bce1c86ffbe",
+      "file": "unwritten.go",
+      "start": {
+        "line": 37,
+        "column": 2
+      },
+      "end": {
+        "line": 37,
+        "column": 10
+      },
+      "original": "return n",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "field",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2d3e903984adf17d",
+      "file": "unwritten.go",
+      "start": {
+        "line": 43,
+        "column": 2
+      },
+      "end": {
+        "line": 43,
+        "column": 9
+      },
+      "original": "p.x = 2",
+      "replacement": ""
+    },
+    {
+      "scope": "field",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f8d92476be83bac9",
+      "file": "unwritten.go",
+      "start": {
+        "line": 44,
+        "column": 2
+      },
+      "end": {
+        "line": 44,
+        "column": 10
+      },
+      "original": "return p",
+      "replacement": "return point{}"
+    },
+    {
+      "scope": "element",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3ac779e97123d678",
+      "file": "unwritten.go",
+      "start": {
+        "line": 51,
+        "column": 2
+      },
+      "end": {
+        "line": 51,
+        "column": 10
+      },
+      "original": "a[0] = 4",
+      "replacement": ""
+    },
+    {
+      "scope": "element",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "64b2fc4cea243bbc",
+      "file": "unwritten.go",
+      "start": {
+        "line": 52,
+        "column": 2
+      },
+      "end": {
+        "line": 52,
+        "column": 10
+      },
+      "original": "return a",
+      "replacement": "return [2]int{}"
+    },
+    {
+      "scope": "declared",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "b9f0e3ab902cdcfe",
+      "file": "unwritten.go",
+      "start": {
+        "line": 60,
+        "column": 2
+      },
+      "end": {
+        "line": 60,
+        "column": 15
+      },
+      "original": "return n, err",
+      "replacement": "return 0, nil"
+    },
+    {
+      "scope": "incremented",
+      "kind": "uoi-incdec",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d5ea3f0306a56b02",
+      "file": "unwritten.go",
+      "start": {
+        "line": 66,
+        "column": 2
+      },
+      "end": {
+        "line": 66,
+        "column": 5
+      },
+      "original": "n++",
+      "replacement": "n--"
+    },
+    {
+      "scope": "incremented",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "2dce1fff9c38c9f0",
+      "file": "unwritten.go",
+      "start": {
+        "line": 67,
+        "column": 2
+      },
+      "end": {
+        "line": 67,
+        "column": 10
+      },
+      "original": "return n",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "last",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "1d0e5976fc64a907",
+      "file": "unwritten.go",
+      "start": {
+        "line": 73,
+        "column": 2
+      },
+      "end": {
+        "line": 74,
+        "column": 3
+      },
+      "original": "for _, x = range xs { }",
+      "replacement": ""
+    },
+    {
+      "scope": "last",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "fad33590e526d422",
+      "file": "unwritten.go",
+      "start": {
+        "line": 75,
+        "column": 2
+      },
+      "end": {
+        "line": 75,
+        "column": 10
+      },
+      "original": "return x",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "addressed",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "fc34202c4be70460",
+      "file": "unwritten.go",
+      "start": {
+        "line": 81,
+        "column": 2
+      },
+      "end": {
+        "line": 81,
+        "column": 9
+      },
+      "original": "set(&n)",
+      "replacement": ""
+    },
+    {
+      "scope": "addressed",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0ad59818670beac4",
+      "file": "unwritten.go",
+      "start": {
+        "line": 82,
+        "column": 2
+      },
+      "end": {
+        "line": 82,
+        "column": 10
+      },
+      "original": "return n",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "set",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "89d39f9b3a2fed74",
+      "file": "unwritten.go",
+      "start": {
+        "line": 87,
+        "column": 2
+      },
+      "end": {
+        "line": 87,
+        "column": 8
+      },
+      "original": "*p = 5",
+      "replacement": ""
+    },
+    {
+      "scope": "sliced",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4aa858d3f93e9f3b",
+      "file": "unwritten.go",
+      "start": {
+        "line": 93,
+        "column": 2
+      },
+      "end": {
+        "line": 93,
+        "column": 18
+      },
+      "original": "copy(a[:], \"ab\")",
+      "replacement": ""
+    },
+    {
+      "scope": "sliced",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "8d7eee58f927d470",
+      "file": "unwritten.go",
+      "start": {
+        "line": 94,
+        "column": 2
+      },
+      "end": {
+        "line": 94,
+        "column": 10
+      },
+      "original": "return a",
+      "replacement": "return [2]byte{}"
+    },
+    {
+      "scope": "shifted",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "6ae39219f1547c2c",
+      "file": "unwritten.go",
+      "start": {
+        "line": 100,
+        "column": 2
+      },
+      "end": {
+        "line": 100,
+        "column": 11
+      },
+      "original": "p.shift()",
+      "replacement": ""
+    },
+    {
+      "scope": "shifted",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "13eb825445828d6e",
+      "file": "unwritten.go",
+      "start": {
+        "line": 101,
+        "column": 2
+      },
+      "end": {
+        "line": 101,
+        "column": 10
+      },
+      "original": "return p",
+      "replacement": "return point{}"
+    },
+    {
+      "scope": "enclosed",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "6ca43759ca33250d",
+      "file": "unwritten.go",
+      "start": {
+        "line": 107,
+        "column": 2
+      },
+      "end": {
+        "line": 107,
+        "column": 20
+      },
+      "original": "func() { n = 8 }()",
+      "replacement": ""
+    },
+    {
+      "scope": "enclosed",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "7e6b29c5e1aa2a2c",
+      "file": "unwritten.go",
+      "start": {
+        "line": 107,
+        "column": 11
+      },
+      "end": {
+        "line": 107,
+        "column": 16
+      },
+      "original": "n = 8",
+      "replacement": ""
+    },
+    {
+      "scope": "enclosed",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a8a4d7d31df61688",
+      "file": "unwritten.go",
+      "start": {
+        "line": 108,
+        "column": 2
+      },
+      "end": {
+        "line": 108,
+        "column": 10
+      },
+      "original": "return n",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4d7b4b9064180034",
+      "file": "unwritten.go",
+      "start": {
+        "line": 116,
+        "column": 2
+      },
+      "end": {
+        "line": 121,
+        "column": 3
+      },
+      "original": "for i, v := range xs { if i > 0 { return x } x = v }",
+      "replacement": ""
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "c37939f7f192c353",
+      "file": "unwritten.go",
+      "start": {
+        "line": 117,
+        "column": 3
+      },
+      "end": {
+        "line": 119,
+        "column": 4
+      },
+      "original": "if i > 0 { return x }",
+      "replacement": ""
+    },
+    {
+      "scope": "later",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "cde175b07e124d21",
+      "file": "unwritten.go",
+      "start": {
+        "line": 117,
+        "column": 6
+      },
+      "end": {
+        "line": 117,
+        "column": 11
+      },
+      "original": "i > 0",
+      "replacement": "i >= 0"
+    },
+    {
+      "scope": "later",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "379b5fdb72118bea",
+      "file": "unwritten.go",
+      "start": {
+        "line": 117,
+        "column": 6
+      },
+      "end": {
+        "line": 117,
+        "column": 11
+      },
+      "original": "i > 0",
+      "replacement": "false"
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "bc1ec9a9264200dd",
+      "file": "unwritten.go",
+      "start": {
+        "line": 118,
+        "column": 4
+      },
+      "end": {
+        "line": 118,
+        "column": 12
+      },
+      "original": "return x",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "77184ecb48103557",
+      "file": "unwritten.go",
+      "start": {
+        "line": 120,
+        "column": 3
+      },
+      "end": {
+        "line": 120,
+        "column": 8
+      },
+      "original": "x = v",
+      "replacement": ""
+    },
+    {
+      "scope": "later",
+      "kind": "sbr-zero",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "9c180bd7daa3a798",
+      "file": "unwritten.go",
+      "start": {
+        "line": 122,
+        "column": 2
+      },
+      "end": {
+        "line": 122,
+        "column": 11
+      },
+      "original": "return -1",
+      "replacement": "return 0"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

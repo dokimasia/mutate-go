@@ -13,3 +13,9 @@ func TestRoom(t *testing.T) {
 		t.Fatalf("room(2) = %#v, want an empty list", xs)
 	}
 }
+
+func TestBuffer(t *testing.T) {
+	if b := buffer(4); b == nil || b.Len() != 0 || b.Cap() < 5 {
+		t.Fatalf("buffer(4) = %v, want an empty buffer with room for 5 bytes", b)
+	}
+}

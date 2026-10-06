@@ -153,6 +153,12 @@ func Suite(patterns ...string) Option
 // and a mutant whose site the tests never execute keeps the verdict not
 // covered when the run passes.
 func Confirm() Option
+
+// IncludeGenerated makes Check mutate every generated file of the package,
+// as if the comments before its package clause contained the line
+// //dokimi:mutate-include. The record lists each such file as included, and
+// the score counts its mutants.
+func IncludeGenerated() Option
 ```
 
 A package opts in with one file:
@@ -203,20 +209,23 @@ are. The command's name is `dokimi-mutate` and the language, the name of
 every language's engine, so `go install` installs it as `dokimi-mutate-go`
 beside the engines of other languages.
 
-| Flag | Meaning |
-|---|---|
-| `packages` | Package patterns, as `go list` resolves them. `.` by default |
-| `-p n` | Packages checked at once, 1 by default |
-| `-workers n` | Mutants of one package run at once, 1 by default, with the same caveat as `Workers` |
-| `-lines file:first-last` | Restrict the run to these lines. Repeatable. The file is relative to the current directory |
-| `-diff file` | Restrict the run to the lines that the unified diff in the file adds, and the lines on either side of each run of lines that it removes. `-` reads standard input. The lines of `-diff` and of `-lines` together are the selection |
-| `-suite pattern` | Count the tests of the packages that the pattern names, where their test binaries link the package, as `Suite` does. Repeatable. The command resolves the pattern in the current directory, as it resolves the packages, and passes the packages' import paths to each run |
-| `-record dir` | Write one record per package to `dir` |
-| `-json` | Write each package's record to standard output as one line of JSON, in place of the lines and the summary |
-| `-timeout d` | Start no package after `d`, and no mutant whose run and the closing control run would not end before then. 0, the default, sets no limit |
-| `-sample n` | Start the runs of the first n mutants of each package in key order, and of no other. A run that this limit alone ends does not fail. 0, the default, runs every mutant |
-| `-memory bytes` | Admit the runs of a package after its opening control run while the memory ceilings of every admitted package's runs fit in `bytes`. `K`, `M`, `G` and `T` state powers of 1024, and 0 sets no limit. By default three quarters of the memory that the process may use |
-| `-confirm` | Run each survivor, and each mutant that is not covered, once more in an ordinary build of that mutant alone, as `Confirm` does |
+The command's help describes every flag, grouped by task: the selection,
+the tests, the execution and the output. One table of flags in the
+command's source defines the flags and writes the help, and a test writes
+the command's package documentation and the README's flag reference from
+the help, so no second description of a flag exists. The sections below
+state the design of the mechanisms behind the flags.
+
+- `-C dir` changes the working directory before the command resolves the
+  packages, the suite's patterns and every path of `-lines`, `-diff` and
+  `-record`, as the go command's `-C` does.
+- `-list` loads and enumerates each package, and type-checks its
+  instrumented source, and stops before the build. It prints one line per
+  mutant, with `to test` or the verdict that the enumeration decides, and
+  a count per package. Its `not-viable` mutants are a run's, except those
+  that only a confirmation's build rejects.
+- `-version` prints the versions of the engine, of the catalogue, of the
+  Go overlay and of the toolchain that built the engine.
 
 The command writes the line of each undetected mutant, and of each mutant
 whose run ended in an `error`, to standard output in Check's format. It
@@ -262,9 +271,14 @@ dokimi-mutate-go: <import path>: <done> of <total> mutants done, <undetected> un
 
 | Exit status | When |
 |---|---|
-| 0 | No package has an undetected mutant, and no run fails |
-| 1 | A package has an undetected mutant |
-| 2 | A run fails, a package does not list or does not start, a package of `-suite` does not resolve or load, the diff of `-diff` does not read or does not match the files, or the command line is wrong |
+| 0 | Every counted mutant was detected, and every run completed |
+| 1 | A package has a mutant that survived or that no test covers |
+| 2 | The command line or an input is invalid: an unknown flag, a value out of range, a directory of `-C` that does not exist, a diff that does not read or does not match the files, or a pattern of packages or of `-suite` that `go list` cannot resolve |
+| 3 | A run failed: a package does not load or build, its tests fail without a mutant, a run changed a file of the package, a record does not write, `-timeout` or a signal ended the run, or the command cannot write to standard output |
+
+When more than one status applies, the command exits with the highest.
+A run that `-sample` alone ends exits with the status of its sample, 0
+or 1.
 
 `-diff` reads a unified diff, such as the output of
 `git diff origin/main...HEAD`, and selects lines of the new version of each
@@ -282,7 +296,8 @@ file as cargo-mutants' `--in-diff` selects them:
   mutants. Its record's `selection` is an empty list, and each of its
   mutants is `not-selected`.
 
-`-memory` keeps the packages that run at once within a budget of memory:
+`-memory-budget` keeps the packages that run at once within a budget of
+memory:
 
 - After its opening control run, a package's runs may use its workers
   times the largest memory ceiling of its test binaries. The package waits
@@ -318,7 +333,7 @@ any run starts.
 | `DOKIMI_MUTATE_INSTRUMENTED` | The engine | `1` in every run of the instrumented test binary, the control runs included, and unset in the ordinary control run and in each confirmation run. A test that asserts an allocation count or a duration skips while it is set |
 | `DOKIMI_MUTATE_TRACE` | The engine | The path of the opening control run's trace |
 | `TMPDIR` | The engine | A fresh directory per run, removed when the run ends |
-| `GOMAXPROCS` | The engine | Every go command runs with the engine's GOMAXPROCS, which the command divides by `-p`. Every run of a test binary gets that number divided by the workers, and at least 1 |
+| `GOMAXPROCS` | The engine | Every go command of a package's run gets the package's share of the engine's GOMAXPROCS. Under the command, a package that starts gets the threads that the running packages leave free, divided by the packages that may start beside it, and at least 1, and it returns its share when its run ends. Every run of a test binary gets the package's share divided by the workers, and at least 1 |
 
 The record's file name is the package's import path, escaped with
 `url.PathEscape`, followed by `.mutate.json`.
@@ -336,7 +351,10 @@ The record's file name is the package's import path, escaped with
    leaves out test files, files outside the build and files that import
    `C`. It also leaves out the files that `go/ast.IsGenerated` reports,
    unless a comment before the file's package clause is the line
-   `//dokimi:mutate-include`.
+   `//dokimi:mutate-include`, or the run includes generated files under
+   `-include-generated` or `mutate.IncludeGenerated`. The record's
+   `generated` lists each such file, with its mutants and whether the run
+   included it.
 
 Measured with this loader alone, on Go 1.27.1, google/btree v1.1.3,
 go-humanize v1.1.0, shopspring/decimal v1.4.0, bits-and-blooms/bitset
@@ -510,9 +528,13 @@ mutant's `coveredBy`. That first part ends at 10 times the sum of those
 tests' wall times in their runs alone plus 2 s, so a mutant that hangs in a
 fast test does not wait for the binary's slowest tests. When the tests
 pass, the run goes on with the binary's whole suite, and the binary's
-deadline applies to both parts together. A test that fails alone,
-or a caller's deadline that leaves too little time, leaves the binary
-without this record, and every mutant then runs the binary's whole suite.
+deadline applies to both parts together. A binary without such a record
+runs its whole suite in each mutant's run. A binary has none after any of
+these:
+
+- A test fails alone.
+- The trace of a run alone does not read, or lacks its start mark.
+- The caller's deadline leaves too little time for the runs alone.
 
 The engine starts the mutants' runs in the order of their keys, one on
 each worker that is free. A key is the start of a SHA-256 digest, so the
@@ -524,7 +546,9 @@ the command. Under a deadline, the opening control run of each test binary
 gets at most half of the time left. A mutant starts only while the time
 left covers twice the sum of the binaries' deadlines: once for its own run
 and once for the closing control run. A run of one test alone starts only
-while the time left also covers its binary's deadline. Every mutant that
+while the time left also covers its binary's deadline. While every worker
+is busy, a timer ends the wait for a free worker once the time left no
+longer covers the next run, so no run starts late. Every mutant that
 has not started by then is `not-run`, and so is every mutant whose run an
 interrupt ends. The record's `sample` then states the score of the mutants
 whose keys sort before the least key of a `not-run` mutant. Those mutants
@@ -588,7 +612,20 @@ After the closing control run, the engine reads the data files of every
 package of the suite again, and compares them with the files before the
 opening control run. A file that the runs added, changed or removed is the
 run error `changed-files`, whose message lists the files relative to the
-module root.
+module root. A run whose closing control run does not complete, because
+the caller ended the run during it, fails without a run error, because no
+run checked that the mutant runs left the tests' state intact.
+
+A package's data files are the files in its directory, hidden ones such
+as `.state` included, and in its subdirectories that contain no Go
+package. Every file below a directory that the go command ignores,
+`testdata` or a name that starts with `_`, is a data file, whatever its
+name and its directory's content, so `testdata/fixture/data.go` is one.
+Outside such a directory, the engine leaves out each directory whose name
+starts with a dot, such as `.git`, where a tool keeps its state. The
+engine reads a regular file as a stream, a symbolic link as its target's
+path, and any other file, such as a named pipe, as its type. It opens no
+other file and follows no link, so a named pipe does not block the read.
 
 ### Record and inputs
 
@@ -612,10 +649,9 @@ The `inputs` digest is the SHA-256 of these fields:
   executable, because such a version does not identify one build.
 - `go env GOVERSION`.
 - The build ID of each instrumented test binary of the suite.
-- The SHA-256 of every data file of every package of the suite, read
-  before the opening control run: the files in the package directory and in
-  its subdirectories that contain no Go package, such as `testdata`, in path
-  order.
+- What the engine reads of every data file of every package of the suite
+  before the opening control run, in path order: the SHA-256 of a regular
+  file, the target of a link, and the type of any other file.
 
 ### Bounds
 

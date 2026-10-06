@@ -71,7 +71,7 @@ func (p *progress) verdict(importPath string, m record.Mutant, mutants int) {
 		}
 		s.ran++
 	}
-	if m.Verdict == spec.Survived || m.Verdict == spec.NoCoverage {
+	if definition.Protocol.Class(m.Verdict) == spec.Undetected {
 		s.undetected++
 	}
 }

@@ -59,7 +59,7 @@ func (s *session) check(ctx context.Context, pkg load.Listed, procs int) int {
 	s.out.result(rec)
 	status := exitDetected
 	for _, m := range rec.Mutants {
-		if m.Verdict == spec.Survived || m.Verdict == spec.NoCoverage {
+		if definition.Protocol.Class(m.Verdict) == spec.Undetected {
 			status = exitUndetected
 		}
 	}

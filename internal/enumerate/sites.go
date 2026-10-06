@@ -43,11 +43,22 @@ func (e *enumerator) walk(f *load.File, root ast.Node, scope string, fn *ast.Fun
 			}
 			return false
 		}
-		var parent ast.Node
 		inner := fn
 		if len(stack) > 0 {
-			parent = stack[len(stack)-1].node
 			inner = stack[len(stack)-1].fn
+		}
+		// outer is n with the parentheses around it, and around the closest
+		// node around outer, or nil at the root. A negation reads the
+		// position of n by them, so parentheses do not change it. No
+		// statement is in parentheses, so around is a statement's parent.
+		var around ast.Node
+		outer := n
+		for _, fr := range slices.Backward(stack) {
+			if _, ok := fr.node.(*ast.ParenExpr); !ok {
+				around = fr.node
+				break
+			}
+			outer = fr.node
 		}
 		if lit, ok := n.(*ast.FuncLit); ok {
 			inner = lit.Type
@@ -62,7 +73,7 @@ func (e *enumerator) walk(f *load.File, root ast.Node, scope string, fn *ast.Fun
 			constants++
 		}
 		if constants == 0 {
-			e.visit(f, n, parent, scope, inner)
+			e.visit(f, n, outer, around, scope, inner)
 		}
 		stack = append(stack, frame{node: n, fn: inner})
 		return true
@@ -85,11 +96,15 @@ func (e *enumerator) constantSite(n ast.Node) bool {
 		return true
 	case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
 		return isNumber(tv.Type)
+	default:
+		return false
 	}
-	return false
 }
 
-func (e *enumerator) visit(f *load.File, n, parent ast.Node, scope string, fn *ast.FuncType) {
+// visit makes the sites of n. outer and around are the position of n
+// without its parentheses, as walk states them, and fn is the innermost
+// function type around n.
+func (e *enumerator) visit(f *load.File, n, outer, around ast.Node, scope string, fn *ast.FuncType) {
 	switch x := n.(type) {
 	case *ast.BinaryExpr:
 		switch x.Op {
@@ -101,23 +116,26 @@ func (e *enumerator) visit(f *load.File, n, parent ast.Node, scope string, fn *a
 			e.ordered(f, x, scope)
 		case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
 			e.arithmetic(f, x, scope)
+		default:
+			// The catalogue has no kind of the other operators, such as a
+			// shift or a bitwise operator.
 		}
 	case *ast.AssignStmt:
 		e.compound(f, x, scope)
-		e.delete(f, x, parent, scope)
+		e.delete(f, x, around, scope)
 	case *ast.IncDecStmt:
-		e.incdec(f, x, parent, scope)
+		e.incdec(f, x, around, scope)
 	case *ast.ReturnStmt:
 		e.zero(f, x, fn, scope)
 	case ast.Stmt:
-		e.delete(f, x, parent, scope)
+		e.delete(f, x, around, scope)
 	case *ast.UnaryExpr:
 		if x.Op == token.SUB {
 			e.minus(f, x, scope)
 		}
-		e.not(f, x, parent, scope)
+		e.not(f, x, outer.(ast.Expr), around, scope)
 	case ast.Expr:
-		e.not(f, x, parent, scope)
+		e.not(f, x, outer.(ast.Expr), around, scope)
 	}
 }
 
@@ -352,8 +370,10 @@ func (e *enumerator) incdec(f *load.File, n *ast.IncDecStmt, parent ast.Node, sc
 
 // not negates a boolean operand: an identifier, a selector, a call, an
 // index, a type assertion, a dereference, or a !x, whose mutant is x. An
-// operand of a connector that is a site gets no negation.
-func (e *enumerator) not(f *load.File, x ast.Expr, parent ast.Node, scope string) {
+// operand of a connector that is a site gets no negation. outer is x with
+// the parentheses around it, and around the closest node around outer, so
+// an operand in parentheses has the position of the operand without them.
+func (e *enumerator) not(f *load.File, x, outer ast.Expr, around ast.Node, scope string) {
 	if e.operands[x] {
 		return
 	}
@@ -377,7 +397,7 @@ func (e *enumerator) not(f *load.File, x ast.Expr, parent ast.Node, scope string
 	// The type checker records the source of a comma-ok assignment as a
 	// tuple, so the bool test excludes it.
 	tv, ok := e.pkg.Info.Types[x]
-	if !ok || tv.Value != nil || !tv.IsValue() || !isPlainBool(tv.Type) || !valuePosition(parent, x) {
+	if !ok || tv.Value != nil || !tv.IsValue() || !isPlainBool(tv.Type) || !valuePosition(around, outer) {
 		return
 	}
 	s := e.newSite(f, x, scope, Not, token.ILLEGAL)
@@ -388,21 +408,22 @@ func (e *enumerator) not(f *load.File, x ast.Expr, parent ast.Node, scope string
 	s.add(spec.UOINot, token.ILLEGAL, replacement)
 }
 
-// valuePosition reports whether x, a boolean value that is a child of
-// parent, is in a position where a negation may replace it: not the target
-// of an assignment, not the operand of & or !, not a composite literal's
-// key, and not the expression of an increment, an expression statement, a
-// deferred call, a go statement or a range clause. The type checker
-// records no type for a selector's name, and a called function is no
-// boolean, so neither reaches this test.
-func valuePosition(parent ast.Node, x ast.Expr) bool {
-	switch p := parent.(type) {
+// valuePosition reports whether outer, a boolean value with the parentheses
+// around it, is in a position where a negation may replace it: not the
+// target of an assignment, not the operand of & or !, not a composite
+// literal's key, and not the expression of an increment, an expression
+// statement, a deferred call, a go statement or a range clause. around is
+// the closest node around outer. The type checker records no type for a
+// selector's name, and a called function is no boolean, so valuePosition
+// tests neither.
+func valuePosition(around ast.Node, outer ast.Expr) bool {
+	switch p := around.(type) {
 	case *ast.AssignStmt:
-		return !slices.Contains(p.Lhs, x)
+		return !slices.Contains(p.Lhs, outer)
 	case *ast.UnaryExpr:
 		return p.Op != token.AND && p.Op != token.NOT
 	case *ast.KeyValueExpr:
-		return p.Key != x
+		return p.Key != outer
 	case *ast.IncDecStmt, *ast.ExprStmt, *ast.DeferStmt, *ast.GoStmt, *ast.RangeStmt:
 		return false
 	}
@@ -461,18 +482,22 @@ func (e *enumerator) delete(f *load.File, st ast.Stmt, parent ast.Node, scope st
 }
 
 // zero makes the mutant that returns the zero value of every result type
-// before a return statement whose results are not all zero values already.
-// The mutant does not evaluate the results.
+// before a return statement whose results are not all the zero values of
+// their result types already. The mutant does not evaluate the results.
 func (e *enumerator) zero(f *load.File, n *ast.ReturnStmt, fn *ast.FuncType, scope string) {
-	if fn == nil || fn.Results == nil || len(n.Results) == 0 || e.allZero(n.Results) {
+	if fn == nil || fn.Results == nil || len(n.Results) == 0 {
 		return
 	}
 	var zeros []string
+	var dests []types.Type
 	for _, field := range fn.Results.List {
-		zero := e.zeroOf(f, field.Type)
+		zero, dest := e.zeroOf(f, field.Type), e.pkg.Info.TypeOf(field.Type)
 		for range max(len(field.Names), 1) {
-			zeros = append(zeros, zero)
+			zeros, dests = append(zeros, zero), append(dests, dest)
 		}
+	}
+	if e.allZero(n.Results, dests) {
+		return
 	}
 	s := e.newSite(f, n, scope, Zero, token.ILLEGAL)
 	s.Zeros = zeros
@@ -505,27 +530,40 @@ func (e *enumerator) zeroOf(f *load.File, t ast.Expr) string {
 	return "nil"
 }
 
-// allZero reports whether every result is the zero value of its type.
-func (e *enumerator) allZero(results []ast.Expr) bool {
-	for _, x := range results {
-		if !e.isZero(x) {
+// allZero reports whether every result is the zero value of its result
+// type, of dests in order. A return of the results of one call has fewer
+// results than result types, and is no zero value.
+func (e *enumerator) allZero(results []ast.Expr, dests []types.Type) bool {
+	if len(results) != len(dests) {
+		return false
+	}
+	for i, x := range results {
+		if !e.isZero(x, dests[i]) {
 			return false
 		}
 	}
 	return true
 }
 
-// isZero reports whether x is the zero value of its type: nil, a constant
-// whose value is 0, "" or false, *new(T) of a type T, or a composite literal
-// of a struct or an array type whose every element is such a value. A
-// composite literal of a slice or a map type is not nil, so it is not a
-// zero value, and *new(x) of an expression x is the value of x.
-func (e *enumerator) isZero(x ast.Expr) bool {
+// isZero reports whether x is the zero value of dest, the type of the
+// result or the element that x gives: nil, a constant whose value is 0, ""
+// or false, *new(T) of a type T, a variable that unwrittenVariables
+// returns, or a composite literal of a struct or an array type whose every
+// element is the zero value of the element's type. A value of a type that
+// is no interface gives an interface that is not nil, so of an interface
+// type only nil, *new(T) of an interface type T and such a variable of an
+// interface type are the zero value. A composite literal of a slice or a
+// map type is not nil, so it is not a zero value, and *new(x) of an
+// expression x is the value of x.
+func (e *enumerator) isZero(x ast.Expr, dest types.Type) bool {
 	info := e.pkg.Info
 	x = ast.Unparen(x)
 	tv := info.Types[x]
 	if tv.IsNil() {
 		return true
+	}
+	if isInterface(dest) && !isInterface(tv.Type) {
+		return false
 	}
 	if v := tv.Value; v != nil {
 		switch v.Kind() {
@@ -533,12 +571,16 @@ func (e *enumerator) isZero(x ast.Expr) bool {
 			return !constant.BoolVal(v)
 		case constant.String:
 			return constant.StringVal(v) == ""
+		default:
+			// The constant is a number. Sign returns 0 for zero, and 1 for a
+			// constant of unknown value.
+			return constant.Sign(v) == 0
 		}
-		// The constant is a number. Sign returns 0 for zero, and 1 for a
-		// constant of unknown value.
-		return constant.Sign(v) == 0
 	}
 	switch n := x.(type) {
+	case *ast.Ident:
+		v, ok := info.Uses[n].(*types.Var)
+		return ok && e.unwritten[v]
 	case *ast.StarExpr:
 		call, ok := ast.Unparen(n.X).(*ast.CallExpr)
 		if !ok {
@@ -547,22 +589,124 @@ func (e *enumerator) isZero(x ast.Expr) bool {
 		b, ok := e.callee(call).(*types.Builtin)
 		return ok && b.Name() == builtinNew && info.Types[call.Args[0]].IsType()
 	case *ast.CompositeLit:
-		switch tv.Type.Underlying().(type) {
-		case *types.Struct, *types.Array:
+		// elem returns the type of the element at index i, whose key is key
+		// or nil. The type checker resolves a struct's key to its field.
+		var elem func(i int, key ast.Expr) types.Type
+		switch u := tv.Type.Underlying().(type) {
+		case *types.Struct:
+			elem = func(i int, key ast.Expr) types.Type {
+				if key != nil {
+					return info.Uses[key.(*ast.Ident)].Type()
+				}
+				return u.Field(i).Type()
+			}
+		case *types.Array:
+			elem = func(int, ast.Expr) types.Type { return u.Elem() }
 		default:
 			return false
 		}
-		for _, elt := range n.Elts {
+		for i, elt := range n.Elts {
+			var key ast.Expr
 			if kv, ok := elt.(*ast.KeyValueExpr); ok {
-				elt = kv.Value
+				key, elt = kv.Key, kv.Value
 			}
-			if !e.isZero(elt) {
+			if !e.isZero(elt, elem(i, key)) {
 				return false
 			}
 		}
 		return true
 	}
 	return false
+}
+
+// isInterface reports whether t is an interface type and no type parameter,
+// whose type set can contain types that are no interface.
+func isInterface(t types.Type) bool {
+	_, ok := t.Underlying().(*types.Interface)
+	return ok && !isTypeParam(t)
+}
+
+// unwrittenVariables returns each variable of the package that a variable
+// declaration without values declares inside a function's body, and that no
+// use writes, so the variable is the zero value of its type wherever a
+// return reads it. A use writes the variable when the variable, alone or
+// under selectors, indexes, dereferences and parentheses, is the target of
+// an assignment, a short variable declaration, an increment, a decrement or
+// a range clause, the operand of & or of a slice expression, or the
+// receiver of a method with a pointer receiver, as x in x.M() and in the
+// method value x.M. Every use in the variable's scope counts, in a function
+// literal too and after the return, because a loop can run a later write
+// before the return. unwrittenVariables reads every file of the package
+// once.
+func (e *enumerator) unwrittenVariables() map[*types.Var]bool {
+	info := e.pkg.Info
+	declared := map[*types.Var]bool{}
+	written := map[types.Object]bool{}
+	// write notes a write of the variable that x is, alone or under
+	// selectors, indexes, dereferences and parentheses.
+	write := func(x ast.Expr) {
+		for {
+			switch n := x.(type) {
+			case *ast.ParenExpr:
+				x = n.X
+			case *ast.SelectorExpr:
+				x = n.X
+			case *ast.IndexExpr:
+				x = n.X
+			case *ast.StarExpr:
+				x = n.X
+			case *ast.Ident:
+				written[info.ObjectOf(n)] = true
+				return
+			default:
+				return
+			}
+		}
+	}
+	for _, f := range e.pkg.Files {
+		ast.Inspect(f.Syntax, func(n ast.Node) bool {
+			switch x := n.(type) {
+			case *ast.ValueSpec:
+				for _, name := range x.Names {
+					if v, ok := info.Defs[name].(*types.Var); ok && len(x.Values) == 0 &&
+						v.Parent() != e.pkg.Types.Scope() {
+						declared[v] = true
+					}
+				}
+			case *ast.AssignStmt:
+				for _, target := range x.Lhs {
+					write(target)
+				}
+			case *ast.IncDecStmt:
+				write(x.X)
+			case *ast.RangeStmt:
+				for _, target := range []ast.Expr{x.Key, x.Value} {
+					if target != nil {
+						write(target)
+					}
+				}
+			case *ast.UnaryExpr:
+				if x.Op == token.AND {
+					write(x.X)
+				}
+			case *ast.SliceExpr:
+				write(x.X)
+			case *ast.SelectorExpr:
+				if sel := info.Selections[x]; sel != nil && sel.Kind() == types.MethodVal {
+					if _, pointer := sel.Obj().Type().(*types.Signature).Recv().Type().(*types.Pointer); pointer {
+						write(x.X)
+					}
+				}
+			}
+			return true
+		})
+	}
+	for v := range declared {
+		if written[v] {
+			delete(declared, v)
+		}
+	}
+	return declared
 }
 
 // isTerminating reports whether s is a terminating statement in the sense

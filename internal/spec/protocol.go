@@ -65,6 +65,20 @@ type Protocol struct {
 	Limits       Limits            `json:"limits"`
 }
 
+// Class returns how the score counts the verdict v: the class that the
+// protocol gives v, or "" for a verdict that the protocol does not define,
+// such as the empty verdict of a mutant that a listing would test. Every
+// count of detected or undetected mutants reads the class here. Class
+// compares v with each verdict of the protocol.
+func (p Protocol) Class(v Verdict) ScoreClass {
+	for _, pv := range p.Verdicts {
+		if pv.ID == v {
+			return pv.Score
+		}
+	}
+	return ""
+}
+
 // RecordName names the record's format and the version of its layout.
 type RecordName struct {
 	Name    string `json:"name"`

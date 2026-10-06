@@ -83,12 +83,12 @@ func TestMain(m *testing.M) {
 
 // moduleDir writes files, by slash-separated path, into a new directory,
 // with the module file module unless files has one, and returns the
-// directory.
+// directory. It only reads files, so parallel tests can share one map.
 func moduleDir(t *testing.T, files map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
 	if _, ok := files[goMod]; !ok {
-		files[goMod] = module
+		write(t, dir, goMod, module)
 	}
 	for name, text := range files {
 		write(t, dir, name, text)

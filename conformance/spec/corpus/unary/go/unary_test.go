@@ -20,3 +20,19 @@ func TestCount(t *testing.T) {
 		t.Fatalf("count(1) = %d, want 2", got)
 	}
 }
+
+func TestToggle(t *testing.T) {
+	b := false
+	if !toggle(&b) || !b {
+		t.Fatal("toggle does not set a false flag and report it")
+	}
+	if toggle(&b) {
+		t.Fatal("toggle reports a flag that was true")
+	}
+}
+
+func TestAddress(t *testing.T) {
+	if p := address(true); p == nil || !*p {
+		t.Fatal("address(true) does not point to true")
+	}
+}

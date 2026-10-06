@@ -81,7 +81,8 @@ func help(w io.Writer, computed map[string]string) {
 		flagIndent + "1  A package has a mutant that survived or that no test covers.\n" +
 		flagIndent + "2  The command line or an input is invalid.\n" +
 		flagIndent + "3  A run failed, such as a package that does not build, tests that\n" +
-		flagIndent + "   fail without a mutant, or a run that -" + flagTimeout + " ended.\n\n")
+		flagIndent + "   fail without a mutant, or a run that -" + flagTimeout + " ended. The command\n" +
+		flagIndent + "   also exits with 3 when it cannot write to standard output.\n\n")
 	paragraph(&b, fmt.Sprintf("A test can read two variables. %s is 0 in the control runs and the active "+
 		"mutant's number in a mutant's run. %s is 1 in every run of the instrumented build. Skip an allocation "+
 		"or timing assertion while %[2]s is set, and use -%s.",

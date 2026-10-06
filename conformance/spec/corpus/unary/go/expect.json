@@ -108,6 +108,96 @@
       },
       "original": "return n",
       "replacement": "return 0"
+    },
+    {
+      "scope": "toggle",
+      "kind": "uoi-not",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "bac6516e5a06bd1c",
+      "file": "unary.go",
+      "start": {
+        "line": 22,
+        "column": 9
+      },
+      "end": {
+        "line": 22,
+        "column": 11
+      },
+      "original": "*b",
+      "replacement": "!*b"
+    },
+    {
+      "scope": "toggle",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0cbf963d1b01bd32",
+      "file": "unary.go",
+      "start": {
+        "line": 23,
+        "column": 2
+      },
+      "end": {
+        "line": 23,
+        "column": 13
+      },
+      "original": "(*b) = true",
+      "replacement": ""
+    },
+    {
+      "scope": "toggle",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "1d566b76efda7d97",
+      "file": "unary.go",
+      "start": {
+        "line": 24,
+        "column": 2
+      },
+      "end": {
+        "line": 24,
+        "column": 15
+      },
+      "original": "return !(was)",
+      "replacement": "return false"
+    },
+    {
+      "scope": "toggle",
+      "kind": "uoi-not",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "bf3a06de5f246719",
+      "file": "unary.go",
+      "start": {
+        "line": 24,
+        "column": 9
+      },
+      "end": {
+        "line": 24,
+        "column": 15
+      },
+      "original": "!(was)",
+      "replacement": "(was)"
+    },
+    {
+      "scope": "address",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "93e420dfbcb04982",
+      "file": "unary.go",
+      "start": {
+        "line": 29,
+        "column": 2
+      },
+      "end": {
+        "line": 29,
+        "column": 14
+      },
+      "original": "return &(ok)",
+      "replacement": "return nil"
     }
   ],
   "skipped": [],

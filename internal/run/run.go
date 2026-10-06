@@ -126,8 +126,11 @@ type runner struct {
 	def        spec.Definition
 	rec        *record.Record
 	work       string
-	pkg        *load.Package
-	prog       *render.Program
+	// wd is the process's working directory as record.Resolved returns it,
+	// against which report states each mutant's path.
+	wd   string
+	pkg  *load.Package
+	prog *render.Program
 	// programs lists the test binaries of the suite: the package's own
 	// first, when it has a test file, and then the others by import path.
 	programs []*program
@@ -221,7 +224,7 @@ func Run(ctx context.Context, cfg Config) (*record.Record, error) {
 		procs = runtime.GOMAXPROCS(0)
 	}
 	r := &runner{
-		cfg: cfg, procs: procs, def: def, work: work,
+		cfg: cfg, procs: procs, def: def, work: work, wd: record.Resolved(workingDir),
 		goEnv:      testbin.Setenv(cfg.Env, procsVar+"="+strconv.Itoa(procs)),
 		confirmEnv: testbin.Setenv(cfg.Env, procsVar+"="+strconv.Itoa(max(1, procs/max(1, cfg.Workers)))),
 		snapshots:  []snapshot{{dir: resolved, files: files}},
@@ -555,6 +558,6 @@ func (r *runner) coveredBy(i int) []string {
 func (r *runner) report(i int) {
 	if r.cfg.Verdict != nil {
 		m := r.rec.Mutants[i]
-		r.cfg.Verdict(m, len(r.rec.Mutants), r.rec.Path(m.File, workingDir))
+		r.cfg.Verdict(m, len(r.rec.Mutants), r.rec.Path(m.File, r.wd))
 	}
 }

@@ -107,8 +107,8 @@ type Limits struct {
 }
 
 // Control states the control runs. Ordinary is nil unless the run
-// confirms its survivors, and Closing is nil when the run ended before its
-// closing control run.
+// confirms its survivors, and Closing is nil when the closing control run
+// did not complete: the run ended before or during it, or it failed.
 type Control struct {
 	Opening  Opening   `json:"opening"`
 	Ordinary *Ordinary `json:"ordinary,omitempty"`
@@ -207,11 +207,13 @@ type Generated struct {
 }
 
 // Failed reports whether the run fails: it has a run error, a mutant whose
-// verdict is error, or a mutant whose verdict is not-run for another reason
+// verdict is error, a mutant whose verdict is not-run for another reason
 // than the caller's limit on the number of mutant runs, which the sample's
-// Limit states.
+// Limit states, or an opening control run that passed and a closing control
+// run that did not complete. Without the closing control run, no run checked
+// that the mutant runs left the tests' state intact.
 func (r *Record) Failed() bool {
-	if len(r.Errors) > 0 {
+	if len(r.Errors) > 0 || r.Control != nil && r.Control.Closing == nil {
 		return true
 	}
 	limited := r.Sample != nil && r.Sample.Limit != nil
@@ -275,15 +277,11 @@ func ratio(detected, undetected int) *float64 {
 // as protocol classifies each verdict, among the mutants whose keys sort
 // before bound, or among every mutant when bound is empty.
 func (r *Record) Tally(protocol spec.Protocol, bound string) (detected, undetected int) {
-	class := map[spec.Verdict]spec.ScoreClass{}
-	for _, v := range protocol.Verdicts {
-		class[v.ID] = v.Score
-	}
 	for _, m := range r.Mutants {
 		if bound != "" && m.Key >= bound {
 			continue
 		}
-		switch class[m.Verdict] {
+		switch protocol.Class(m.Verdict) {
 		case spec.Detected:
 			detected++
 		case spec.Undetected:
@@ -294,16 +292,26 @@ func (r *Record) Tally(protocol spec.Protocol, bound string) (detected, undetect
 	return detected, undetected
 }
 
-// Path returns the path of file, a file of the record, relative to dir,
-// with the symbolic links of dir resolved, as an editor resolves a path
-// that a test prints from dir.
+// Path returns the path of file, a file of the record, relative to dir, a
+// directory as [Resolved] returns it. Path reads no file system.
 func (r *Record) Path(file, dir string) string {
+	rel, _ := filepath.Rel(dir, filepath.Join(r.Root, filepath.FromSlash(file)))
+	return rel
+}
+
+// Resolved returns dir as [Record.Path] reads a directory: absolute, with
+// its symbolic links resolved, as an editor resolves a path that a test
+// prints from dir. A directory whose links do not resolve, such as one that
+// does not exist, is only made absolute. A caller resolves its directory
+// once and passes the result to each call of Path.
+func Resolved(dir string) string {
+	// filepath.Abs fails only without a working directory, in which no run
+	// loads its package either.
 	dir, _ = filepath.Abs(dir)
 	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = resolved
 	}
-	rel, _ := filepath.Rel(dir, filepath.Join(r.Root, filepath.FromSlash(file)))
-	return rel
+	return dir
 }
 
 // FileName returns the name of the record file of the target importPath:

@@ -138,7 +138,8 @@ var commandFlags = []option{
 	},
 	{
 		name: flagParallel, value: "n", section: executionSection,
-		usage:  "The number of packages to test at once. The default is 1.",
+		usage: "The number of packages to test at once. The default is 1. The packages that run at once share " +
+			"the command's GOMAXPROCS threads.",
 		define: func(fs *flag.FlagSet, name string, o *options) { fs.IntVar(&o.parallel, name, o.parallel, "") },
 	},
 	{
@@ -242,7 +243,9 @@ func (f *suiteFlag) Set(pattern string) error {
 	return nil
 }
 
-// linesFlag collects the entries of -lines, which repeats.
+// linesFlag collects the entries of -lines, which repeats. Each path is as
+// the entry writes it, so the command resolves it after it changes to the
+// directory of -C.
 type linesFlag []selection.Lines
 
 // String returns the empty text, which the help does not show.

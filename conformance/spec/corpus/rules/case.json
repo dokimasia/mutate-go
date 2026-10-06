@@ -1,14 +1,17 @@
 {
   "case": "rules",
-  "proves": "A call to a logging API and every site inside its arguments are suppressed with the rule logging. An argument that only sizes an allocation is suppressed with the rule capacity.",
-  "fixture": "report logs n+1 and returns n times two. room makes an empty list whose capacity is n+1.",
+  "proves": "A call to a logging API and every site inside its arguments are suppressed with the rule logging. An argument that only sizes an allocation is suppressed with the rule capacity, also in a call of a method expression, which passes the receiver first.",
+  "fixture": "report logs n+1 and returns n times two. room makes an empty list whose capacity is n+1. buffer grows a buffer by n+1 bytes through the method expression (*bytes.Buffer).Grow.",
   "mutants": [
     { "scope": "report", "kind": "sbr-delete", "nth": 0, "verdict": "suppressed" },
     { "scope": "report", "kind": "aor", "nth": 0, "verdict": "suppressed" },
     { "scope": "report", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
     { "scope": "report", "kind": "aor", "nth": 1, "verdict": "killed" },
     { "scope": "room", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
-    { "scope": "room", "kind": "aor", "nth": 0, "verdict": "suppressed" }
+    { "scope": "room", "kind": "aor", "nth": 0, "verdict": "suppressed" },
+    { "scope": "buffer", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "buffer", "kind": "aor", "nth": 0, "verdict": "suppressed" },
+    { "scope": "buffer", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
   ],
   "errors": []
 }

@@ -32,3 +32,15 @@ func TestEmpty(t *testing.T) {
 		t.Fatalf("empty() = %#v, want an empty list", xs)
 	}
 }
+
+func TestAnswer(t *testing.T) {
+	if got := answer(); got != 0 {
+		t.Fatalf("answer() = %v, want 0", got)
+	}
+}
+
+func TestLabelled(t *testing.T) {
+	if p := labelled(); p.label != "" {
+		t.Fatalf("labelled() = %v, want the empty label", p)
+	}
+}

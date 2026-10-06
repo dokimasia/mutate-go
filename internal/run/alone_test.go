@@ -35,6 +35,35 @@ const (
 // runsName is the name of the file of runsVar.
 const runsName = "runs"
 
+// runFlag starts the flag of a test binary that selects tests, which a run
+// of one test alone passes and the control runs do not. It is the testing
+// package's spelling, pinned.
+const runFlag = "-test.run="
+
+// aloneTrace returns a test main of the package fixture that runs stmt
+// before the tests in a run that selects tests, as each test's run alone
+// does, with trace the path of the run's trace file.
+func aloneTrace(stmt string) string {
+	return fmt.Sprintf(`package fixture
+
+import (
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestMain(m *testing.M) {
+	trace := os.Getenv(%q)
+	for _, arg := range os.Args[1:] {
+		if trace != "" && strings.HasPrefix(arg, %q) {
+			%s
+		}
+	}
+	os.Exit(m.Run())
+}
+`, render.TraceVar, runFlag, stmt)
+}
+
 // ordered is a test file of arith whose first test, TestFirst, checks
 // nothing and appends the active mutant to the file of runsVar in each
 // mutant's run. TestAdd checks Add, and fails without TestFirst before it
@@ -91,7 +120,7 @@ func TestAlone(t *testing.T) {
 			// TestFirst runs before TestAdd and TestSub, and executes no site.
 			// A mutant that TestAdd kills never runs it. A survivor runs it in
 			// the whole suite after TestSub.
-			rec, firsts := runOrdered(t, run.Config{})
+			rec, firsts := runOrdered(t, run.Config{}, nil)
 			assert.Equal(t, verdicts(rec), arithVerdicts, "each mutant has the verdict of its run")
 			assert.Empty(t, rec.Errors, "the run states no run error")
 			assert.Equal(t, firsts, 2, "TestFirst runs in the whole suites of Sub's survivors alone")
@@ -99,20 +128,41 @@ func TestAlone(t *testing.T) {
 				"each mutant names the test that executed its site alone")
 		})
 
-		t.Run("runs the whole suite for each mutant when a test fails alone", func(t *testing.T) {
-			t.Parallel()
-			rec, firsts := runOrdered(t, run.Config{}, dependsVar+"=1")
-			assert.Equal(t, verdicts(rec), arithVerdicts, "each mutant has the verdict of its run")
-			assert.Empty(t, rec.Errors, "a test that fails alone is no run error")
-			assert.Equal(t, firsts, 4, "TestFirst runs in the run of each mutant that runs")
-			assert.Equal(t, coveredBy(rec), make([][]string, 6), "no mutant names a covering test")
-		})
+		tests := []struct {
+			name string
+			more map[string]string
+			env  []string
+		}{
+			{name: "runs the whole suite for each mutant when a test fails alone", env: []string{dependsVar + "=1"}},
+			{
+				name: "runs the whole suite for each mutant when the trace of a test alone does not read",
+				more: map[string]string{mainTestFile: aloneTrace("_ = os.Remove(trace)")},
+			},
+			{
+				name: "runs the whole suite for each mutant when the trace of a test alone lacks the start mark",
+				more: map[string]string{mainTestFile: aloneTrace("_ = os.Truncate(trace, 0)")},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				rec, firsts := runOrdered(t, run.Config{}, tt.more, tt.env...)
+				assert.Equal(t, verdicts(rec), arithVerdicts, "each mutant has the verdict of its run")
+				assert.Empty(t, rec.Errors, "a run of a test alone is no control run")
+				assert.Equal(t, firsts, 4, "TestFirst runs in the run of each mutant that runs")
+				assert.Equal(t, coveredBy(rec), make([][]string, 6), "no mutant names a covering test")
+			})
+		}
 
 		t.Run("runs no test alone for a test binary with fewer mutants to run than tests", func(t *testing.T) {
 			t.Parallel()
 			// The selection contains Add's two mutants, and the binary has
 			// three tests.
-			rec, firsts := runOrdered(t, run.Config{Lines: []selection.Lines{{Path: arithFile, First: 5, Last: 5}}})
+			rec, firsts := runOrdered(
+				t,
+				run.Config{Lines: []selection.Lines{{Path: arithFile, First: 5, Last: 5}}},
+				nil,
+			)
 			assert.Equal(t, verdicts(rec), addKilled+`Sub sbr-zero 0: not-selected
 Sub aor 0: not-selected
 Unused sbr-zero 0: not-selected
@@ -127,20 +177,20 @@ Unused aor 0: not-selected
 			// test binary's deadline is above 7 seconds. Less than 20 seconds
 			// are left after the opening control run: twice the deadline, but
 			// not three times.
-			rec, firsts := runOrdered(t, run.Config{Deadline: time.Now().Add(20 * time.Second)}, slowVar+"=1")
+			rec, firsts := runOrdered(t, run.Config{Deadline: time.Now().Add(20 * time.Second)}, nil, slowVar+"=1")
 			assert.Equal(t, verdicts(rec), arithVerdicts, "each mutant has the verdict of its run")
 			assert.Equal(t, firsts, 4, "TestFirst runs in the run of each mutant that runs")
 		})
 	})
 }
 
-// runOrdered runs the engine on arith with the test file ordered and cfg,
-// with the variables env, and returns the record and the number of mutant
-// runs in which TestFirst ran. The path of cfg's first range is relative to
-// the module's directory.
-func runOrdered(t *testing.T, cfg run.Config, env ...string) (*record.Record, int) {
+// runOrdered runs the engine on arith with the test file ordered, the files
+// of more and cfg, with the variables env, and returns the record and the
+// number of mutant runs in which TestFirst ran. The path of cfg's first
+// range is relative to the module's directory.
+func runOrdered(t *testing.T, cfg run.Config, more map[string]string, env ...string) (*record.Record, int) {
 	t.Helper()
-	dir := module(t, map[string]string{arithFile: arith, arithTestFile: ordered})
+	dir := module(t, with(map[string]string{arithFile: arith, arithTestFile: ordered}, more))
 	runs := filepath.Join(t.TempDir(), runsName)
 	cfg.Env = append(os.Environ(), append(env, runsVar+"="+runs)...)
 	if len(cfg.Lines) > 0 {

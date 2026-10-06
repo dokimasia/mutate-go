@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,6 +60,16 @@ func (c *cancelling) Write(data []byte) (int, error) {
 	return c.Buffer.Write(data)
 }
 
+// errFull is the error of every write to full.
+var errFull = errors.New("no space left on device")
+
+// full is a standard output whose every write fails, as a write to a full
+// device does.
+type full struct{}
+
+// Write writes nothing and returns errFull.
+func (full) Write([]byte) (int, error) { return 0, errFull }
+
 func TestCLI(t *testing.T) {
 	t.Parallel()
 
@@ -89,6 +100,16 @@ func TestCLI(t *testing.T) {
 			assert.Equal(t, status, exitDetected, "the versions are no error")
 			assert.ContainsInOrder(t, stdout, []string{name + " ", "\ncatalogue ", "\noverlay ", "\ntoolchain "},
 				"the command states each version")
+		})
+
+		t.Run("returns 3 when standard output does not write", func(t *testing.T) {
+			t.Parallel()
+			var errs bytes.Buffer
+			c := &cli{stdin: strings.NewReader(""), stdout: full{}, stderr: &errs, every: time.Hour, now: time.Now}
+			status := c.main(t.Context(), []string{"-" + flagVersion})
+			assert.Equal(t, status, exitFailed, "the command could not write the versions")
+			assert.Equal(t, errs.String(), name+": standard output: "+errFull.Error()+"\n",
+				"the error names the stream and its error")
 		})
 	})
 }
@@ -132,6 +153,16 @@ func TestCLIEnv(t *testing.T) {
 			assert.Equal(t, stderr, "", "the run writes nothing to stderr")
 		})
 
+		t.Run("returns 3 when the record of a run does not write to standard output", func(t *testing.T) {
+			enter(t, addFiles)
+			var errs bytes.Buffer
+			c := &cli{stdin: strings.NewReader(""), stdout: full{}, stderr: &errs, every: time.Hour, now: time.Now}
+			status := c.main(t.Context(), []string{"-" + flagJSON})
+			assert.Equal(t, status, exitFailed, "every mutant is killed, and the command could not write the record")
+			assert.Equal(t, errs.String(), name+": standard output: "+errFull.Error()+"\n",
+				"the error names the stream and its error")
+		})
+
 		t.Run("tests the packages in the directory of -C", func(t *testing.T) {
 			dir := module(t, arithFiles)
 			t.Chdir(t.TempDir())
@@ -167,6 +198,17 @@ func TestCLIEnv(t *testing.T) {
 			assert.Equal(t, stdout, "arith.go:5:26: survived: return a - b became return 0 (sbr-zero)\n"+
 				"arith.go:5:33: survived: a - b became a + b (aor)\n"+
 				"fixture: 0 of 2 mutants detected (0%): 2 survived, 4 not selected\n", "the run tests Sub alone")
+		})
+
+		t.Run("resolves the paths of -lines in the directory of -C", func(t *testing.T) {
+			dir := module(t, arithFiles)
+			t.Chdir(t.TempDir())
+			status, stdout, _ := call("-"+flagDir, dir, "-"+flagLines, "arith.go:5-6")
+			assert.Equal(t, status, exitUndetected, "Sub's mutants survive")
+			assert.Equal(t, stdout, "arith.go:5:26: survived: return a - b became return 0 (sbr-zero)\n"+
+				"arith.go:5:33: survived: a - b became a + b (aor)\n"+
+				"fixture: 0 of 2 mutants detected (0%): 2 survived, 4 not selected\n",
+				"the entry names the file in the directory of -C")
 		})
 
 		t.Run("tests the lines that the diff of -diff changes", func(t *testing.T) {
@@ -284,10 +326,12 @@ func TestCLIEnv(t *testing.T) {
 					subProcsVar, 1),
 			}))
 			threads := runtime.GOMAXPROCS(0)
-			// The first package starts beside the second, and the second starts
-			// with no package left to start.
-			t.Setenv(expectedProcsVar, strconv.Itoa(max(1, max(1, threads/2)/2)))
-			t.Setenv(subProcsVar, strconv.Itoa(max(1, threads/2)))
+			// The first package starts beside the second, and the second gets
+			// the threads that the first leaves free. Each package's workers
+			// share its threads.
+			first := max(1, threads/2)
+			t.Setenv(expectedProcsVar, strconv.Itoa(max(1, first/2)))
+			t.Setenv(subProcsVar, strconv.Itoa(max(1, max(1, threads-first)/2)))
 			status, stdout, stderr := call("-"+flagParallel, "2", "-"+flagWorkers, "2", "./...")
 			assert.Equal(t, status, exitDetected, "each run has the expected threads")
 			assert.Length(t, strings.Split(strings.TrimSpace(stdout), "\n"), 2, "each package has its summary")

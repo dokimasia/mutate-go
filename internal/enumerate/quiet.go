@@ -62,9 +62,9 @@ func (e *enumerator) quietStatements(f *load.File) {
 		if family == "" {
 			return true
 		}
-		e.suppressions = append(
-			e.suppressions,
-			suppression{f: f, start: e.off(st.Pos()), end: e.off(st.End()), family: family},
+		e.suppressions[f] = append(
+			e.suppressions[f],
+			suppression{start: e.off(st.Pos()), end: e.off(st.End()), family: family},
 		)
 		return false
 	})
@@ -278,9 +278,9 @@ func (e *enumerator) quietSelectors(f *load.File, st ast.Stmt) {
 	}
 	for _, x := range parts {
 		if e.effectFree(x) {
-			e.suppressions = append(
-				e.suppressions,
-				suppression{f: f, start: e.off(x.Pos()), end: e.off(x.End()), family: family},
+			e.suppressions[f] = append(
+				e.suppressions[f],
+				suppression{start: e.off(x.Pos()), end: e.off(x.End()), family: family},
 			)
 		}
 	}

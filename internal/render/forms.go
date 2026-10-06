@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/build/constraint"
+	"go/scanner"
 	"go/token"
 	"sort"
 	"strconv"
@@ -116,11 +117,6 @@ func (r *fileRenderer) newlines(from, to int) {
 	r.buf.WriteString(strings.Repeat("\n", bytes.Count(r.text[from:to], []byte("\n"))))
 }
 
-// verbatim returns the tokens of n on one line, without its comments.
-func (r *fileRenderer) verbatim(n ast.Node) string {
-	return enumerate.Tokens(r.text[r.off(n.Pos()):r.off(n.End())])
-}
-
 func (r *fileRenderer) writef(format string, args ...any) { fmt.Fprintf(&r.buf, format, args...) }
 
 // writeSite writes the form of s, which switches on the active mutant.
@@ -143,8 +139,9 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 	case enumerate.Compound:
 		a := s.Node.(*ast.AssignStmt)
 		target, value := a.Lhs[0], a.Rhs[0]
-		r.buf.Write(r.text[r.off(target.Pos()):r.off(target.End())])
-		r.writef(" = _mutate_s%d%s(%s, ", o, typeArgs(s), r.verbatim(target))
+		source := r.text[r.off(target.Pos()):r.off(target.End())]
+		r.buf.Write(source)
+		r.writef(" = _mutate_s%d%s(%s, ", o, typeArgs(s), oneLine(source))
 		r.newlines(r.off(target.End()), r.off(value.Pos()))
 		r.inner(s, value)
 		r.writef(")")
@@ -181,8 +178,9 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		r.writef("%s }", st.Tok)
 	case enumerate.IncDecPost:
 		st := s.Node.(*ast.IncDecStmt)
-		r.buf.Write(r.text[r.off(st.X.Pos()):r.off(st.X.End())])
-		r.writef(" = _mutate_s%d%s(%s)", o, typeArgs(s), r.verbatim(st.X))
+		source := r.text[r.off(st.X.Pos()):r.off(st.X.End())]
+		r.buf.Write(source)
+		r.writef(" = _mutate_s%d%s(%s)", o, typeArgs(s), oneLine(source))
 	case enumerate.Not:
 		r.writef("(")
 		r.writeRange(s.Start, s.End, r.children[s])
@@ -199,11 +197,39 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		r.writef(" }")
 	case enumerate.Zero:
 		// A zero value writes its type, which can span lines, so the form
-		// writes its tokens on one line.
-		r.writef("if _mutateIs(%d) { return %s }; ", o, enumerate.Tokens([]byte(strings.Join(s.Zeros, ", "))))
+		// writes it on one line.
+		r.writef("if _mutateIs(%d) { return %s }; ", o, oneLine([]byte(strings.Join(s.Zeros, ", "))))
 		r.writeRange(s.Start, s.End, r.children[s])
 	}
 	r.spans = append(r.spans, span{start: begin, end: r.buf.Len(), site: s})
+}
+
+// oneLine returns the code of src on one line: its tokens separated by
+// spaces, without comments. It writes each semicolon that the scanner
+// inserts at a line break as ;, so the line is the same code as src, and
+// leaves out the semicolon that the scanner inserts at the end of src.
+func oneLine(src []byte) string {
+	fset := token.NewFileSet()
+	var s scanner.Scanner
+	s.Init(fset.AddFile("", fset.Base(), len(src)), src, nil, 0)
+	var out []string
+	inserted := false
+	for {
+		_, tok, lit := s.Scan()
+		if tok == token.EOF {
+			break
+		}
+		// The scanner gives an inserted semicolon the literal "\n".
+		inserted = tok == token.SEMICOLON && lit == "\n"
+		if lit == "" || inserted {
+			lit = tok.String()
+		}
+		out = append(out, lit)
+	}
+	if inserted {
+		out = out[:len(out)-1]
+	}
+	return strings.Join(out, " ")
 }
 
 // connectorForm is the text of a connector's form for one operator:

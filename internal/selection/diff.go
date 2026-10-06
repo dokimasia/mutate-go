@@ -225,7 +225,8 @@ func hunkHeader(line string) (oldCount, start, newCount int, err error) {
 }
 
 // hunkRange parses start,count, or start alone with a count of 1, and
-// reports whether both are numbers of at least 0.
+// reports whether both are numbers of at least 0 and a range of at least
+// one line starts at line 1 or later. Only an empty range starts at 0.
 func hunkRange(r string) (start, count int, ok bool) {
 	first, rest, comma := strings.Cut(r, ",")
 	start, err := strconv.Atoi(first)
@@ -233,5 +234,5 @@ func hunkRange(r string) (start, count int, ok bool) {
 	if comma && err == nil {
 		count, err = strconv.Atoi(rest)
 	}
-	return start, count, err == nil && start >= 0 && count >= 0
+	return start, count, err == nil && count >= 0 && (start >= 1 || start == 0 && count == 0)
 }

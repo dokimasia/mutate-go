@@ -1,14 +1,19 @@
 {
   "case": "unary",
-  "proves": "An increment becomes a decrement, a negation loses its !, and a unary minus is removed. A test that checks a result only against zero misses the lost minus.",
-  "fixture": "negate returns -x, flip returns !ok, and count increments n. The test of negate checks only that the result is not zero.",
+  "proves": "An increment becomes a decrement, a negation loses its !, and a unary minus is removed. A test that checks a result only against zero misses the lost minus. A boolean operand in parentheses keeps the position of the operand without them, so the target of an assignment and the operands of & and ! have no negation.",
+  "fixture": "negate returns -x, flip returns !ok, and count increments n. The test of negate checks only that the result is not zero. toggle reads *b, sets (*b) to true and returns !(was). address returns &(ok).",
   "mutants": [
     { "scope": "negate", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
     { "scope": "negate", "kind": "uoi-minus", "nth": 0, "verdict": "survived" },
     { "scope": "flip", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
     { "scope": "flip", "kind": "uoi-not", "nth": 0, "verdict": "killed" },
     { "scope": "count", "kind": "uoi-incdec", "nth": 0, "verdict": "killed" },
-    { "scope": "count", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
+    { "scope": "count", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "toggle", "kind": "uoi-not", "nth": 0, "verdict": "killed" },
+    { "scope": "toggle", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "toggle", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "toggle", "kind": "uoi-not", "nth": 1, "verdict": "killed" },
+    { "scope": "address", "kind": "sbr-zero", "nth": 0, "verdict": "killed" }
   ],
   "errors": []
 }

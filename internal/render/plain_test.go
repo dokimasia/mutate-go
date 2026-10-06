@@ -62,6 +62,17 @@ func TestPlain(t *testing.T) {
 				"uoi-not of a negation drops the negation")
 		})
 
+		t.Run("writes a zero value whose type spans lines on the return's line", func(t *testing.T) {
+			t.Parallel()
+			head := "package fixture\n\nfunc f(n int) struct {\n\ta int\n\tb int // the second field\n} {\n"
+			ret := "return struct {\n\t\ta int\n\t\tb int // the second field\n\t}{n, n}\n}\n"
+			p, r := fixture(t, map[string]string{"f.go": head + "\t" + ret})
+			assert.Length(t, r.Mutants, 1, "the return is the only site")
+			got := string(render.Plain(p, r.Mutants[0]).Files[filepath.Join(p.Dir, "f.go")])
+			assert.Equal(t, got, head+"\tif true { return struct { a int ; b int ; } { } }; "+ret,
+				"the zero value's type keeps its semicolons, and the return keeps its lines")
+		})
+
 		t.Run("builds each mutant to compute what its instrumented form computes", func(t *testing.T) {
 			t.Parallel()
 			p, r := fixture(t, semanticsFiles())

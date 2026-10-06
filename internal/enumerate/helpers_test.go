@@ -32,12 +32,17 @@ const (
 )
 
 // moduleDir writes files into a new directory, with the module file module
-// unless files has one, and returns the directory.
+// unless files has one, and returns the directory. It only reads files, so
+// parallel tests can share one map.
 func moduleDir(t *testing.T, files map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
 	if _, ok := files[goMod]; !ok {
-		files[goMod] = module
+		assert.NoError(
+			t,
+			os.WriteFile(filepath.Join(dir, goMod), []byte(module), fileMode),
+			"the module file is written",
+		)
 	}
 	for name, text := range files {
 		path := filepath.Join(dir, name)

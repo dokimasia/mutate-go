@@ -10,6 +10,8 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+
+	"go.dokimi.dev/mutate/internal/enumerate"
 )
 
 // blank returns spaces in place of each byte of line.
@@ -62,6 +64,20 @@ func TestForms(t *testing.T) {
 			expect.HasPrefix(t, string(prog.Files[filepath.Join(p.Dir, helperFile)]),
 				"//go:build go1.18\n\npackage fixture\n", "the helper file requires go1.18")
 			assert.Equal(t, lines(run(t, bin, p.Dir, active(0)))["Sum"], "8", "the package computes as its source")
+		})
+
+		t.Run("writes a zero value whose type spans lines on one line", func(t *testing.T) {
+			t.Parallel()
+			src := "package fixture\n\nfunc f(n int) struct {\n\ta int\n\tb int // the second field\n} {\n" +
+				"\treturn struct {\n\t\ta int\n\t\tb int // the second field\n\t}{n, n}\n}\n"
+			p, r := fixture(t, map[string]string{"f.go": src})
+			prog := instrument(t, p, r)
+			assert.Length(t, r.Mutants, 1, "the return is the only site")
+			expect.Equal(t, r.Mutants[0].Status, enumerate.Runnable, "the type checker accepts its form")
+			got := string(prog.Files[filepath.Join(p.Dir, "f.go")])
+			expect.Contains(t, got, "\tif _mutateIs(1) { return struct { a int ; b int ; } { } }; return struct {\n",
+				"the form writes the semicolons of the zero value's type")
+			expect.Equal(t, strings.Count(got, "\n"), strings.Count(src, "\n"), "and keeps every line")
 		})
 	})
 }

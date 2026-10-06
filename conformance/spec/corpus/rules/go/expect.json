@@ -9,11 +9,11 @@
       "key": "2d08098b9431da4f",
       "file": "rules.go",
       "start": {
-        "line": 7,
+        "line": 10,
         "column": 2
       },
       "end": {
-        "line": 7,
+        "line": 10,
         "column": 29
       },
       "original": "log.Printf(\"n+1 = %d\", n+1)",
@@ -28,11 +28,11 @@
       "key": "651148f6e01507cb",
       "file": "rules.go",
       "start": {
-        "line": 7,
+        "line": 10,
         "column": 25
       },
       "end": {
-        "line": 7,
+        "line": 10,
         "column": 28
       },
       "original": "n+1",
@@ -47,11 +47,11 @@
       "key": "9b1e9d664a1aa5e6",
       "file": "rules.go",
       "start": {
-        "line": 8,
+        "line": 11,
         "column": 2
       },
       "end": {
-        "line": 8,
+        "line": 11,
         "column": 14
       },
       "original": "return n * 2",
@@ -65,11 +65,11 @@
       "key": "8d6551aeb50a2930",
       "file": "rules.go",
       "start": {
-        "line": 8,
+        "line": 11,
         "column": 9
       },
       "end": {
-        "line": 8,
+        "line": 11,
         "column": 14
       },
       "original": "n * 2",
@@ -83,11 +83,11 @@
       "key": "7076e1e41ae8e186",
       "file": "rules.go",
       "start": {
-        "line": 13,
+        "line": 16,
         "column": 2
       },
       "end": {
-        "line": 13,
+        "line": 16,
         "column": 28
       },
       "original": "return make([]int, 0, n+1)",
@@ -101,16 +101,71 @@
       "key": "4e0f0ff29df64213",
       "file": "rules.go",
       "start": {
-        "line": 13,
+        "line": 16,
         "column": 24
       },
       "end": {
-        "line": 13,
+        "line": 16,
         "column": 27
       },
       "original": "n+1",
       "replacement": "n-1",
       "rule": "capacity"
+    },
+    {
+      "scope": "buffer",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d70fbe1ec07a8b14",
+      "file": "rules.go",
+      "start": {
+        "line": 23,
+        "column": 2
+      },
+      "end": {
+        "line": 23,
+        "column": 31
+      },
+      "original": "(*bytes.Buffer).Grow(&b, n+1)",
+      "replacement": ""
+    },
+    {
+      "scope": "buffer",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "14f00e6f42128e98",
+      "file": "rules.go",
+      "start": {
+        "line": 23,
+        "column": 27
+      },
+      "end": {
+        "line": 23,
+        "column": 30
+      },
+      "original": "n+1",
+      "replacement": "n-1",
+      "rule": "capacity"
+    },
+    {
+      "scope": "buffer",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9343727b6bf6a3a7",
+      "file": "rules.go",
+      "start": {
+        "line": 24,
+        "column": 2
+      },
+      "end": {
+        "line": 24,
+        "column": 11
+      },
+      "original": "return &b",
+      "replacement": "return nil"
     }
   ],
   "skipped": [],

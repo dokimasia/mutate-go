@@ -5,7 +5,6 @@ package main
 
 import (
 	"flag"
-	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -23,8 +22,6 @@ var suffixes = []string{"", "K", "M", "G", "T"}
 
 func TestFlags(t *testing.T) {
 	t.Parallel()
-	wd, err := os.Getwd()
-	assert.NoError(t, err, "the working directory reads")
 
 	t.Run("parse", func(t *testing.T) {
 		t.Parallel()
@@ -48,11 +45,8 @@ func TestFlags(t *testing.T) {
 			}, 0)
 			assert.NoError(t, err, "every flag parses")
 			assert.Equal(t, o, &options{
-				dir: "dir",
-				lines: linesFlag{
-					{Path: filepath.Join(wd, "a.go"), First: 1, Last: 2},
-					{Path: filepath.Join(wd, "b.go"), First: 3, Last: 3},
-				},
+				dir:              "dir",
+				lines:            linesFlag{{Path: "a.go", First: 1, Last: 2}, {Path: "b.go", First: 3, Last: 3}},
 				diff:             "change.diff",
 				sample:           5,
 				includeGenerated: true,
@@ -179,15 +173,15 @@ func TestFlags(t *testing.T) {
 		t.Run("Set", func(t *testing.T) {
 			t.Parallel()
 
-			t.Run("adds the lines of each entry", func(t *testing.T) {
+			t.Run("adds the lines of each entry with its path as the entry writes it", func(t *testing.T) {
 				t.Parallel()
 				var f linesFlag
 				assert.NoError(t, f.Set("a.go:1-2"), "the first entry parses")
-				assert.NoError(t, f.Set("b.go:3-4"), "the second entry parses")
+				assert.NoError(t, f.Set(filepath.Join("sub", "b.go")+":3-4"), "the second entry parses")
 				assert.Equal(t, []selection.Lines(f), []selection.Lines{
-					{Path: filepath.Join(wd, "a.go"), First: 1, Last: 2},
-					{Path: filepath.Join(wd, "b.go"), First: 3, Last: 4},
-				}, "the flag collects both entries")
+					{Path: "a.go", First: 1, Last: 2},
+					{Path: filepath.Join("sub", "b.go"), First: 3, Last: 4},
+				}, "the flag collects both entries without resolving their paths")
 				assert.Equal(t, f.String(), "", "the flag shows no value")
 			})
 

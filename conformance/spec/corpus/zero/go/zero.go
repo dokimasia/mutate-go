@@ -34,3 +34,19 @@ func first[T any](xs []T) T {
 func empty() []int {
 	return []int{}
 }
+
+// pair is a value with a label of any type.
+type pair struct {
+	label any
+	n     int
+}
+
+// answer returns 0 in an interface, which is not nil.
+func answer() any {
+	return 0
+}
+
+// labelled returns a pair whose label is the empty string in an interface.
+func labelled() pair {
+	return pair{label: ""}
+}

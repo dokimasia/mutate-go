@@ -77,6 +77,30 @@ pipe aor 0: n+1 -> "n-1"
 `, "each family suppresses what its rules name, and no rule names the buffer of a channel")
 		})
 
+		t.Run("suppresses the argument of a method expression's call one place after the receiver", func(t *testing.T) {
+			t.Parallel()
+			r := all(t, map[string]string{"grow.go": `package fixture
+
+import (
+	"bytes"
+	"strings"
+)
+
+func grow(n int) (*bytes.Buffer, *strings.Builder) {
+	var b bytes.Buffer
+	(*bytes.Buffer).Grow(&b, n+1)
+	var s strings.Builder
+	(*strings.Builder).Grow(&s, n*2)
+	s.Grow(n - 1)
+	return &b, &s
+}
+`})
+			assert.Equal(t, listing(r, string(spec.AOR)), `grow aor 0: n+1 -> "n-1" [capacity]
+grow aor 1: n*2 -> "n/2" [capacity]
+grow aor 2: n - 1 -> "n + 1" [capacity]
+`, "the capacity of a method expression's call is the argument after the receiver")
+		})
+
 		t.Run("suppresses the marks of test helpers by their APIs and by the method rule", func(t *testing.T) {
 			t.Parallel()
 			r := all(t, map[string]string{"helpers.go": `package fixture

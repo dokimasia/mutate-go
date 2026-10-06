@@ -47,23 +47,34 @@ func TestPlan(t *testing.T) {
 			assert.Equal(t, got, exitFailed, "the failed run decides the status")
 		})
 
-		t.Run("divides GOMAXPROCS among the packages that run at once", func(t *testing.T) {
+		t.Run("gives each package the threads that the running packages leave free", func(t *testing.T) {
 			t.Parallel()
 			var mu sync.Mutex
 			procs := map[string]int{}
+			started := map[string]chan struct{}{
+				"a": make(chan struct{}),
+				"b": make(chan struct{}),
+				"c": make(chan struct{}),
+			}
+			// Each package ends only after the next one started, so a and b
+			// run at once, and c starts beside b after a ended.
+			next := map[string]string{"a": "b", "b": "c"}
 			schedule(t.Context(), listed("a", "b", "c"), 2, time.Time{}, out,
 				func(_ context.Context, pkg load.Listed, n int) int {
 					mu.Lock()
-					defer mu.Unlock()
 					procs[pkg.ImportPath] = n
+					mu.Unlock()
+					close(started[pkg.ImportPath])
+					if after, ok := next[pkg.ImportPath]; ok {
+						<-started[after]
+					}
 					return exitDetected
 				})
 			threads := runtime.GOMAXPROCS(0)
-			assert.Equal(t, procs, map[string]int{
-				"a": max(1, threads/2),
-				"b": max(1, threads/2),
-				"c": threads,
-			}, "the last package to start shares the threads with no package left to start")
+			a := max(1, threads/2)
+			b := max(1, threads-a)
+			assert.Equal(t, procs, map[string]int{"a": a, "b": b, "c": max(1, threads-b)},
+				"a package shares the threads that the running packages leave free among the slots it may fill")
 		})
 
 		t.Run("runs at most the given number of packages at once", func(t *testing.T) {

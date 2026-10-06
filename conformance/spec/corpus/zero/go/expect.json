@@ -180,6 +180,42 @@
       },
       "original": "return []int{}",
       "replacement": "return nil"
+    },
+    {
+      "scope": "answer",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "a52f2ff1d67a0575",
+      "file": "zero.go",
+      "start": {
+        "line": 46,
+        "column": 2
+      },
+      "end": {
+        "line": 46,
+        "column": 10
+      },
+      "original": "return 0",
+      "replacement": "return nil"
+    },
+    {
+      "scope": "labelled",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "94b277eee8101732",
+      "file": "zero.go",
+      "start": {
+        "line": 51,
+        "column": 2
+      },
+      "end": {
+        "line": 51,
+        "column": 24
+      },
+      "original": "return pair{label: \"\"}",
+      "replacement": "return pair{}"
     }
   ],
   "skipped": [],

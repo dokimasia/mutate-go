@@ -26,16 +26,18 @@ const (
 	entrySeparator = ","
 )
 
-// Lines selects the lines First to Last of the file at Path, an absolute
-// path.
+// Lines selects the lines First to Last of the file at Path. A run reads
+// an absolute path, which [Lines.Abs] makes of a relative one.
 type Lines struct {
 	Path        string
 	First, Last int
 }
 
-// ParseEntry parses an entry of a selection, file:first-last, whose file is
-// relative to the working directory, and returns the lines with the file's
-// absolute path. The file ends at the entry's last colon.
+// ParseEntry parses an entry of a selection, file:first-last, and returns
+// its lines with the file as the entry writes it. The file ends at the
+// entry's last colon. ParseEntry reads neither the file nor the working
+// directory, so a caller can parse an entry before it changes the working
+// directory and resolve the path afterwards with [Lines.Abs].
 //
 // # Errors
 //
@@ -50,15 +52,23 @@ func ParseEntry(entry string) (Lines, error) {
 	if colon < 1 || !ok || err1 != nil || err2 != nil || from < 1 || to < from {
 		return Lines{}, fmt.Errorf("selection: %q is not file:first-last with 1 <= first <= last", entry)
 	}
-	// Abs fails only without a working directory, in which the run cannot
-	// load its package either.
-	path, _ := filepath.Abs(entry[:colon])
-	return Lines{Path: path, First: from, Last: to}, nil
+	return Lines{Path: entry[:colon], First: from, Last: to}, nil
+}
+
+// Abs returns l with its path made absolute against the working directory,
+// as [filepath.Abs] makes it. Abs cleans an absolute path and changes it no
+// further.
+func (l Lines) Abs() Lines {
+	// filepath.Abs fails only without a working directory, in which the run
+	// cannot load its package either.
+	l.Path, _ = filepath.Abs(l.Path)
+	return l
 }
 
 // ParseList parses entries separated by commas, as Var states them, and
-// returns their lines in order. It returns nil for an empty list, which
-// selects every line.
+// returns their lines in order, each with its path made absolute against
+// the working directory. It returns nil for an empty list, which selects
+// every line.
 //
 // # Errors
 //
@@ -74,7 +84,7 @@ func ParseList(list string) ([]Lines, error) {
 		if err != nil {
 			return nil, err
 		}
-		lines = append(lines, l)
+		lines = append(lines, l.Abs())
 	}
 	return lines, nil
 }

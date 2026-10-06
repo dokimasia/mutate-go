@@ -139,6 +139,27 @@ func TestOutput(t *testing.T) {
 				}
 				wg.Wait()
 				assert.Equal(t, buf.String(), strings.Repeat("one line\n", writers), "no line interleaves")
+				assert.NoError(t, w.Err(), "and no write failed")
+			})
+
+			t.Run("returns the error of a write that fails", func(t *testing.T) {
+				t.Parallel()
+				w := &lockedWriter{w: full{}}
+				_, err := w.Write([]byte("one line\n"))
+				assert.ErrorIs(t, err, errFull, "the write returns the stream's error")
+			})
+		})
+
+		t.Run("Err", func(t *testing.T) {
+			t.Parallel()
+
+			t.Run("returns the first error of a write", func(t *testing.T) {
+				t.Parallel()
+				w := &lockedWriter{w: full{}}
+				_, _ = w.Write([]byte("first\n"))
+				w.w = io.Discard
+				_, _ = w.Write([]byte("second\n"))
+				assert.ErrorIs(t, w.Err(), errFull, "a later write that succeeds keeps the error")
 			})
 		})
 	})

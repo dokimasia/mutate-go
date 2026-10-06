@@ -17,6 +17,14 @@ import (
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
+// recordDirVar is the variable of the environment that names the directory
+// where Check writes the run's record.
+const recordDirVar = "DOKIMI_MUTATE_RECORD_DIR"
+
+// workingDir is the test's working directory, the package directory under
+// go test, which Check tests and against which it states each path.
+const workingDir = "."
+
 // Check runs mutation testing on the package in the test's working
 // directory, and fails tb with one line for each undetected mutant: a
 // survivor, or a mutant whose site the tests never execute. Each line
@@ -38,6 +46,10 @@ import (
 // mutant and the closing control run, Check marks the remaining mutants
 // not-run and fails tb. Run it with -timeout 0, or with a timeout longer
 // than the run.
+//
+// Check stops tb with a fatal failure, before any run, when
+// DOKIMI_MUTATE_LINES does not parse or the run cannot make its work
+// directory. A record that does not write fails tb after the report.
 func Check(tb testing.TB, opts ...Option) {
 	tb.Helper()
 	if _, inside := os.LookupEnv(spec.Load().Protocol.Variable); inside {
@@ -62,7 +74,7 @@ func Check(tb testing.TB, opts ...Option) {
 	rec, err := run.Run(
 		context.Background(),
 		run.Config{
-			Dir: ".", Env: os.Environ(), Lines: lines, Suite: c.suite, Workers: c.workers, Deadline: deadline,
+			Dir: workingDir, Env: os.Environ(), Lines: lines, Suite: c.suite, Workers: c.workers, Deadline: deadline,
 			Confirm: c.confirm, IncludeGenerated: c.includeGenerated,
 		},
 	)
@@ -71,7 +83,7 @@ func Check(tb testing.TB, opts ...Option) {
 		return
 	}
 	reportTo(tb, rec)
-	if dir := os.Getenv("DOKIMI_MUTATE_RECORD_DIR"); dir != "" {
+	if dir := os.Getenv(recordDirVar); dir != "" {
 		if _, err := rec.Write(dir); err != nil {
 			tb.Errorf("mutate: %v", err)
 		}
@@ -84,15 +96,16 @@ func Check(tb testing.TB, opts ...Option) {
 // the mutants that did not run, and logs the run's summary.
 func reportTo(tb testing.TB, rec *record.Record) {
 	tb.Helper()
+	protocol, wd := spec.Load().Protocol, record.Resolved(workingDir)
 	for _, m := range rec.Mutants {
-		if report.Listed(m.Verdict) {
-			fail(tb, report.Line(m, rec.Path(m.File, ".")))
+		if report.Listed(protocol, m.Verdict) {
+			fail(tb, report.Line(m, rec.Path(m.File, wd)))
 		}
 	}
 	for _, note := range report.Notes(rec) {
 		tb.Errorf("mutate: %s", note)
 	}
-	tb.Log("mutate: " + report.Summary(rec, spec.Load().Protocol))
+	tb.Log("mutate: " + report.Summary(rec, protocol))
 }
 
 // fail writes line to the test's output without the source position that

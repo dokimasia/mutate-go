@@ -63,11 +63,16 @@ func suite(ctx context.Context, patterns []string, out *output) ([]string, bool)
 
 // schedule calls test for each of pkgs, for at most parallel packages at
 // once, in the order of pkgs, and returns the highest exit status that test
-// returns. Each package gets GOMAXPROCS divided by the number of packages
-// that run at once, parallel or the number of packages left to start when
-// that is less, and at least 1. A package starts only while ctx is not done
-// and deadline, when it is not zero, has not passed. schedule writes a note
-// on each package that does not start, and returns exitFailed for it.
+// returns. A package starts only while ctx is not done and deadline, when
+// it is not zero, has not passed. schedule writes a note on each package
+// that does not start, and returns exitFailed for it.
+//
+// Each package gets a share of the threads that the running packages leave
+// free, GOMAXPROCS minus their shares, divided by the packages that may
+// start beside it: the free slots of parallel, or the packages left to
+// start when they are fewer, and at least 1. A package returns its share
+// when its run ends, so the packages that run at once use at most
+// GOMAXPROCS threads, or one each where GOMAXPROCS is less than parallel.
 func schedule(
 	ctx context.Context,
 	pkgs []load.Listed,
@@ -76,13 +81,10 @@ func schedule(
 	out *output,
 	test func(ctx context.Context, pkg load.Listed, procs int) int,
 ) int {
+	threads := runtime.GOMAXPROCS(0)
+	// mu guards the status and the threads and the packages that run.
 	var mu sync.Mutex
-	status := exitDetected
-	raise := func(s int) {
-		mu.Lock()
-		defer mu.Unlock()
-		status = max(status, s)
-	}
+	status, used, running := exitDetected, 0, 0
 	slots := make(chan struct{}, parallel)
 	var wg sync.WaitGroup
 	for i, pkg := range pkgs {
@@ -93,15 +95,22 @@ func schedule(
 		} else if !deadline.IsZero() && time.Now().After(deadline) {
 			why = "-" + flagTimeout + " passed before the package started"
 		}
+		mu.Lock()
 		if why != "" {
+			status = max(status, exitFailed)
+			mu.Unlock()
 			<-slots
 			out.errorf("%s: not tested, because %s", pkg.ImportPath, why)
-			raise(exitFailed)
 			continue
 		}
-		procs := max(1, runtime.GOMAXPROCS(0)/min(parallel, len(pkgs)-i))
+		procs := max(1, (threads-used)/min(parallel-running, len(pkgs)-i))
+		used, running = used+procs, running+1
+		mu.Unlock()
 		wg.Go(func() {
-			raise(test(ctx, pkg, procs))
+			s := test(ctx, pkg, procs)
+			mu.Lock()
+			status, used, running = max(status, s), used-procs, running-1
+			mu.Unlock()
 			<-slots
 		})
 	}

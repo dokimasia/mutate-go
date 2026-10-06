@@ -22,10 +22,12 @@ import (
 // without a verdict whose sites the program executed, because each test
 // costs a run.
 //
-// alone drops a program's record when one of its tests fails alone, or
-// when ctx or the caller's deadline ends the runs before each of its tests
-// ran. A test's run starts only while the time left covers the program's
-// deadline and the reserve of a mutant.
+// A test's run starts, as dispatch starts it, only while the time left
+// covers the program's deadline and the reserve of a mutant. alone drops a
+// program's record when one of its tests fails alone, when the trace of a
+// test's run does not read or lacks the start mark, because the trace then
+// states no site that the engine can trust, or when ctx or the caller's
+// deadline ends the runs before each of its tests ran.
 func (r *runner) alone(ctx context.Context) {
 	type job struct {
 		p           *program
@@ -51,31 +53,19 @@ func (r *runner) alone(ctx context.Context) {
 	}
 	var mu sync.Mutex
 	broken := map[*program]bool{}
-	queue := make(chan job)
-	var wg sync.WaitGroup
-	for range max(1, r.cfg.Workers) {
-		wg.Go(func() {
-			for j := range queue {
-				p, env := j.p, r.env(0, j.trace)
-				args := append(testbin.Flags(p.deadline, true), testbin.Only(j.test))
-				res := r.execute(ctx, p, p.bin, env, args, p.deadline, testbin.BackupDelay, true)
-				data, _ := os.ReadFile(j.trace)
-				sites, _ := render.ParseTrace(data)
-				mu.Lock()
-				broken[j.p] = broken[j.p] || failed(res)
-				j.p.sites[j.test], j.p.seconds[j.test] = sites, res.Seconds
-				mu.Unlock()
-			}
-		})
-	}
-	for _, j := range jobs {
-		if ctx.Err() != nil || !r.cfg.Deadline.IsZero() && time.Until(r.cfg.Deadline) < r.reserve()+j.p.deadline {
-			break
-		}
-		queue <- j
-	}
-	close(queue)
-	wg.Wait()
+	need := func(k int) time.Duration { return r.reserve() + jobs[k].p.deadline }
+	_, _, wait := r.dispatch(ctx, len(jobs), need, func(k int) {
+		j := jobs[k]
+		args := append(testbin.Flags(j.p.deadline, true), testbin.Only(j.test))
+		res := r.execute(ctx, j.p, j.p.bin, r.env(0, j.trace), args, j.p.deadline, testbin.BackupDelay, true)
+		data, err := os.ReadFile(j.trace)
+		sites, started := render.ParseTrace(data)
+		mu.Lock()
+		defer mu.Unlock()
+		broken[j.p] = broken[j.p] || failed(res) || err != nil || !started
+		j.p.sites[j.test], j.p.seconds[j.test] = sites, res.Seconds
+	})
+	wait()
 	for _, p := range r.programs {
 		if broken[p] || len(p.sites) < len(p.tests) {
 			p.sites, p.seconds = nil, nil

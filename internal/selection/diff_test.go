@@ -208,6 +208,16 @@ func TestDiff(t *testing.T) {
 			{"returns an error for a new count that is not a number", "+++ %[1]s\n@@ -1 +1,y @@\n", "does not parse"},
 			{"returns an error for a negative count", "+++ %[1]s\n@@ -1,-1 +1 @@\n", "does not parse"},
 			{
+				"returns an error for a new range of lines at line 0",
+				"+++ %[1]s\n@@ -0,0 +0,1 @@\n+a\n",
+				"does not parse",
+			},
+			{
+				"returns an error for an old range of lines at line 0",
+				"+++ %[1]s\n@@ -0 +1 @@\n-a\n+b\n",
+				"does not parse",
+			},
+			{
 				"returns an error for a diff that ends inside a hunk", "+++ %[1]s\n@@ -1,2 +1,2 @@\n package fixture",
 				"ends inside the hunk",
 			},

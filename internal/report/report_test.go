@@ -57,7 +57,7 @@ func TestReport(t *testing.T) {
 			t.Parallel()
 			var listed []spec.Verdict
 			for _, v := range protocol.Verdicts {
-				if report.Listed(v.ID) {
+				if report.Listed(protocol, v.ID) {
 					listed = append(listed, v.ID)
 				}
 			}
@@ -172,21 +172,27 @@ func TestReport(t *testing.T) {
 	t.Run("Notes", func(t *testing.T) {
 		t.Parallel()
 		notRun := func(reason string) record.Mutant { return record.Mutant{Verdict: spec.NotRun, Reason: reason} }
+		// cut is the control of a run whose opening control run passed and
+		// whose closing control run did not complete.
+		cut := &record.Control{}
 		tests := []struct {
 			name    string
 			errors  []record.RunError
 			mutants []record.Mutant
+			control *record.Control
 			want    []string
 		}{
 			{
 				"returns nil for a run without a run error and without a mutant that did not run",
 				nil,
 				[]record.Mutant{{Verdict: spec.Killed}},
+				&record.Control{Closing: &record.Closing{}},
 				nil,
 			},
 			{
 				"states each run error by its code and its message",
 				[]record.RunError{{Code: spec.ErrorBuild, Message: "x"}, {Code: spec.ErrorChangedFiles, Message: "y"}},
+				nil,
 				nil,
 				[]string{"build: x", "changed-files: y"},
 			},
@@ -194,31 +200,53 @@ func TestReport(t *testing.T) {
 				"states the number of the mutants that did not run and their reason",
 				nil,
 				[]record.Mutant{notRun("the caller cancelled the run"), notRun("the caller cancelled the run")},
+				nil,
 				[]string{"2 mutants did not run: the caller cancelled the run"},
 			},
 			{
 				"states one mutant that did not run in the singular",
 				nil,
 				[]record.Mutant{{Verdict: spec.Killed}, notRun("the caller cancelled the run")},
+				nil,
 				[]string{"1 mutant did not run: the caller cancelled the run"},
 			},
 			{
 				"states each reason on a line of its own in the order of its first mutant",
 				nil,
 				[]record.Mutant{notRun("b"), notRun("a"), notRun("b")},
+				nil,
 				[]string{"2 mutants did not run: b", "1 mutant did not run: a"},
 			},
 			{
 				"states the run errors before the mutants that did not run",
 				[]record.RunError{{Code: spec.ErrorControl, Message: "x"}},
 				[]record.Mutant{notRun("the opening control run failed")},
+				nil,
 				[]string{"control-failed: x", "1 mutant did not run: the opening control run failed"},
+			},
+			{
+				"states a closing control run that did not complete after the mutants that did not run",
+				nil,
+				[]record.Mutant{notRun("the caller cancelled the run")},
+				cut,
+				[]string{
+					"1 mutant did not run: the caller cancelled the run",
+					"the closing control run did not complete, so no run checked that the mutant runs left the " +
+						"tests' state intact",
+				},
+			},
+			{
+				"states a closing control run that failed by its run error alone",
+				[]record.RunError{{Code: spec.ErrorClosing, Message: "x"}},
+				nil,
+				cut,
+				[]string{"closing-control-failed: x"},
 			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				rec := &record.Record{Errors: tt.errors, Mutants: tt.mutants}
+				rec := &record.Record{Errors: tt.errors, Mutants: tt.mutants, Control: tt.control}
 				assert.Equal(t, report.Notes(rec), tt.want, "the notes state what the summary leaves out")
 			})
 		}

@@ -138,13 +138,24 @@ func TestRecord(t *testing.T) {
 				},
 				false,
 			},
+			{
+				"reports true for a closing control run that did not complete after an opening one that passed",
+				func(r *record.Record) { r.Control.Closing = nil },
+				true,
+			},
+			{
+				"reports false for a run without a control run",
+				func(r *record.Record) { r.Control = nil },
+				false,
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				r := full()
 				tt.give(r)
-				assert.Equal(t, r.Failed(), tt.want, "a run error, an error and an unlimited not-run fail the run")
+				assert.Equal(t, r.Failed(), tt.want,
+					"a run error, an error, an unlimited not-run and a missing closing control run fail the run")
 			})
 		}
 	})
@@ -281,27 +292,49 @@ func TestRecord(t *testing.T) {
 		t.Parallel()
 		root, err := filepath.EvalSymlinks(t.TempDir())
 		assert.NoError(t, err, "the root resolves")
-		assert.NoError(t, os.Mkdir(filepath.Join(root, "pkg"), dirMode), "the package's directory is made")
-		link := filepath.Join(t.TempDir(), "link")
-		assert.NoError(t, os.Symlink(filepath.Join(root, "pkg"), link), "the link is made")
 		r := &record.Record{Root: root}
 		tests := []struct {
 			name, file, dir, want string
 		}{
-			{"returns the file relative to a directory through a link", "pkg/a.go", link, "a.go"},
+			{"returns a file of the directory by its name", "pkg/a.go", filepath.Join(root, "pkg"), "a.go"},
 			{
-				"returns the file relative to a directory",
-				"b.go", filepath.Join(root, "pkg"), filepath.Join("..", "b.go"),
-			},
-			{
-				"returns the file relative to a directory that does not exist",
-				"b.go", filepath.Join(root, "missing"), filepath.Join("..", "b.go"),
+				"returns a file outside the directory through its parent", "b.go", filepath.Join(root, "pkg"),
+				filepath.Join("..", "b.go"),
 			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				assert.Equal(t, r.Path(tt.file, tt.dir), tt.want, "the path leads from the directory to the file")
+			})
+		}
+	})
+
+	t.Run("Resolved", func(t *testing.T) {
+		t.Parallel()
+		root, err := filepath.EvalSymlinks(t.TempDir())
+		assert.NoError(t, err, "the root resolves")
+		assert.NoError(t, os.Mkdir(filepath.Join(root, "pkg"), dirMode), "the package's directory is made")
+		link := filepath.Join(t.TempDir(), "link")
+		assert.NoError(t, os.Symlink(filepath.Join(root, "pkg"), link), "the link is made")
+		wd, err := os.Getwd()
+		assert.NoError(t, err, "the working directory reads")
+		wd, err = filepath.EvalSymlinks(wd)
+		assert.NoError(t, err, "the working directory resolves")
+		tests := []struct {
+			name, dir, want string
+		}{
+			{"returns a directory through a link as the link's target", link, filepath.Join(root, "pkg")},
+			{
+				"returns a directory that does not exist as an absolute path",
+				filepath.Join(root, "missing"), filepath.Join(root, "missing"),
+			},
+			{"returns the working directory for the current directory", ".", wd},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				assert.Equal(t, record.Resolved(tt.dir), tt.want, "the directory is absolute and its links resolved")
 			})
 		}
 	})

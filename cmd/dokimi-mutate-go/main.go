@@ -83,11 +83,20 @@ type cli struct {
 // command line that is not valid gets one line that states the error, and
 // a line on the help. Otherwise main changes to the directory of -C,
 // resolves the selection, the suite and the packages, and tests or lists
-// each package.
-func (c *cli) main(ctx context.Context, args []string) int {
+// each package. When a write to stdout fails, main states the first error
+// on stderr and returns at least exitFailed, because the command did not
+// write its results.
+func (c *cli) main(ctx context.Context, args []string) (status int) {
+	stdout := &lockedWriter{w: c.stdout}
+	defer func() {
+		if err := stdout.Err(); err != nil {
+			fmt.Fprintf(c.stderr, "%s: standard output: %v\n", name, err)
+			status = max(status, exitFailed)
+		}
+	}()
 	o, err := parse(args, c.budget)
 	if errors.Is(err, flag.ErrHelp) {
-		help(c.stdout, map[string]string{flagBudget: budgetDefault(c.budget)})
+		help(stdout, map[string]string{flagBudget: budgetDefault(c.budget)})
 		return exitDetected
 	}
 	if err != nil {
@@ -95,17 +104,20 @@ func (c *cli) main(ctx context.Context, args []string) int {
 		return exitInvalid
 	}
 	if o.version {
-		version(c.stdout)
+		version(stdout)
 		return exitDetected
 	}
-	out := &output{stdout: &lockedWriter{w: c.stdout}, stderr: &lockedWriter{w: c.stderr}, json: o.json}
+	out := &output{stdout: stdout, stderr: &lockedWriter{w: c.stderr}, json: o.json}
 	if o.dir != "" {
 		if err := os.Chdir(o.dir); err != nil {
 			out.errorf("-%s: %v", flagDir, err)
 			return exitInvalid
 		}
 	}
-	lines := []selection.Lines(o.lines)
+	var lines []selection.Lines
+	for _, l := range o.lines {
+		lines = append(lines, l.Abs())
+	}
 	if o.diff != "" {
 		changed, err := c.readDiff(o.diff)
 		if err != nil {
@@ -119,7 +131,6 @@ func (c *cli) main(ctx context.Context, args []string) int {
 		return exitInvalid
 	}
 	pkgs, ok := packages(ctx, o.patterns, out)
-	status := exitDetected
 	if !ok {
 		status = exitInvalid
 	}

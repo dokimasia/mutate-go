@@ -49,6 +49,27 @@ func TestProtocol(t *testing.T) {
 		})
 	})
 
+	t.Run("Class", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns the class that the protocol gives each verdict", func(t *testing.T) {
+			t.Parallel()
+			p := spec.Load().Protocol
+			for _, v := range p.Verdicts {
+				assert.Equal(t, p.Class(v.ID), v.Score, string(v.ID)+" has the protocol's class")
+			}
+			assert.Equal(t,
+				[]spec.ScoreClass{p.Class(spec.Killed), p.Class(spec.NoCoverage), p.Class(spec.NotRun)},
+				[]spec.ScoreClass{spec.Detected, spec.Undetected, spec.Excluded},
+				"a killed mutant is detected, one without coverage undetected, and one that did not run excluded")
+		})
+
+		t.Run("returns the empty class for a verdict that the protocol does not define", func(t *testing.T) {
+			t.Parallel()
+			assert.Empty(t, spec.Load().Protocol.Class(""), "a mutant without a verdict has no class")
+		})
+	})
+
 	t.Run("ErrorCode", func(t *testing.T) {
 		t.Parallel()
 

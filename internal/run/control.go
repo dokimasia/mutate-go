@@ -166,7 +166,9 @@ func (r *runner) ordinary(ctx context.Context) string {
 }
 
 // closing runs the closing control run of each program, each under the
-// program's limits, unless the caller cancelled the run.
+// program's limits, unless the caller cancelled the run. A run that the
+// caller cancels before or during it states no closing control run, and
+// fails, as [record.Record.Failed] states, without a run error.
 func (r *runner) closing(ctx context.Context) {
 	if ctx.Err() != nil {
 		return

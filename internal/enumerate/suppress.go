@@ -21,10 +21,15 @@ const (
 	kindSeparator   = ","
 )
 
-// annotation is one annotation comment and the line that it covers.
-type annotation struct {
+// fileLine is one line of a file, the key of the annotations that cover it.
+type fileLine struct {
 	f    *load.File
 	line int
+}
+
+// annotation is one annotation comment. The enumerator keys it by the line
+// that it covers.
+type annotation struct {
 	// kinds contains each name that the annotation lists, and unknown the
 	// names that are no kind, class or keyword of the catalogue.
 	kinds   map[string]bool
@@ -45,17 +50,18 @@ func (a *annotation) stale() string {
 	return message
 }
 
-// suppression is the code that a rule family suppresses. For a call of a
-// family that lists calls, call is the call: the call itself, a statement
+// suppression is the code that a rule family suppresses in one file. For a
+// call of a family that lists calls, call is the call, and lparen and
+// rparen are the offsets of its parentheses: the call itself, a statement
 // that makes it, and every site inside its parentheses are suppressed. For
 // an argument rule, call is nil and the range is the argument. For a
-// compound statement that a family suppresses as a whole, call is nil and
-// the range is the statement.
+// compound statement that a family suppresses as a whole, or a part of
+// one, call is nil and the range is the statement or the part.
 type suppression struct {
-	f          *load.File
-	start, end int
-	family     spec.Family
-	call       *ast.CallExpr
+	start, end     int
+	lparen, rparen int
+	family         spec.Family
+	call           *ast.CallExpr
 }
 
 // resultRule is a result rule of a family: the family, and the type of the
@@ -117,26 +123,36 @@ func (e *enumerator) family(f *load.File, call *ast.CallExpr) {
 	}
 	if ok {
 		e.calls[call] = family
-		e.suppressions = append(
-			e.suppressions,
-			suppression{f: f, start: e.off(call.Pos()), end: e.off(call.End()), family: family, call: call},
-		)
+		e.suppressions[f] = append(e.suppressions[f], suppression{
+			start: e.off(call.Pos()), end: e.off(call.End()), lparen: e.off(call.Lparen), rparen: e.off(call.Rparen),
+			family: family, call: call,
+		})
 		return
+	}
+	// A rule names an argument by the index of the API's parameter. A call of
+	// a method expression passes the receiver first, so the argument is one
+	// place later there.
+	receiver := 0
+	if sel, isSel := ast.Unparen(call.Fun).(*ast.SelectorExpr); isSel {
+		if s := info.Selections[sel]; s != nil && s.Kind() == types.MethodExpr {
+			receiver = 1
+		}
 	}
 	// The overlay states each argument rule in one family, so one family at
 	// most suppresses an argument, whatever the order of the map.
 	for family, rules := range e.def.Overlay.Families {
 		for _, a := range rules.Arguments {
-			if a.Func != name || a.Argument >= len(call.Args) {
+			at := a.Argument + receiver
+			if a.Func != name || at >= len(call.Args) {
 				continue
 			}
 			if name == spec.Make && allocated(info.TypeOf(call.Args[0])) != a.Of {
 				continue
 			}
-			arg := call.Args[a.Argument]
-			e.suppressions = append(
-				e.suppressions,
-				suppression{f: f, start: e.off(arg.Pos()), end: e.off(arg.End()), family: family},
+			arg := call.Args[at]
+			e.suppressions[f] = append(
+				e.suppressions[f],
+				suppression{start: e.off(arg.Pos()), end: e.off(arg.End()), family: family},
 			)
 		}
 	}
@@ -337,7 +353,7 @@ func (e *enumerator) parseAnnotations(f *load.File) {
 				)
 				continue
 			}
-			a := &annotation{f: f, line: line, kinds: map[string]bool{}, reason: reason, where: where}
+			a := &annotation{kinds: map[string]bool{}, reason: reason, where: where}
 			for k := range strings.SplitSeq(list, kindSeparator) {
 				name := strings.TrimSpace(k)
 				a.kinds[name] = true
@@ -346,31 +362,43 @@ func (e *enumerator) parseAnnotations(f *load.File) {
 				}
 			}
 			e.annotations = append(e.annotations, a)
+			covered := fileLine{f: f, line: line}
+			e.covers[covered] = append(e.covers[covered], a)
 		}
 	}
 }
 
-// suppress applies the rule families, then the annotations, to m.
-func (e *enumerator) suppress(m *Mutant) {
-	s := m.Site
-	for _, sup := range e.suppressions {
-		if sup.f != s.File {
-			continue
-		}
+// ruleOf returns the family of the first suppression of s's file, in the
+// order that the enumeration makes them, that suppresses s: a range that
+// contains s, the parentheses of a call that contain s, the call itself, or
+// the call that s's statement makes. It returns "" when none does. It
+// compares s with each suppression of its file once, so a site costs
+// O(suppressions of its file).
+func (e *enumerator) ruleOf(s *Site) spec.Family {
+	for _, sup := range e.suppressions[s.File] {
 		inside := sup.start <= s.Start && s.End <= sup.end
 		if sup.call != nil {
-			args := e.off(sup.call.Lparen) < s.Start && s.End <= e.off(sup.call.Rparen)
+			args := sup.lparen < s.Start && s.End <= sup.rparen
 			whole := s.Start == sup.start && s.End == sup.end
 			inside = args || whole || s.Form == Delete && callOf(s.Node.(ast.Stmt)) == sup.call
 		}
 		if inside {
-			m.Status, m.Rule, m.Reason = Suppressed, sup.family, ""
-			return
+			return sup.family
 		}
 	}
-	for _, a := range e.annotations {
-		if a.f == s.File && a.line == s.StartPos.Line &&
-			(a.kinds[string(m.Kind)] || a.kinds[string(e.classes[m.Kind])] || a.kinds[e.def.Catalogue.Every]) {
+	return ""
+}
+
+// suppress suppresses m by rule, the family that ruleOf returns for m's
+// site, or else by the first annotation of the site's line that lists m's
+// kind, its class or the keyword of every kind.
+func (e *enumerator) suppress(m *Mutant, rule spec.Family) {
+	if rule != "" {
+		m.Status, m.Rule, m.Reason = Suppressed, rule, ""
+		return
+	}
+	for _, a := range e.covers[fileLine{f: m.Site.File, line: m.Site.StartPos.Line}] {
+		if a.kinds[string(m.Kind)] || a.kinds[string(e.classes[m.Kind])] || a.kinds[e.def.Catalogue.Every] {
 			m.Status, m.Reason = Suppressed, a.reason
 			a.used = true
 			return

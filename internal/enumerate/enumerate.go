@@ -174,15 +174,17 @@ type Generated struct {
 // with the selection and the generated files that opts states.
 func Enumerate(p *load.Package, d spec.Definition, opts Options) *Result {
 	e := &enumerator{
-		pkg:      p,
-		def:      d,
-		include:  opts.IncludeGenerated,
-		families: map[string]spec.Family{},
-		classes:  map[spec.Kind]spec.Class{},
-		rank:     map[spec.Kind]int{},
-		names:    map[string]bool{d.Catalogue.Every: true},
-		calls:    map[*ast.CallExpr]spec.Family{},
-		operands: map[ast.Expr]bool{},
+		pkg:          p,
+		def:          d,
+		include:      opts.IncludeGenerated,
+		families:     map[string]spec.Family{},
+		classes:      map[spec.Kind]spec.Class{},
+		rank:         map[spec.Kind]int{},
+		names:        map[string]bool{d.Catalogue.Every: true},
+		suppressions: map[*load.File][]suppression{},
+		covers:       map[fileLine][]*annotation{},
+		calls:        map[*ast.CallExpr]spec.Family{},
+		operands:     map[ast.Expr]bool{},
 	}
 	for family, rules := range d.Overlay.Families {
 		for _, api := range rules.APIs {
@@ -194,7 +196,7 @@ func Enumerate(p *load.Package, d spec.Definition, opts Options) *Result {
 		e.rank[k.ID] = i
 		e.names[string(k.ID)], e.names[string(k.Class)] = true, true
 	}
-	e.results = e.resultVariables()
+	e.results, e.unwritten = e.resultVariables(), e.unwrittenVariables()
 	for _, f := range p.Files {
 		if e.target(f) {
 			e.file(f)
@@ -220,7 +222,9 @@ func (e *enumerator) target(f *load.File) bool {
 func (e *enumerator) generated() []Generated {
 	g := &enumerator{
 		pkg: e.pkg, def: e.def, include: e.include, families: e.families, classes: e.classes, rank: e.rank,
-		names: e.names, calls: map[*ast.CallExpr]spec.Family{}, operands: map[ast.Expr]bool{}, results: e.results,
+		names: e.names, suppressions: map[*load.File][]suppression{}, covers: map[fileLine][]*annotation{},
+		calls: map[*ast.CallExpr]spec.Family{}, operands: map[ast.Expr]bool{}, results: e.results,
+		unwritten: e.unwritten,
 	}
 	out := []Generated{}
 	for _, f := range e.pkg.Files {
@@ -242,14 +246,19 @@ type enumerator struct {
 	pkg *load.Package
 	def spec.Definition
 	// include reports whether the enumeration includes generated files.
-	include      bool
-	families     map[string]spec.Family
-	classes      map[spec.Kind]spec.Class
-	rank         map[spec.Kind]int
-	sites        []*Site
-	skips        []skip
+	include  bool
+	families map[string]spec.Family
+	classes  map[spec.Kind]spec.Class
+	rank     map[spec.Kind]int
+	sites    []*Site
+	skips    []skip
+	// annotations lists every annotation in the order of the files and their
+	// comments, and covers lists them by the line that each covers.
+	// suppressions lists the suppressions of each file in the order that the
+	// enumeration makes them.
 	annotations  []*annotation
-	suppressions []suppression
+	covers       map[fileLine][]*annotation
+	suppressions map[*load.File][]suppression
 	problems     []Problem
 	// names contains each name that an annotation can list: a kind, a
 	// class, and the keyword of every kind.
@@ -257,10 +266,12 @@ type enumerator struct {
 	// calls maps each call that a family which lists calls suppresses to
 	// the family. operands contains each operand, without its parentheses,
 	// of a connector that is a site. results maps each variable whose calls
-	// a result rule puts into a family to the family.
-	calls    map[*ast.CallExpr]spec.Family
-	operands map[ast.Expr]bool
-	results  map[*types.Var]spec.Family
+	// a result rule puts into a family to the family. unwritten contains
+	// each variable that unwrittenVariables returns.
+	calls     map[*ast.CallExpr]spec.Family
+	operands  map[ast.Expr]bool
+	results   map[*types.Var]spec.Family
+	unwritten map[*types.Var]bool
 }
 
 type skip struct {
@@ -365,6 +376,7 @@ func (e *enumerator) result(lines []Range) *Result {
 		)
 		s.StartPos, s.EndPos = e.position(s.File, s.Start), e.position(s.File, s.End)
 		tokens := Tokens(s.File.Text[s.Start:s.End])
+		rule := e.ruleOf(s)
 		for _, m := range s.Mutants {
 			group := strings.Join([]string{s.File.Name, s.Scope, string(m.Kind), tokens}, keySeparator)
 			m.Occurrence = occurrences[group]
@@ -375,7 +387,7 @@ func (e *enumerator) result(lines []Range) *Result {
 			// suppresses only mutants outside the selection is not stale. A
 			// mutant outside the selection is not-selected, whatever else
 			// excludes it, and states no rule or reason.
-			e.suppress(m)
+			e.suppress(m, rule)
 			if !selected(lines, s.File.Name, s.StartPos.Line) {
 				m.Status, m.Rule, m.Reason = NotSelected, "", ""
 			}

@@ -104,7 +104,9 @@ Execution:
 	-C dir
 		Change to dir before the command resolves packages and paths.
 	-p n
-		The number of packages to test at once. The default is 1.
+		The number of packages to test at once. The default is 1. The
+		packages that run at once share the command's GOMAXPROCS
+		threads.
 	-workers n
 		The number of mutants of one package to test at once. The
 		default is 1. Above 1, tests that share a resource, such as a
@@ -151,7 +153,8 @@ Exit status:
 	1  A package has a mutant that survived or that no test covers.
 	2  The command line or an input is invalid.
 	3  A run failed, such as a package that does not build, tests that
-	   fail without a mutant, or a run that -timeout ended.
+	   fail without a mutant, or a run that -timeout ended. The command
+	   also exits with 3 when it cannot write to standard output.
 
 A test can read two variables. DOKIMI_MUTATE_MUTANT is 0 in the control runs
 and the active mutant's number in a mutant's run. DOKIMI_MUTATE_INSTRUMENTED
@@ -262,7 +265,9 @@ its confirmation run. Every run of the instrumented test binary also has
   `DOKIMI_MUTATE_INSTRUMENTED` is set.
 - A run fails with the error `changed-files` when a test adds, changes or
   removes a file of the package, such as a failing input that it stores in
-  `testdata` for later runs. Do not store such a file while
+  `testdata` for later runs. Hidden files count, and so does every file
+  below `testdata`. Outside `testdata`, the files of a directory whose name
+  starts with a dot, such as `.git`, do not. Do not store such a file while
   `DOKIMI_MUTATE_MUTANT` is set to a value other than 0.
 
 With `-confirm` or `mutate.Confirm()`, the engine runs each survivor, and
@@ -376,9 +381,11 @@ suppressed mutant with its reason, and the score leaves it out.
   once, each in its own process. Tests that share a resource outside their
   temporary directory, such as a fixed port, then fail each other, and the
   failures count as kills.
-- The packages together use GOMAXPROCS threads. Every go command of a
-  package runs with GOMAXPROCS divided by `-p`, and every test binary with
-  that number divided by the workers.
+- The packages that run at once share GOMAXPROCS threads. A package that
+  starts gets the threads that the running packages leave free, divided by
+  the packages that may start beside it, and returns them when its run
+  ends. Every go command of a package runs with its share, and every test
+  binary with the share divided by the workers.
 - A mutant's run of a test binary ends at 10 times that binary's time in
   the opening control run plus 2 seconds. On Linux, it also ends when its
   resident memory exceeds 4 times that binary's peak in the opening control
@@ -390,10 +397,11 @@ suppressed mutant with its reason, and the score leaves it out.
   the whole suite only when they pass. The first part ends at 10 times
   those tests' times plus 2 seconds, so a mutant that hangs in a fast test
   does not wait for the binary's slowest tests.
-- `-memory` admits the runs of a package only while the memory ceilings of
-  every admitted package's runs fit in the budget. The engine ends each run
-  that crosses its ceiling, so the runs together use about the budget at
-  most, by default three quarters of a CI container's memory limit.
+- `-memory-budget` admits the runs of a package only while the memory
+  ceilings of every admitted package's runs fit in the budget. The engine
+  ends each run that crosses its ceiling, so the runs together use about
+  the budget at most, by default three quarters of a CI container's memory
+  limit.
 - The mutants run in the order of their keys, which is a pseudo-random
   order that every run of the same code repeats. When `-timeout`, the
   test's deadline or an interrupt ends a run early, the mutants that ran are
@@ -402,6 +410,8 @@ suppressed mutant with its reason, and the score leaves it out.
   `fixture: the run failed, 40 of a sample of 52 mutants detected (76%): ...`
   A run that `-sample` alone ends does not fail, and its score is the
   sample's: `fixture: 40 of a sample of 52 mutants detected (76%): ...`
+- An interrupt during the closing control run fails the run too, because
+  no run then checked that the mutant runs left the tests' state intact.
 
 ## Develop
 

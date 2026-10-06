@@ -58,7 +58,9 @@
 //	-C dir
 //		Change to dir before the command resolves packages and paths.
 //	-p n
-//		The number of packages to test at once. The default is 1.
+//		The number of packages to test at once. The default is 1. The
+//		packages that run at once share the command's GOMAXPROCS
+//		threads.
 //	-workers n
 //		The number of mutants of one package to test at once. The
 //		default is 1. Above 1, tests that share a resource, such as a
@@ -105,7 +107,8 @@
 //	1  A package has a mutant that survived or that no test covers.
 //	2  The command line or an input is invalid.
 //	3  A run failed, such as a package that does not build, tests that
-//	   fail without a mutant, or a run that -timeout ended.
+//	   fail without a mutant, or a run that -timeout ended. The command
+//	   also exits with 3 when it cannot write to standard output.
 //
 // A test can read two variables. DOKIMI_MUTATE_MUTANT is 0 in the control runs
 // and the active mutant's number in a mutant's run. DOKIMI_MUTATE_INSTRUMENTED

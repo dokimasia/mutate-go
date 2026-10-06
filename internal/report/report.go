@@ -30,11 +30,16 @@ const (
 // which the listing leaves without a verdict.
 const toTest = "to test"
 
+// closingIncomplete is the note on a run whose closing control run did not
+// complete, which fails the run.
+const closingIncomplete = "the closing control run did not complete, so no run checked that the mutant runs left " +
+	"the tests' state intact"
+
 // Listed reports whether a report lists a mutant with the verdict v on a
-// line of its own: a survivor, a mutant without coverage, or a mutant whose
-// run ended in an error.
-func Listed(v spec.Verdict) bool {
-	return v == spec.Survived || v == spec.NoCoverage || v == spec.Error
+// line of its own: a mutant that protocol counts as undetected, a survivor
+// or a mutant without coverage, or a mutant whose run ended in an error.
+func Listed(protocol spec.Protocol, v spec.Verdict) bool {
+	return protocol.Class(v) == spec.Undetected || v == spec.Error
 }
 
 // Line returns the line that reports m at its position in the file at path:
@@ -72,14 +77,17 @@ func Planned(m record.Mutant, path string) string {
 }
 
 // Notes returns the notes on rec besides the mutants' lines and the
-// summary: one line for each run error, as its code and its message, and
-// one line for each reason for which mutants did not run, with their
-// number, in the order of each reason's first mutant. It returns nil for a
-// run without a run error and without a mutant that did not run.
+// summary: one line for each run error, as its code and its message, one
+// line for each reason for which mutants did not run, with their number, in
+// the order of each reason's first mutant, and one line for a closing
+// control run that did not complete, unless a run error states its
+// failure. It returns nil for a run without any of them.
 func Notes(rec *record.Record) []string {
 	var notes []string
+	closingFailed := false
 	for _, e := range rec.Errors {
 		notes = append(notes, string(e.Code)+": "+e.Message)
+		closingFailed = closingFailed || e.Code == spec.ErrorClosing
 	}
 	var reasons []string
 	notRun := map[string]int{}
@@ -94,6 +102,9 @@ func Notes(rec *record.Record) []string {
 	}
 	for _, reason := range reasons {
 		notes = append(notes, count(notRun[reason], "mutant")+" did not run: "+reason)
+	}
+	if rec.Control != nil && rec.Control.Closing == nil && !closingFailed {
+		notes = append(notes, closingIncomplete)
 	}
 	return notes
 }

@@ -73,8 +73,8 @@ type Package struct {
 	Files []*File
 	Fset  *token.FileSet
 	Types *types.Package
-	// Info states the types, the definitions, the uses and the scopes of
-	// every file in Files.
+	// Info states the types, the definitions, the uses, the scopes and the
+	// selections of every file in Files.
 	Info *types.Info
 
 	importer types.Importer
@@ -367,10 +367,11 @@ func (p *Package) check(target *listedPackage, exports map[string]string, arch s
 	p.importer = importer.ForCompiler(p.Fset, compiler, lookup)
 	p.sizes = types.SizesFor(compiler, arch)
 	p.Info = &types.Info{
-		Types:  map[ast.Expr]types.TypeAndValue{},
-		Defs:   map[*ast.Ident]types.Object{},
-		Uses:   map[*ast.Ident]types.Object{},
-		Scopes: map[ast.Node]*types.Scope{},
+		Types:      map[ast.Expr]types.TypeAndValue{},
+		Defs:       map[*ast.Ident]types.Object{},
+		Uses:       map[*ast.Ident]types.Object{},
+		Scopes:     map[ast.Node]*types.Scope{},
+		Selections: map[*ast.SelectorExpr]*types.Selection{},
 	}
 	syntax := make([]*ast.File, len(p.Files))
 	for i, f := range p.Files {

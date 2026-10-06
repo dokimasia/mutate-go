@@ -5,12 +5,14 @@
 // command's -lines, the entries of the variable that mutate.Check reads,
 // and the lines that a unified diff changes.
 //
-// A selection is a list of [Lines], each a range of lines of a file at an
-// absolute path. [ParseEntry] reads one entry, file:first-last, whose path
-// is relative to the working directory. [ParseList] reads entries separated
-// by commas, as the variable [Var] states them. [ParseDiff] reads a unified
-// diff, such as the output of git diff, and selects the lines that it adds
-// and the lines on either side of the lines that it removes.
+// A selection is a list of [Lines], each a range of lines of a file. A run
+// reads absolute paths. [ParseEntry] reads one entry, file:first-last, and
+// keeps its path as the entry writes it, and [Lines.Abs] makes a relative
+// path absolute against the working directory. [ParseList] reads entries
+// separated by commas, as the variable [Var] states them, with absolute
+// paths. [ParseDiff] reads a unified diff, such as the output of git diff,
+// and selects the lines that it adds and the lines on either side of the
+// lines that it removes, with absolute paths.
 //
 // # Errors
 //

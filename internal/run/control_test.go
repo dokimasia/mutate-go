@@ -412,12 +412,14 @@ func TestControl(t *testing.T) {
 			assert.Empty(t, rec.Errors, "a cancellation is no run error")
 		})
 
-		t.Run("stops at a cancellation during the closing control run", func(t *testing.T) {
+		t.Run("fails a run whose closing control run the caller cancels", func(t *testing.T) {
 			t.Parallel()
 			rec := cancelInPhase(t, closingPhase, run.Config{})
 			assert.Equal(t, verdicts(rec), addKilled, "each mutant has its verdict")
 			assert.Nil(t, rec.Control.Closing, "the cut closing control run states no time")
 			assert.Empty(t, rec.Errors, "a cancellation is no run error")
+			assert.True(t, rec.Failed(), "no run checked the tests' state after the mutant runs")
+			assert.Nil(t, rec.Score, "so the run has no score")
 		})
 
 		t.Run("stops a run whose ordinary build the caller cancels", func(t *testing.T) {

@@ -1,6 +1,6 @@
 {
   "language": "go",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "comment": "//",
   "generated": "^// Code generated .* DO NOT EDIT\\.$",
   "files": [
@@ -53,7 +53,7 @@
     ],
     "uoi-not": [
       "An identifier, a selector, a call, an index, a type assertion, a dereference or a !x expression whose value is bool or an untyped boolean and is not a constant.",
-      "Not the target of an assignment, not the source of a comma-ok assignment, not the operand of & or !, not an operand of && or ||, in parentheses or not, not a composite literal's key, not a selector's name, not a called function, and not an expression statement, a deferred call or a go statement."
+      "Not, in parentheses or not, the target of an assignment, the source of a comma-ok assignment, the operand of & or !, or an operand of && or ||, and not a composite literal's key, a selector's name, a called function, an expression statement, a deferred call or a go statement."
     ],
     "uoi-minus": [
       "A unary minus of an integer or floating-point operand whose value is not a constant."
@@ -66,8 +66,9 @@
       "The mutant's source writes the statement behind a constant that skips it, as if false { statement }, so a variable, an imported package or a label that only the statement uses remains in use."
     ],
     "sbr-zero": [
-      "A return statement with results, unless every result is already the zero value of its type.",
-      "A result is the zero value of its type when it is nil, a constant whose value is 0, \"\" or false, *new(T) of a type T, or a composite literal of a struct or an array type whose every element is such a result. A composite literal of a slice or a map type is not nil, so it is not a zero value, and *new(x) of an expression x is the value of x.",
+      "A return statement with results, unless every result is already the zero value of its result type.",
+      "A result is the zero value of its result type when it is nil, a constant whose value is 0, \"\" or false, *new(T) of a type T, an unwritten variable, or a composite literal of a struct or an array type whose every element is the zero value of the element's type. A result or an element of an interface type is the zero value only when it is nil, because any other value gives an interface that is not nil. A composite literal of a slice or a map type is not nil, so it is not a zero value, and *new(x) of an expression x is the value of x.",
+      "An unwritten variable is a variable that a variable declaration without values declares inside a function's body, and that no use writes. A use writes the variable when the variable, alone or under selectors, indexes, dereferences and parentheses, is the target of an assignment, a short variable declaration, an increment, a decrement or a range clause, the operand of & or of a slice expression, or the receiver of a method with a pointer receiver, as x in x.M() and in the method value x.M. Every use in the variable's scope counts, in a function literal too and after the return, because a loop can run a later write before the return.",
       "The mutant does not evaluate the results. Its source writes the return of the zero values before the original return, which then never runs, as if true { return 0, nil } followed by return f(x), err."
     ]
   },
