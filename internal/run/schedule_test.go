@@ -6,8 +6,12 @@ package run_test
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -89,6 +93,60 @@ var survivors = map[string]string{
 var uncovered = map[string]string{
 	addFile:     add,
 	addTestFile: "package fixture\n\nimport \"testing\"\n\nfunc TestNothing(t *testing.T) {}\n",
+}
+
+// overlapVar names the file to which overlapping appends a line + when a
+// mutant's run of TestAdd starts, and a line - when it ends.
+const overlapVar = "FIXTURE_OVERLAP"
+
+// overlapping is a test of add that, under a mutant, appends + to the file
+// of overlapVar, sleeps 300 ms and appends -, so two runs at once append +
+// twice before the first -.
+var overlapping = fmt.Sprintf(`package fixture
+
+import (
+	"os"
+	"testing"
+	"time"
+)
+
+func TestAdd(t *testing.T) {
+	if os.Getenv(%q) != "0" {
+		f, err := os.OpenFile(os.Getenv(%q), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = f.WriteString("+\n")
+		time.Sleep(300 * time.Millisecond)
+		_, _ = f.WriteString("-\n")
+		_ = f.Close()
+	}
+	if Add(2, 3) != 5 {
+		t.Error("Add(2, 3) != 5")
+	}
+}
+`, protocol.Variable, overlapVar)
+
+// overlap runs the engine on add with the test overlapping and cfg, and
+// returns the most mutant runs that ran at once.
+func overlap(t *testing.T, cfg run.Config) int {
+	t.Helper()
+	log := filepath.Join(t.TempDir(), logName)
+	cfg.Env = append(os.Environ(), overlapVar+"="+log)
+	rec := runIn(t, module(t, map[string]string{addFile: add, addTestFile: overlapping}), cfg)
+	assert.Equal(t, verdicts(rec), addKilled, "the test kills both mutants")
+	data, err := os.ReadFile(log)
+	assert.NoError(t, err, "the runs' log reads")
+	running, most := 0, 0
+	for line := range strings.Lines(string(data)) {
+		if strings.HasPrefix(line, "+") {
+			running++
+		} else {
+			running--
+		}
+		most = max(most, running)
+	}
+	return most
 }
 
 func TestSchedule(t *testing.T) {
@@ -282,6 +340,47 @@ func TestSchedule(t *testing.T) {
 				assert.Equal(t, rec.Mutants[0].Reason, tooLateReason, "the record states why no mutant starts")
 			},
 		)
+
+		t.Run("runs as many mutants at once as Procs allows", func(t *testing.T) {
+			t.Parallel()
+			got := overlap(t, run.Config{Procs: 1, Workers: 2})
+			assert.Equal(t, got, 1, "one thread runs one mutant at a time")
+		})
+
+		t.Run("runs another worker on the threads that Borrow lends", func(t *testing.T) {
+			t.Parallel()
+			var asked, released atomic.Int64
+			got := overlap(t, run.Config{
+				Procs:   1,
+				Workers: 2,
+				Borrow: func(threads int) (func(), <-chan struct{}) {
+					asked.Store(int64(threads))
+					return func() { released.Add(1) }, nil
+				},
+			})
+			assert.Equal(t, got, 2, "the borrowed worker runs a mutant beside the first")
+			assert.Equal(t, asked.Load(), int64(1), "the run asks for the one thread of a worker")
+			assert.Equal(t, released.Load(), int64(1), "and gives it back when the worker ends")
+		})
+
+		t.Run("asks Borrow again when the channel of its refusal closes", func(t *testing.T) {
+			t.Parallel()
+			var calls atomic.Int64
+			closed := make(chan struct{})
+			close(closed)
+			got := overlap(t, run.Config{
+				Procs:   1,
+				Workers: 2,
+				Borrow: func(int) (func(), <-chan struct{}) {
+					if calls.Add(1) == 1 {
+						return nil, closed
+					}
+					return func() {}, nil
+				},
+			})
+			assert.Equal(t, got, 2, "the worker that the second call lends runs beside the first")
+			assert.Equal(t, calls.Load(), int64(2), "the run asks once more after the refusal")
+		})
 
 		t.Run("stops the runs when the caller cancels", func(t *testing.T) {
 			t.Parallel()

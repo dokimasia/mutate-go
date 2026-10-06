@@ -64,10 +64,11 @@
 //		of the command's GOMAXPROCS threads in proportion to its
 //		mutants.
 //	-workers n
-//		The number of mutants of one package to test at once. The
-//		default is 1. Above 1, tests that share a resource, such as a
-//		fixed port, can fail each other, and each such failure counts as
-//		a detection.
+//		The most mutants of one package to test at once. The default is
+//		1. A package tests as many as its share of the threads allows,
+//		and more, up to n, on the threads that other packages return.
+//		Above 1, tests that share a resource, such as a fixed port, can
+//		fail each other, and each such failure counts as a detection.
 //	-timeout d
 //		The time limit of the command, such as 30m. A mutant starts only
 //		when it can finish before the limit. The mutants that do not

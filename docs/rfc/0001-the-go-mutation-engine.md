@@ -122,14 +122,14 @@ type Option struct {
 	set func(config) config
 }
 
-// Workers sets the number of mutants that run concurrently, 1 by default.
+// Workers sets the most mutants that run concurrently, 1 by default.
 //
-// Each mutant runs in a process of its own, so n above 1 runs n copies of
-// the package's tests concurrently. Tests that share a resource outside
-// their temporary directory, such as a fixed port, then fail each other,
-// and the failures count as kills. Every run, the control runs included,
-// gets GOMAXPROCS divided by n, and at least 1. Workers panics for n below
-// 1.
+// Each mutant runs in a process of its own, so n above 1 runs up to n
+// copies of the package's tests concurrently, and at most GOMAXPROCS. Tests
+// that share a resource outside their temporary directory, such as a fixed
+// port, then fail each other, and the failures count as kills. Every run,
+// the control runs included, gets GOMAXPROCS divided by n, and at least 1.
+// Workers panics for n below 1.
 func Workers(n int) Option
 
 // Suite adds the tests of other packages to the tests that count for the
@@ -618,6 +618,16 @@ The engine starts the mutants' runs in the order of their keys, one on
 each worker that is free. A key is the start of a SHA-256 digest, so the
 order is a pseudo-random permutation that every run of the same code
 repeats.
+
+Each worker's test binaries get the package's share of the threads divided
+by the workers, and at least 1, for the whole run. A package starts as many
+workers as its share allows, at most the workers that the caller asks for.
+Under the command, once no package is left to start, a package whose
+workers all run borrows the threads of another worker from the threads that
+the other packages returned, up to the workers that the caller asks for.
+The worker gives them back when its last run ends. A borrowed worker runs
+its test binaries with the same threads as the others, so the limits of the
+opening control run apply to every run.
 
 The caller's deadline is the test's deadline for Check, and `-timeout` for
 the command. Under a deadline, the opening control run of each test binary

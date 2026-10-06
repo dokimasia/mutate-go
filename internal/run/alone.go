@@ -16,11 +16,11 @@ import (
 )
 
 // alone runs each top-level test of a program alone, with no mutant active
-// and a trace on, on cfg.Workers workers and under the program's limits,
-// and records the sites that each test executed. It does so for each
-// program that has more than one test and fewer tests than the mutants
-// without a verdict whose sites the program executed, because each test
-// costs a run.
+// and a trace on, on the workers that dispatch starts and under the
+// program's limits, and records the sites that each test executed. It does
+// so for each program that has more than one test and fewer tests than the
+// mutants without a verdict whose sites the program executed, because each
+// test costs a run.
 //
 // A test's run starts, as dispatch starts it, only while the time left
 // covers the program's deadline and the reserve of a mutant. alone drops a

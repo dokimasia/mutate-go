@@ -15,6 +15,19 @@ import (
 	"go.dokimi.dev/mutate/internal/run"
 )
 
+// share is a package's part of the command's threads, which schedule
+// passes to the package's run.
+type share struct {
+	// procs is the number of threads of the package's runs.
+	procs int
+	// spare returns the threads that the running packages leave free,
+	// divided among them, for the package's go commands.
+	spare func() int
+	// borrow lends the package the threads of another worker once no
+	// package is left to start, as run.Config.Borrow states.
+	borrow func(threads int) (release func(), freed <-chan struct{})
+}
+
 // packages returns the packages that the patterns name, as go list resolves
 // them in the working directory. It writes the error of each package that
 // go list states, and reports false when go list fails or a package has an
@@ -106,9 +119,11 @@ func weigh(ctx context.Context, pkgs []load.Listed, cfg run.Config, threads, par
 //     one thread.
 //   - A package returns its share when its run ends.
 //
-// test receives the package's share, and a function that returns the
-// threads that the running packages leave free, divided among them, for the
-// package's go commands.
+// test receives the package's share, a function that returns the threads
+// that the running packages leave free, divided among them, for the
+// package's go commands, and a function that lends the package threads for
+// another worker. It lends threads only when no package is left to start,
+// so a package that waits for threads never waits for a borrowed worker.
 func schedule(
 	ctx context.Context,
 	pkgs []load.Listed,
@@ -116,7 +131,7 @@ func schedule(
 	threads, parallel int,
 	deadline time.Time,
 	out *output,
-	test func(ctx context.Context, pkg load.Listed, procs int, spare func() int) int,
+	test func(ctx context.Context, pkg load.Listed, sh share) int,
 ) int {
 	weight := func(i int) int64 {
 		if weights == nil {
@@ -129,11 +144,17 @@ func schedule(
 		order[i] = i
 	}
 	slices.SortStableFunc(order, func(a, b int) int { return cmp.Compare(weight(b), weight(a)) })
-	// mu guards the status and the threads and the packages that run.
-	// released receives a signal when a package returns its share.
+	// mu guards the status, the threads in use, the packages that run, the
+	// packages left to start, and changed, which closes when threads return,
+	// so every goroutine that waits for threads looks again.
 	var mu sync.Mutex
-	status, used, running := exitDetected, 0, 0
-	released := make(chan struct{}, 1)
+	status, used, running, left := exitDetected, 0, 0, len(order)
+	changed := make(chan struct{})
+	give := func(count int) {
+		used -= count
+		close(changed)
+		changed = make(chan struct{})
+	}
 	spare := func() int {
 		mu.Lock()
 		defer mu.Unlock()
@@ -142,6 +163,19 @@ func schedule(
 		}
 		return (threads - used) / running
 	}
+	borrow := func(want int) (func(), <-chan struct{}) {
+		mu.Lock()
+		defer mu.Unlock()
+		if left > 0 || threads-used < want {
+			return nil, changed
+		}
+		used += want
+		return func() {
+			mu.Lock()
+			defer mu.Unlock()
+			give(want)
+		}, nil
+	}
 	slots := make(chan struct{}, parallel)
 	var wg sync.WaitGroup
 	for n, i := range order {
@@ -149,10 +183,12 @@ func schedule(
 		slots <- struct{}{}
 		mu.Lock()
 		for threads >= parallel && used >= threads {
+			wait := changed
 			mu.Unlock()
-			<-released
+			<-wait
 			mu.Lock()
 		}
+		left--
 		why := ""
 		if ctx.Err() != nil {
 			why = "the command was interrupted"
@@ -182,14 +218,11 @@ func schedule(
 		used, running = used+procs, running+1
 		mu.Unlock()
 		wg.Go(func() {
-			s := test(ctx, pkg, procs, spare)
+			s := test(ctx, pkg, share{procs: procs, spare: spare, borrow: borrow})
 			mu.Lock()
-			status, used, running = max(status, s), used-procs, running-1
+			status, running = max(status, s), running-1
+			give(procs)
 			mu.Unlock()
-			select {
-			case released <- struct{}{}:
-			default:
-			}
 			<-slots
 		})
 	}

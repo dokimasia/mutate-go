@@ -145,9 +145,10 @@ var commandFlags = []option{
 	},
 	{
 		name: flagWorkers, value: "n", section: executionSection,
-		usage: "The number of mutants of one package to test at once. The default is 1. Above 1, tests that " +
-			"share a resource, such as a fixed port, can fail each other, and each such failure counts as a " +
-			"detection.",
+		usage: "The most mutants of one package to test at once. The default is 1. A package tests as many as " +
+			"its share of the threads allows, and more, up to n, on the threads that other packages return. " +
+			"Above 1, tests that share a resource, such as a fixed port, can fail each other, and each such " +
+			"failure counts as a detection.",
 		define: func(fs *flag.FlagSet, name string, o *options) { fs.IntVar(&o.workers, name, o.workers, "") },
 	},
 	{

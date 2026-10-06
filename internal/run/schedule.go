@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.dokimi.dev/mutate/internal/spec"
@@ -28,11 +29,18 @@ func (r *runner) fits(d time.Duration) bool {
 	return r.cfg.Deadline.IsZero() || time.Until(r.cfg.Deadline) >= d
 }
 
-// dispatch starts the jobs 0 to n-1 in order on cfg.Workers workers, each by
+// dispatch starts the jobs 0 to n-1 in order on the run's workers, each by
 // a call of do with the job's index. Job k starts only while ctx is not done
 // and, under the caller's deadline, while the time left covers need(k). A
 // timer ends the wait for a free worker once the time left no longer covers
 // need(k), so no job starts after its time because the workers were busy.
+//
+// Each worker's test binaries get cfg.Procs divided by cfg.Workers threads,
+// and at least 1, and dispatch starts as many workers as the run's threads
+// allow, at most cfg.Workers. While every worker runs a job and fewer than
+// cfg.Workers run, dispatch asks cfg.Borrow for the threads of another
+// worker. It asks again before the next job, and when the channel of a
+// refusal closes.
 //
 // dispatch returns when the starts end, while the jobs that started still
 // run: the number of jobs that started, whether the caller's deadline ended
@@ -45,16 +53,38 @@ func (r *runner) dispatch(
 	need func(k int) time.Duration,
 	do func(k int),
 ) (started int, late bool, wait func()) {
+	most := max(1, r.cfg.Workers)
+	each := max(1, r.procs/most)
+	workers := min(most, max(1, r.procs/each))
 	jobs := make(chan int)
+	// busy counts the jobs that started and have not ended.
+	var busy atomic.Int64
+	work := func() {
+		for k := range jobs {
+			do(k)
+			busy.Add(-1)
+		}
+	}
 	var wg sync.WaitGroup
-	for range max(1, r.cfg.Workers) {
-		wg.Go(func() {
-			for k := range jobs {
-				do(k)
-			}
-		})
+	for range workers {
+		wg.Go(work)
 	}
 	for started < n && !late && ctx.Err() == nil {
+		// freed closes when threads that cfg.Borrow refused may have become
+		// free. It is nil, and receives nothing, while dispatch asks for no
+		// threads.
+		var freed <-chan struct{}
+		if workers < most && r.cfg.Borrow != nil && busy.Load() == int64(workers) {
+			release, refused := r.cfg.Borrow(each)
+			if release != nil {
+				workers++
+				wg.Go(func() {
+					defer release()
+					work()
+				})
+			}
+			freed = refused
+		}
 		// expired receives the time when the time left no longer covers the
 		// job. It is nil, and receives nothing, without a deadline. A timer's
 		// channel can be empty for a moment after its time, so the time left
@@ -73,9 +103,11 @@ func (r *runner) dispatch(
 		select {
 		case jobs <- started:
 			started++
+			busy.Add(1)
 		case <-ctx.Done():
 		case <-expired:
 			late = true
+		case <-freed:
 		}
 		if timer != nil {
 			timer.Stop()
@@ -85,8 +117,8 @@ func (r *runner) dispatch(
 	return started, late, wg.Wait
 }
 
-// mutants runs each mutant without a verdict alone, on cfg.Workers
-// workers, as dispatch starts them. It starts the runs in the order of the
+// mutants runs each mutant without a verdict alone, on the workers that
+// dispatch starts. It starts the runs in the order of the
 // mutants' keys, and of the record for two equal keys, so a run that the
 // caller's deadline ends has run a uniform sample of the mutants. Under the
 // caller's deadline, a mutant starts only while the time left covers the

@@ -85,7 +85,7 @@ func TestPlan(t *testing.T) {
 			t.Parallel()
 			statuses := map[string]int{"a": exitDetected, "b": exitFailed, "c": exitUndetected}
 			got := schedule(t.Context(), listed("a", "b", "c"), nil, 4, 2, time.Time{}, out,
-				func(_ context.Context, pkg load.Listed, _ int, _ func() int) int { return statuses[pkg.ImportPath] })
+				func(_ context.Context, pkg load.Listed, _ share) int { return statuses[pkg.ImportPath] })
 			assert.Equal(t, got, exitFailed, "the failed run decides the status")
 		})
 
@@ -93,8 +93,8 @@ func TestPlan(t *testing.T) {
 			t.Parallel()
 			var s shares
 			schedule(t.Context(), listed("a", "b", "c", "d"), []int{1, 3, 2, 3}, 4, 1, time.Time{}, out,
-				func(_ context.Context, pkg load.Listed, procs int, _ func() int) int {
-					s.add(pkg.ImportPath, procs)
+				func(_ context.Context, pkg load.Listed, sh share) int {
+					s.add(pkg.ImportPath, sh.procs)
 					return exitDetected
 				})
 			assert.Equal(t, s.starts, []string{"b", "d", "c", "a"},
@@ -132,8 +132,8 @@ func TestPlan(t *testing.T) {
 				// a ends only after b started, so both run at once.
 				started := make(chan struct{})
 				schedule(t.Context(), listed("a", "b"), tt.weights, tt.threads, 2, time.Time{}, out,
-					func(_ context.Context, pkg load.Listed, procs int, _ func() int) int {
-						s.add(pkg.ImportPath, procs)
+					func(_ context.Context, pkg load.Listed, sh share) int {
+						s.add(pkg.ImportPath, sh.procs)
 						if pkg.ImportPath == "a" {
 							<-started
 						} else {
@@ -157,8 +157,8 @@ func TestPlan(t *testing.T) {
 			// run at once, and c starts beside b after a ended.
 			next := map[string]string{"a": "b", "b": "c"}
 			schedule(t.Context(), listed("a", "b", "c"), nil, 5, 2, time.Time{}, out,
-				func(_ context.Context, pkg load.Listed, procs int, _ func() int) int {
-					s.add(pkg.ImportPath, procs)
+				func(_ context.Context, pkg load.Listed, sh share) int {
+					s.add(pkg.ImportPath, sh.procs)
 					close(started[pkg.ImportPath])
 					if after, ok := next[pkg.ImportPath]; ok {
 						<-started[after]
@@ -181,8 +181,8 @@ func TestPlan(t *testing.T) {
 				done := make(chan int)
 				go func() {
 					done <- schedule(t.Context(), listed("a", "b", "c"), []int{6, 1, 1}, 4, 3, time.Time{}, out,
-						func(_ context.Context, pkg load.Listed, procs int, _ func() int) int {
-							s.add(pkg.ImportPath, procs)
+						func(_ context.Context, pkg load.Listed, sh share) int {
+							s.add(pkg.ImportPath, sh.procs)
 							<-release[pkg.ImportPath]
 							return exitDetected
 						})
@@ -207,8 +207,8 @@ func TestPlan(t *testing.T) {
 				done := make(chan int)
 				go func() {
 					done <- schedule(t.Context(), listed("a", "b", "c"), nil, 2, 3, time.Time{}, out,
-						func(_ context.Context, pkg load.Listed, procs int, _ func() int) int {
-							s.add(pkg.ImportPath, procs)
+						func(_ context.Context, pkg load.Listed, sh share) int {
+							s.add(pkg.ImportPath, sh.procs)
 							<-release
 							return exitDetected
 						})
@@ -229,14 +229,14 @@ func TestPlan(t *testing.T) {
 				done := make(chan int)
 				go func() {
 					done <- schedule(t.Context(), listed("a", "b"), nil, 4, 2, time.Time{}, out,
-						func(_ context.Context, pkg load.Listed, _ int, spare func() int) int {
+						func(_ context.Context, pkg load.Listed, sh share) int {
 							if pkg.ImportPath == "a" {
 								<-release
 								return exitDetected
 							}
-							before = spare()
+							before = sh.spare()
 							<-proceed
-							after = spare()
+							after = sh.spare()
 							return exitDetected
 						})
 				}()
@@ -250,12 +250,45 @@ func TestPlan(t *testing.T) {
 			})
 		})
 
+		t.Run("lends a package the threads that another returned once no package is left to start",
+			func(t *testing.T) {
+				t.Parallel()
+				synctest.Test(t, func(t *testing.T) {
+					release := make(chan struct{})
+					var refused, lent bool
+					done := make(chan int)
+					go func() {
+						done <- schedule(t.Context(), listed("a", "b"), nil, 2, 2, time.Time{}, out,
+							func(_ context.Context, pkg load.Listed, sh share) int {
+								if pkg.ImportPath == "b" {
+									<-release
+									return exitDetected
+								}
+								give, freed := sh.borrow(1)
+								refused = give == nil
+								<-freed
+								give, _ = sh.borrow(1)
+								lent = give != nil
+								if lent {
+									give()
+								}
+								return exitDetected
+							})
+					}()
+					synctest.Wait()
+					close(release)
+					<-done
+					assert.True(t, refused, "no thread is free while a and b run")
+					assert.True(t, lent, "the refusal's channel closes when b returns its thread, which a then borrows")
+				})
+			})
+
 		t.Run("runs at most the given number of packages at once", func(t *testing.T) {
 			t.Parallel()
 			var mu sync.Mutex
 			running, most := 0, 0
 			schedule(t.Context(), listed("a", "b", "c", "d", "e"), nil, 4, 2, time.Time{}, out,
-				func(context.Context, load.Listed, int, func() int) int {
+				func(context.Context, load.Listed, share) int {
 					mu.Lock()
 					running++
 					most = max(most, running)
@@ -299,7 +332,7 @@ func TestPlan(t *testing.T) {
 				called := false
 				got := schedule(tt.ctx(), listed("a"), nil, 4, 1, tt.deadline,
 					&output{stdout: io.Discard, stderr: &errs},
-					func(context.Context, load.Listed, int, func() int) int {
+					func(context.Context, load.Listed, share) int {
 						called = true
 						return exitDetected
 					})

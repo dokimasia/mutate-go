@@ -110,10 +110,11 @@ Execution:
 		of the command's GOMAXPROCS threads in proportion to its
 		mutants.
 	-workers n
-		The number of mutants of one package to test at once. The
-		default is 1. Above 1, tests that share a resource, such as a
-		fixed port, can fail each other, and each such failure counts as
-		a detection.
+		The most mutants of one package to test at once. The default is
+		1. A package tests as many as its share of the threads allows,
+		and more, up to n, on the threads that other packages return.
+		Above 1, tests that share a resource, such as a fixed port, can
+		fail each other, and each such failure counts as a detection.
 	-timeout d
 		The time limit of the command, such as 30m. A mutant starts only
 		when it can finish before the limit. The mutants that do not
@@ -380,10 +381,12 @@ suppressed mutant with its reason, and the score leaves it out.
 
 ## Parallelism and limits
 
-- `-workers n` and `mutate.Workers(n)` run n mutants of one package at
-  once, each in its own process. Tests that share a resource outside their
-  temporary directory, such as a fixed port, then fail each other, and the
-  failures count as kills.
+- `-workers n` and `mutate.Workers(n)` run up to n mutants of one package
+  at once, each in its own process, as many as the package's threads
+  allow. Under the command, once no package is left to start, a package
+  borrows the threads that other packages returned for more workers, up to
+  n. Tests that share a resource outside their temporary directory, such
+  as a fixed port, then fail each other, and the failures count as kills.
 - The packages that run at once share GOMAXPROCS threads. Under `-p` above
   1, the command counts each package's mutants before the runs and starts
   the packages with the most mutants first. A package that starts gets a

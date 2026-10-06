@@ -177,14 +177,14 @@ func Suite(patterns ...string) Option {
 	}}
 }
 
-// Workers sets the number of mutants that run concurrently, 1 by default.
+// Workers sets the most mutants that run concurrently, 1 by default.
 //
-// Each mutant runs in a process of its own, so n above 1 runs n copies of
-// the package's tests concurrently. Tests that share a resource outside
-// their temporary directory, such as a fixed port, then fail each other,
-// and the failures count as kills. Every run, the control runs included,
-// gets GOMAXPROCS divided by n, and at least 1. Workers panics for n below
-// 1.
+// Each mutant runs in a process of its own, so n above 1 runs up to n
+// copies of the package's tests concurrently, and at most GOMAXPROCS. Tests
+// that share a resource outside their temporary directory, such as a fixed
+// port, then fail each other, and the failures count as kills. Every run,
+// the control runs included, gets GOMAXPROCS divided by n, and at least 1.
+// Workers panics for n below 1.
 func Workers(n int) Option {
 	if n < 1 {
 		panic(fmt.Sprintf("mutate: Workers(%d) states fewer than one worker", n))

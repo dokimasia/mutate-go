@@ -56,8 +56,10 @@ type Config struct {
 	// the package instrumented, and leaves out the others and the package
 	// itself.
 	Suite []string
-	// Workers is the number of mutants that run at once. Below 2, one
-	// mutant runs at a time.
+	// Workers is the most mutants that run at once. Below 2, one mutant
+	// runs at a time. Each worker's test binaries get Procs divided by
+	// Workers threads, and at least 1. The run starts as many workers as
+	// Procs allows, and more, up to Workers, on threads that Borrow lends.
 	Workers int
 	// Procs is the number of threads that the run may use, or 0 for the
 	// engine's GOMAXPROCS. Every go command runs with GOMAXPROCS set to
@@ -70,6 +72,14 @@ type Config struct {
 	// threads to Procs before the division among the workers. A run of a
 	// test binary does not read it, so no verdict depends on it.
 	Spare func() int
+	// Borrow, when it is not nil, lends the run the threads of another
+	// worker, while every worker runs and fewer than Workers do. It
+	// receives the threads of one worker, and returns the function that
+	// gives them back when it lends them. Otherwise it returns nil and a
+	// channel that closes when threads may have become free, after which
+	// the run asks again. A borrowed worker gives its threads back when the
+	// run's starts have ended and its last run has ended.
+	Borrow func(threads int) (release func(), freed <-chan struct{})
 	// Deadline is when the caller's time ends, or zero for a caller
 	// without a deadline. The opening control run of each test binary gets
 	// at most half of the time left. Run does not start a mutant when the
