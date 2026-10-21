@@ -2,9 +2,9 @@
 rfc: 0001
 title: The Go mutation engine
 author: Roy Klopper <roy.klopper@stealthscale.io>
-status: Draft
+status: Accepted
 created: 2026-10-02
-updated: 2026-10-20
+updated: 2026-10-21
 discussion: none
 supersedes: none
 superseded-by: none
@@ -86,10 +86,12 @@ leaves the module under test unchanged.
 | Recorder | The record and its `inputs` digest | `internal/record` |
 | Definition | The vendored catalogue, run protocol and Go overlay from mutate-spec, decoded once, with their vocabularies as Go types | `internal/spec` |
 
-The module's go line is 1.27.0. A module that adds the engine as a
-dependency gets its go line raised to at least 1.27.0. The module's
-packages import only the standard library, and its tests also import
-`go.dokimi.dev/assert`. CI builds and tests it with the latest release.
+The module's go line is 1.27.2. A module that adds the engine as a
+dependency gets its go line raised to at least 1.27.2. The package `mutate`
+and the internal packages import only the standard library. The command
+also imports `go.stealthscale.io/cli`. That module imports only the
+standard library. The tests also import `go.dokimi.dev/assert`. CI builds
+and tests the module with the latest release.
 
 ### The test entry point
 
@@ -207,7 +209,7 @@ for the mutants that did not run, and logs the run's summary.
 ### The command
 
 ```sh
-go run go.dokimi.dev/mutate/cmd/dokimi-mutate-go@latest [flags] [packages]
+go run go.dokimi.dev/mutate/cmd/dokimi-mutate-go@latest [options] [packages]
 ```
 
 `go run` with a version suffix ignores the `go.mod` of the current
@@ -216,35 +218,38 @@ are. The command's name is `dokimi-mutate` and the language, the name of
 every language's engine, so `go install` installs it as `dokimi-mutate-go`
 beside the engines of other languages.
 
-The command's help describes every flag, grouped by task: the selection,
-the tests, the execution and the output. One table of flags in the
-command's source defines the flags and writes the help, and a test writes
-the command's package documentation and the README's flag reference from
-the help, so no second description of a flag exists. The sections below
-state the design of the mechanisms behind the flags.
+The command's options are the fields of one struct. `go.stealthscale.io/cli`
+derives the long flag, the environment variable and the help of each option
+from its field. The field `Workers` gives the flag `--workers` and the
+variable `DOKIMI_MUTATE_GO_WORKERS`. The command line follows the rules of
+GNU. Each flag takes precedence over its variable. A test writes the command's
+package documentation and the README's reference from the help. No second
+description of an option exists. The help describes the mechanism behind
+each option, and the following sections describe the design.
 
-- `-C dir` changes the working directory before the command resolves the
-  packages, the patterns of `-suite` and `-skip`, and every path of
-  `-lines`, `-diff` and `-record`, as the go command's `-C` does.
-- `-skip pattern` leaves out the packages that the pattern names, as
+- `-C dir` or `--directory dir` changes the working directory before the
+  command resolves the packages, the patterns of `--suite` and `--skip`,
+  and every path of `--lines`, `--diff` and `--record`, as the go command's
+  `-C` does.
+- `--skip pattern` leaves out the packages that the pattern names, as
   `go list` resolves it in the working directory, and repeats. Each such
   package gets the empty selection of a package that a diff does not
   touch: no build, every mutant `not-selected`, and a summary and a record
   that count them. A pattern that `go list` cannot resolve stops the
   command before any run starts.
-- `-list` loads and enumerates each package, and type-checks its
+- `--list` loads and enumerates each package, and type-checks its
   instrumented source, and stops before the build. It prints one line per
   mutant, with `to test` or the verdict that the enumeration decides, and
   a count per package. Its `not-viable` mutants are a run's, except those
   that only a confirmation's build rejects.
-- `-version` prints the versions of the engine, of the catalogue, of the
+- `--version` prints the versions of the engine, of the catalogue, of the
   Go overlay and of the toolchain that built the engine.
 
 The command writes the line of each undetected mutant, and of each mutant
 whose run ended in an `error`, to standard output in Check's format. It
 writes the line when the mutant's verdict is final. A mutant without
 coverage gets its verdict when the opening control run ends, or under
-`-confirm` when its confirmation ends, and any other mutant when its run
+`--confirm` when its confirmation ends, and any other mutant when its run
 ends, so the lines follow the order of the verdicts.
 When a package's run ends, the command writes the package's summary:
 
@@ -256,7 +261,7 @@ When a package's run ends, the command writes the package's summary:
 ```
 
 The percentage is rounded down. The second form states the record's
-`sample` of a run that `-sample` alone ended. The fourth form states the
+`sample` of a run that `--sample` alone ended. The fourth form states the
 `sample` of a run that a deadline or an interrupt ended.
 
 To standard error, the command writes each run error, the number of
@@ -264,13 +269,13 @@ mutants that did not run with the reason, and a progress line for each
 package that runs, every 10 seconds:
 
 ```text
-dokimi-mutate-go: <import path>: <done> of <total> mutants done, <undetected> undetected, <rate> mutants a second, about <duration> left, -timeout in <duration>
+dokimi-mutate-go: <import path>: <done> of <total> mutants done, <undetected> undetected, <rate> mutants a second, about <duration> left, --timeout in <duration>
 ```
 
 The line reads `running` until the package's first verdict. A mutant is
 done when it has a verdict other than `not-run`. The rate and the time left
 appear once a mutant's run has ended. The time until the timeout appears
-under `-timeout`, and `-timeout passed` replaces it once the timeout has
+under `--timeout`, and `--timeout passed` replaces it once the timeout has
 passed. SIGINT and SIGTERM stop the runs, and no package starts after them.
 
 Once the caller's deadline keeps the remaining mutants from starting, the
@@ -279,21 +284,21 @@ workers took still run. The line then states them and what the run waits
 for, in place of the rate and the time left:
 
 ```text
-dokimi-mutate-go: <import path>: <done> of <total> mutants done, <undetected> undetected, <count> not run, waiting for <count> mutant runs and the closing control run, -timeout in <duration>
+dokimi-mutate-go: <import path>: <done> of <total> mutants done, <undetected> undetected, <count> not run, waiting for <count> mutant runs and the closing control run, --timeout in <duration>
 ```
 
 | Exit status | When |
 |---|---|
 | 0 | Every counted mutant was detected, and every run completed |
 | 1 | A package has a mutant that survived or that no test covers |
-| 2 | The command line or an input is invalid: an unknown flag, a value out of range, a directory of `-C` that does not exist, a diff that does not read or does not match the files, or a pattern of packages, of `-suite` or of `-skip` that `go list` cannot resolve |
-| 3 | A run failed: a package does not load or build, its tests fail without a mutant, a run changed a file of the package, a record does not write, `-timeout` or a signal ended the run, or the command cannot write to standard output |
+| 2 | The command line or an input is invalid: an unknown flag, a value out of range, a directory of `--directory` that does not exist, a diff that does not read or does not match the files, or a pattern of packages, of `--suite` or of `--skip` that `go list` cannot resolve |
+| 3 | A run failed: a package does not load or build, its tests fail without a mutant, a run changed a file of the package, a record does not write, `--timeout` or a signal ended the run, or the command cannot write to standard output |
 
 When more than one status applies, the command exits with the highest.
-A run that `-sample` alone ends exits with the status of its sample, 0
+A run that `--sample` alone ends exits with the status of its sample, 0
 or 1.
 
-`-diff` reads a unified diff, such as the output of
+`--diff` reads a unified diff, such as the output of
 `git diff origin/main...HEAD`, and selects lines of the new version of each
 file as cargo-mutants' `--in-diff` selects them:
 
@@ -303,7 +308,7 @@ file as cargo-mutants' `--in-diff` selects them:
   context, such as the output of `git diff -U0`, selects the same lines. A
   file that the diff deletes selects no line.
 - The path of each new version, after its `b/` prefix, is relative to the
-  working directory, as a path of `-lines` is.
+  working directory, as a path of `--lines` is.
 - The engine reads each file that the diff states. A line that the diff
   adds or keeps, and that the file states otherwise, stops the command,
   because the diff is older or newer than the checkout. So does a hunk with
@@ -320,7 +325,7 @@ file as cargo-mutants' `--in-diff` selects them:
   mutants. Its record's `selection` is an empty list, and each of its
   mutants is `not-selected`.
 
-Under `-p` above 1, the command counts the mutants that each package's run
+Under `--parallel` above 1, the command counts the mutants that each package's run
 would test before the first run starts. It loads and enumerates each
 package for its count, and schedules the packages by the counts:
 
@@ -328,26 +333,27 @@ package for its count, and schedules the packages by the counts:
   the order of `go list` among equal counts.
 - A package that starts gets a share of the threads that the running
   packages leave free, in proportion to its count against the counts of
-  the packages that may start beside it: the free slots of `-p`, or the
-  packages left when they are fewer. The share is rounded, at least 1 and
-  at most the free threads, and equal where those packages count 0.
-- While GOMAXPROCS is at least `-p`, a package starts only when a thread
-  is free, so a package with many mutants runs on more threads beside fewer
-  packages. Where GOMAXPROCS is below `-p`, each package gets one thread.
+  the packages that may start beside it: the free slots of `--parallel`, or
+  the packages left when they are fewer. The share is rounded, at least 1
+  and at most the free threads, and equal where those packages count 0.
+- While GOMAXPROCS is at least `--parallel`, a package starts only when a
+  thread is free, so a package with many mutants runs on more threads beside
+  fewer packages. Where GOMAXPROCS is below `--parallel`, each package gets
+  one thread.
 - A package's share does not change during its run, and the package
   returns it when the run ends. A share that grew during a run would change
   how many tests a binary runs at once, so the mutants before and after the
   change would run under different conditions, and the limits of the
   opening control run would no longer describe the later runs.
 
-`-memory-budget` keeps the packages that run at once within a budget of
+`--memory-budget` keeps the packages that run at once within a budget of
 memory:
 
 - Each memory ceiling is at most the budget, and at least the binary's
   peak plus 512 MiB, as mutate-spec's run protocol states.
 - After its opening control run, a package starts as many workers as fit
   in the budget with the largest memory ceiling of its test binaries, at
-  least one and at most `-workers`. The package waits until the workers'
+  least one and at most `--workers`. The package waits until the workers'
   ceilings fit in the budget beside the runs of the packages that the
   command admitted. A package whose one ceiling exceeds the budget starts
   when no other package runs, so every package starts.
@@ -355,7 +361,7 @@ memory:
   use: the machine's `MemTotal`, or the least `memory.max` of the
   process's cgroup v2 and its ancestors when that is less. A systemd scope
   or a CI container states such a limit.
-- `-memory-budget 0` admits every package at once. The memory that the
+- `--memory-budget 0` admits every package at once. The memory that the
   process may use then bounds the ceilings and the workers in place of the
   budget. `mutate.Check` applies that bound too.
 - The engine ends each run that crosses its ceiling, so the runs together
@@ -369,8 +375,8 @@ list` states with every symbolic link resolved. A relative pattern made
 absolute from the working directory keeps the links of the working
 directory's path, and `go list` then places the pattern outside the
 module. An import path refers to the same package from every directory of
-the module. A pattern of `-suite` that `go list` cannot resolve, and a
-package of `-suite` that it states an error of, stop the command before
+the module. A pattern of `--suite` that `go list` cannot resolve, and a
+package of `--suite` that it states an error of, stop the command before
 any run starts.
 
 ### Environment
@@ -379,11 +385,13 @@ any run starts.
 |---|---|---|
 | `DOKIMI_MUTATE_RECORD_DIR` | The caller | Check writes the record to this directory |
 | `DOKIMI_MUTATE_LINES` | The caller | Check's selection, as `file:first-last` entries separated by commas, files relative to the package directory |
+| `DOKIMI_MUTATE_GO_` and the name of an option | The caller | The command's option of that name. `DOKIMI_MUTATE_GO_WORKERS` sets `--workers`. The flag of the option takes precedence over the variable |
 | `DOKIMI_MUTATE_MUTANT` | The engine | The protocol's variable: the ordinal of the active mutant in a mutant's run and in its confirmation run, and 0 in the control runs. Its presence makes Check skip. A test library that stores state for later runs stores none while it is not 0 |
 | `DOKIMI_MUTATE_INSTRUMENTED` | The engine | `1` in every run of the instrumented test binary, the control runs included, and unset in the ordinary control run and in each confirmation run. A test that asserts an allocation count or a duration skips while it is set |
 | `DOKIMI_MUTATE_TRACE` | The engine | The path of the opening control run's trace |
-| `TMPDIR` | The engine | A fresh directory per run, removed when the run ends |
-| `GOMAXPROCS` | The engine | Every run of a test binary gets the package's share of the engine's GOMAXPROCS divided by the workers, and at least 1. Every go command of a package's run gets the package's share and the threads that the running packages leave free, divided among them, because a build's threads do not change a verdict. A confirmation's build divides them by the workers too. Under the command, the rules of `-p` decide each package's share |
+| `TMPDIR`, `TMP` and `TEMP` | The engine | A fresh directory per run, removed when the run ends. `os.TempDir` reads `TMPDIR` on Unix, and `TMP` and `TEMP` on Windows |
+| `PWD` | The engine | The package's directory, in which every run starts. `go test` sets `PWD` the same way for a test binary |
+| `GOMAXPROCS` | The engine | Every run of a test binary gets the package's share of the engine's GOMAXPROCS divided by the workers, and at least 1. Every go command of a package's run gets the package's share and the threads that the running packages leave free, divided among them, because a build's threads do not change a verdict. A confirmation's build divides them by the workers too. Under the command, the rules of `--parallel` decide each package's share |
 
 The record's file name is the package's import path, escaped with
 `url.PathEscape`, followed by `.mutate.json`.
@@ -402,7 +410,7 @@ The record's file name is the package's import path, escaped with
    `C`. It also leaves out the files that `go/ast.IsGenerated` reports,
    unless a comment before the file's package clause is the line
    `//dokimi:mutate-include`, or the run includes generated files under
-   `-include-generated` or `mutate.IncludeGenerated`. The record's
+   `--include-generated` or `mutate.IncludeGenerated`. The record's
    `generated` lists each such file, with its mutants and whether the run
    included it.
 
@@ -596,8 +604,7 @@ The engine also enforces the limits from outside the binary:
 - **Elsewhere.** On macOS the engine does not apply a memory ceiling, and
   each binary's `memoryCeilingBytes` in the record is `null`. On Windows it
   does not apply one either, and it kills only the test binary, because the
-  standard library has no call that ends a process tree there. Neither
-  platform has been run.
+  standard library has no call that ends a process tree there.
 
 The engine gives each run of a test binary its verdict by the first rule
 that matches:
@@ -657,7 +664,7 @@ The worker gives them back when its last run ends. A borrowed worker runs
 its test binaries with the same threads as the others, so the limits of the
 opening control run apply to every run.
 
-The caller's deadline is the test's deadline for Check, and `-timeout` for
+The caller's deadline is the test's deadline for Check, and `--timeout` for
 the command. Under a deadline, the opening control run of each test binary
 gets at most half of the time left. A mutant starts only while the time
 left covers twice the sum of the binaries' deadlines: once for its own run
@@ -668,7 +675,7 @@ longer covers the next run, so no run starts late. Every mutant that
 has not started by then is `not-run`, and so is every mutant whose run an
 interrupt ends. The record's `sample` then states the score of the mutants
 whose keys sort before the least key of a `not-run` mutant. Those mutants
-are a uniform sample of the package's mutants. Under `-sample n`, the
+are a uniform sample of the package's mutants. Under `--sample n`, the
 engine starts the runs of the first n mutants in key order, and every later
 mutant is `not-run`, so the same code gives the same sample on every
 machine. When that limit alone ends the runs, the record's `sample` states
@@ -676,7 +683,7 @@ the limit, the run does not fail, and its `score` is the sample's score.
 
 ### Confirmation
 
-Under `Confirm` or `-confirm`, the engine runs each survivor, and each
+Under `Confirm` or `--confirm`, the engine runs each survivor, and each
 mutant whose site no binary executed, once more in that mutant's ordinary
 build:
 
@@ -851,10 +858,19 @@ mutant's run.
 such as one that leaves the connector `x != 1 || x != 2`, runs and gets a
 verdict.
 
+### The command line of the flag package
+
+**Why not:** the flag package does not read environment variables. The
+command would write its help and parse its values by hand. The command line of
+`go.stealthscale.io/cli` follows the rules of GNU. The package derives the
+flag, the variable and the help of each option from one field. Its package
+`clitest` runs the command in a test with the arguments, the variables and
+the files of the test alone.
+
 ## Drawbacks
 
 - **The test entry point changes the module under test.** A module below
-  go 1.27.0 gets its go line raised to 1.27.0, and each package that opts in
+  go 1.27.2 gets its go line raised to 1.27.2, and each package that opts in
   gets a test file. A module below go 1.22 then gets a variable per loop
   iteration, which changes a loop whose closures capture its variable.
 - **The engine needs a Go 1.27 toolchain.** It refuses a go command of
@@ -884,12 +900,12 @@ verdict.
 - **Workers above 1 can produce false kills.** Copies of a package's tests
   that share a port or a file fail each other.
 - **The memory ceiling exists on Linux only.** macOS and Windows runs are
-  bounded by the deadline alone, and Windows has not been run.
+  bounded by the deadline alone.
 - **A process that leaves the group escapes the ceiling.** A test that
   starts a process in a new session or process group runs it outside the
   sum of the run's memory.
 - **A small budget slows a run down.** A budget that fits fewer ceilings
-  than `-workers` runs fewer mutants at once. A budget below a binary's
+  than `--workers` runs fewer mutants at once. A budget below a binary's
   peak plus 512 MiB runs one mutant at a time, with a ceiling above the
   budget.
 

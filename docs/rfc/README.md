@@ -11,4 +11,4 @@ because they record why not.
 
 | # | Title | Status |
 |---|---|---|
-| [0001](0001-the-go-mutation-engine.md) | The Go mutation engine | Draft |
+| [0001](0001-the-go-mutation-engine.md) | The Go mutation engine | Accepted |
