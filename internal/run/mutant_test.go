@@ -262,13 +262,13 @@ Unused aor 0: not-run
 	})
 }
 
-// TestMutantEnv sets TMPDIR, the state of the whole process, so neither it
-// nor its subtests run in parallel.
+// TestMutantEnv sets the temporary directory of the whole process, so
+// neither it nor its subtests run in parallel.
 func TestMutantEnv(t *testing.T) {
 	t.Run("Run", func(t *testing.T) {
 		t.Run("gives error to a survivor whose ordinary build is not written", func(t *testing.T) {
 			base := t.TempDir()
-			t.Setenv(tmpVar, base)
+			useTempDir(t, base)
 			// The files take the places of the directories of the confirmations
 			// of Sub's mutants, the record's mutants 2 and 3.
 			var once sync.Once

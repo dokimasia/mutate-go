@@ -135,7 +135,13 @@ func TestRun(t *testing.T) {
 			got := make([]string, 0, len(mutants))
 			want := make([]string, 0, len(mutants))
 			for i, m := range mutants {
-				got = append(got, filepath.Join(wd, paths[i]))
+				// A path from another volume on Windows is the file's path in the
+				// root.
+				path := paths[i]
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(wd, path)
+				}
+				got = append(got, path)
 				want = append(want, filepath.Join(rec.Root, filepath.FromSlash(m.File)))
 			}
 			assert.Equal(t, got, want, "each path leads from the working directory to the mutant's file")
@@ -385,13 +391,14 @@ Unused aor 0: no-coverage
 	})
 }
 
-// TestRunEnv sets TMPDIR, the state of the whole process, so neither it nor
-// its subtests run in parallel.
+// TestRunEnv sets the temporary directory of the whole process, so neither
+// it nor its subtests run in parallel.
 func TestRunEnv(t *testing.T) {
 	t.Run("Run", func(t *testing.T) {
 		t.Run("returns an error when the work directory cannot be made", func(t *testing.T) {
-			t.Setenv(tmpVar, filepath.Join(t.TempDir(), missing))
-			_, err := run.Run(t.Context(), &run.Config{Dir: ".", Env: os.Environ()})
+			dir := module(t, map[string]string{addFile: add})
+			useTempDir(t, filepath.Join(t.TempDir(), missing))
+			_, err := run.Run(t.Context(), &run.Config{Dir: dir, Env: os.Environ()})
 			assert.ErrorIs(t, err, fs.ErrNotExist, "the temporary directory does not exist")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
 		})

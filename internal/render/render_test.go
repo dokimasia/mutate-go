@@ -14,6 +14,7 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/enumerate"
 	"go.dokimi.dev/mutate/internal/render"
@@ -194,31 +195,25 @@ func TestRender(t *testing.T) {
 				assert.Equal(t, string(copied), "a", "and has the file's text")
 			})
 
+			// Each tree puts a file or a directory at a path that Write writes.
 			tests := []struct {
-				name    string
-				blocked string
-				file    bool
+				name string
+				give files.Tree
 			}{
-				{name: "returns an error when a file's directory cannot be made", blocked: "0", file: true},
-				{name: "returns an error when a file does not write", blocked: filepath.Join("0", "a.go")},
-				{name: "returns an error when the overlay does not write", blocked: "overlay.json"},
+				{
+					name: "returns an error when a file's directory cannot be made",
+					give: files.Tree{"0": files.Text("")},
+				},
+				{name: "returns an error when a file does not write", give: files.Tree{"0/a.go": files.Dir()}},
+				{
+					name: "returns an error when the overlay does not write",
+					give: files.Tree{"overlay.json": files.Dir()},
+				},
 			}
 			for _, tt := range tests {
 				t.Run(tt.name, func(t *testing.T) {
 					t.Parallel()
-					dir := t.TempDir()
-					blocked := filepath.Join(dir, tt.blocked)
-					assert.NoError(
-						t,
-						os.MkdirAll(filepath.Dir(blocked), dirMode),
-						"the blocked path's directory exists",
-					)
-					if tt.file {
-						assert.NoError(t, os.WriteFile(blocked, nil, fileMode), "a file blocks the path")
-					} else {
-						assert.NoError(t, os.Mkdir(blocked, dirMode), "a directory blocks the path")
-					}
-					_, err := prog.Write(dir)
+					_, err := prog.Write(files.Workspace(t, tt.give))
 					assert.HasError(t, err, "Write fails")
 					assert.HasPrefix(t, err.Error(), "render: ", "the error starts with the package's name")
 				})

@@ -24,7 +24,7 @@ import (
 // binary and for the engine's executable.
 const goCommands = 5
 
-// logName is the name of the file to which the wrapper in goLog appends.
+// logName is the name of the file to which the wrapper of goWrapper appends.
 const logName = "log"
 
 func TestProgram(t *testing.T) {
@@ -78,15 +78,12 @@ func TestProgram(t *testing.T) {
 		for _, tt := range commands {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				if runtime.GOOS == "windows" {
-					t.Skip("the go wrapper is a shell script")
-				}
 				goCmd, err := exec.LookPath(goCommand)
 				assert.NoError(t, err, "the go command is on the PATH")
 				log := filepath.Join(t.TempDir(), logName)
 				env := testbin.Setenv(
 					os.Environ(),
-					pathVar+"="+goLog+string(filepath.ListSeparator)+os.Getenv(pathVar),
+					pathVar+"="+goWrapper+string(filepath.ListSeparator)+os.Getenv(pathVar),
 					goVar+"="+goCmd,
 					goLogVar+"="+log,
 					expectedProcsVar+"=3",

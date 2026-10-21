@@ -5,18 +5,22 @@ package run_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 
+	"go.dokimi.dev/mutate/internal/process"
 	"go.dokimi.dev/mutate/internal/record"
 	"go.dokimi.dev/mutate/internal/render"
 	"go.dokimi.dev/mutate/internal/run"
@@ -28,18 +32,21 @@ import (
 const (
 	pathVar  = "PATH"
 	procsVar = "GOMAXPROCS"
-	tmpVar   = "TMPDIR"
 )
+
+// tempVars are the variables that name the temporary directory of a
+// process: TMPDIR on Unix, and TMP and TEMP on Windows.
+var tempVars = []string{"TMPDIR", "TMP", "TEMP"}
 
 // The variables of the fixtures' environment.
 const (
-	// goVar names the go command that a wrapper of goLog or goBlock runs.
+	// goVar names the go command that the wrapper of goWrapper runs.
 	goVar = "FIXTURE_GO"
-	// goLogVar names the file to which the wrapper in goLog appends its
+	// goLogVar names the file to which the wrapper of goWrapper appends its
 	// GOMAXPROCS.
 	goLogVar = "FIXTURE_GO_LOG"
-	// blockVar is the shell pattern of the argument that makes the wrapper in
-	// goBlock create the marker and wait in place of the go command.
+	// blockVar is the shell pattern of the argument that makes the wrapper of
+	// goWrapper create the marker and wait in place of the go command.
 	blockVar = "FIXTURE_BLOCK"
 	// markerVar names the file that a fixture creates at the step of the run
 	// at which the test acts.
@@ -51,14 +58,14 @@ const (
 	// alwaysVar makes killer end its binary whatever Add returns.
 	alwaysVar = "FIXTURE_ALWAYS"
 	// slowBuildVar is the shell pattern of the argument that makes the
-	// wrapper in goSlow wait slowBuild before it runs the go command.
+	// wrapper of goWrapper wait slowBuild before it runs the go command.
 	slowBuildVar = "FIXTURE_SLOW_BUILD"
 	// childVar makes a fixture's test run as the copy of its binary that the
 	// test starts.
 	childVar = "FIXTURE_CHILD"
 )
 
-// slowBuild is how long the wrapper in goSlow waits before a go command
+// slowBuild is how long the wrapper of goWrapper waits before a go command
 // whose argument matches slowBuildVar's pattern, and ordinaryOutput is the
 // pattern of the output of an ordinary control run's build.
 const (
@@ -74,9 +81,9 @@ const (
 	closingPhase  = "closing"
 )
 
-// The modes of the fixtures' directories and files.
+// The modes of the files that the tests write while a run runs, and of the
+// go wrapper that TestMain writes before any test starts.
 const (
-	dirMode    = 0o755
 	fileMode   = 0o644
 	scriptMode = 0o755
 )
@@ -95,11 +102,13 @@ const (
 	goMod     = "module fixture\n\ngo 1.21\n"
 )
 
-// The names of the go wrappers: the pattern of their directories, and the
-// file name of the go command, which the wrappers take on.
+// The names of the go wrapper. Its directory has the pattern
+// wrapperPattern, and the wrapper takes on the name goCommand. Its file name
+// is goName, because Windows runs a command only with the suffix .exe.
 const (
 	wrapperPattern = "gowrapper"
 	goCommand      = "go"
+	goName         = goCommand + process.ExeSuffix
 )
 
 // markerName is the name of the marker file of a test.
@@ -410,70 +419,132 @@ const (
 	conformanceMainFile = "conformance/main_test.go"
 )
 
-// goLog, goBlock and goSlow are directories of a go command that wraps the
-// one that goVar names. The command in goLog appends its GOMAXPROCS to the
-// file of goLogVar and then runs the go command. The command in goBlock
-// runs the go command too, except for a command with an argument that
-// matches the shell pattern of blockVar, which creates the file of
-// markerVar and then waits a minute. The command in goSlow waits slowBuild
-// before a command with an argument that matches the shell pattern of
-// slowBuildVar, and then runs the go command. TestMain writes them before
-// any test starts, because a file that is open for writing while another
-// goroutine forks a process fails exec with ETXTBSY.
-var goLog, goBlock, goSlow string
+// goWrapper is the directory of a go command that wraps the one that goVar
+// names. The command is a copy of the test binary, which TestMain runs as
+// the wrapper because its name is goName:
+//   - It appends its GOMAXPROCS to the file of goLogVar where that variable
+//     is set.
+//   - For a command with an argument that matches the shell pattern of
+//     blockVar, it creates the file of markerVar and waits a minute in place
+//     of the go command.
+//   - Before a command with an argument that matches the shell pattern of
+//     slowBuildVar, it waits slowBuild.
+//   - It runs the go command with its arguments and its standard streams,
+//     and exits with the go command's status.
+//
+// TestMain writes it before any test starts, because a file that is open
+// for writing while another goroutine forks a process fails exec with
+// ETXTBSY.
+var goWrapper string
 
-// TestMain writes the go wrappers, runs the tests and removes the wrappers.
+// TestMain runs the go wrapper when the test binary's name is goName. It
+// otherwise writes the wrapper, runs the tests and removes the wrapper.
 func TestMain(m *testing.M) {
-	scripts := map[*string]string{
-		&goLog: fmt.Sprintf("#!/bin/sh\necho \"$%s\" >> \"$%s\"\nexec \"$%s\" \"$@\"\n", procsVar, goLogVar, goVar),
-		&goBlock: fmt.Sprintf(
-			"#!/bin/sh\nfor a in \"$@\"; do\n\tcase \"$a\" in\n\t$%s)\n\t\t: > \"$%s\"\n\t\texec sleep 60\n\t\t;;\n"+
-				"\tesac\ndone\nexec \"$%s\" \"$@\"\n",
-			blockVar, markerVar, goVar,
-		),
-		&goSlow: fmt.Sprintf(
-			"#!/bin/sh\nfor a in \"$@\"; do\n\tcase \"$a\" in\n\t$%s)\n\t\tsleep %d\n\t\t;;\n\tesac\ndone\n"+
-				"exec \"$%s\" \"$@\"\n",
-			slowBuildVar, int(slowBuild.Seconds()), goVar,
-		),
+	if filepath.Base(os.Args[0]) == goName {
+		os.Exit(wrapGo(os.Args[1:]))
 	}
-	for dir, script := range scripts {
-		var err error
-		*dir, err = os.MkdirTemp("", wrapperPattern)
-		if err == nil {
-			err = os.WriteFile(filepath.Join(*dir, goCommand), []byte(script), scriptMode)
-		}
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
+	dir, err := os.MkdirTemp("", wrapperPattern)
+	if err == nil {
+		goWrapper = dir
+		err = copySelf(filepath.Join(dir, goName))
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 	code := m.Run()
-	_ = os.RemoveAll(goLog)
-	_ = os.RemoveAll(goBlock)
-	_ = os.RemoveAll(goSlow)
+	_ = os.RemoveAll(goWrapper)
 	os.Exit(code)
 }
 
-// module writes files, by slash-separated path, into a new directory, with
-// goMod as the go.mod unless files has one, and returns the directory.
-func module(t *testing.T, files map[string]string) string {
-	t.Helper()
-	dir := t.TempDir()
-	if _, ok := files[goModFile]; !ok {
-		files = with(files, map[string]string{goModFile: goMod})
+// copySelf copies the test binary to path, as a file that its owner may
+// execute.
+func copySelf(path string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
 	}
-	for name, text := range files {
-		path := filepath.Join(dir, filepath.FromSlash(name))
-		assert.NoError(t, os.MkdirAll(filepath.Dir(path), dirMode), "the fixture's directory is made")
-		assert.NoError(t, os.WriteFile(path, []byte(text), fileMode), "the fixture's file is written")
+	data, err := os.ReadFile(self)
+	if err != nil {
+		return err
 	}
-	return dir
+	return os.WriteFile(path, data, scriptMode)
 }
 
-// with returns a copy of files with the files of more added or replaced.
-func with(files, more map[string]string) map[string]string {
-	out := maps.Clone(files)
+// wrapGo runs as the go command of goWrapper with the arguments args, and
+// returns its exit status.
+func wrapGo(args []string) int {
+	if log := os.Getenv(goLogVar); log != "" {
+		f, err := os.OpenFile(log, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileMode)
+		if err == nil {
+			_, err = fmt.Fprintln(f, os.Getenv(procsVar))
+			err = errors.Join(err, f.Close())
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+	}
+	if slices.ContainsFunc(args, func(arg string) bool { return matches(os.Getenv(blockVar), arg) }) {
+		if err := os.WriteFile(os.Getenv(markerVar), nil, fileMode); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		time.Sleep(time.Minute)
+		return 0
+	}
+	if slices.ContainsFunc(args, func(arg string) bool { return matches(os.Getenv(slowBuildVar), arg) }) {
+		time.Sleep(slowBuild)
+	}
+	//nolint:noctx // the go wrapper runs outside any test, and the run that started it ends it
+	cmd := exec.Command(os.Getenv(goVar), args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	err := cmd.Run()
+	if exit, ok := errors.AsType[*exec.ExitError](err); ok {
+		return exit.ExitCode()
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
+// matches reports whether arg matches the shell pattern pattern, whose *
+// matches any text. It compares arg with slashes, so a pattern with slashes
+// matches a path of Windows. An empty pattern matches no argument.
+func matches(pattern, arg string) bool {
+	if pattern == "" {
+		return false
+	}
+	glob := "^" + strings.ReplaceAll(regexp.QuoteMeta(pattern), `\*`, ".*") + "$"
+	return regexp.MustCompile(glob).MatchString(filepath.ToSlash(arg))
+}
+
+// useTempDir makes dir the temporary directory of the test process until t
+// ends, through the variable of every platform.
+func useTempDir(t *testing.T, dir string) {
+	t.Helper()
+	for _, name := range tempVars {
+		t.Setenv(name, dir)
+	}
+}
+
+// module writes texts, by slash-separated path, into a workspace of the
+// test, with goMod as the go.mod unless texts has one, and returns the
+// workspace's directory.
+func module(t *testing.T, texts map[string]string) string {
+	t.Helper()
+	tree := files.Tree{goModFile: files.Text(goMod)}
+	for name, text := range texts {
+		tree[name] = files.Text(text)
+	}
+	return files.Workspace(t, tree)
+}
+
+// with returns a copy of texts with the files of more added or replaced.
+func with(texts, more map[string]string) map[string]string {
+	out := maps.Clone(texts)
 	maps.Copy(out, more)
 	return out
 }
@@ -498,7 +569,7 @@ func runWith(t *testing.T, ctx context.Context, dir string, cfg run.Config) *rec
 }
 
 // cancelAt runs the engine on the package in dir with cfg, whose Env states
-// marker as the file of markerVar or of the wrapper in goBlock, and cancels
+// marker as the file of markerVar or of the wrapper of goWrapper, and cancels
 // the run once the file exists. It returns the run's record.
 func cancelAt(t *testing.T, dir string, cfg run.Config, marker string) *record.Record {
 	t.Helper()
@@ -526,19 +597,15 @@ func cancelAt(t *testing.T, dir string, cfg run.Config, marker string) *record.R
 
 // blocking returns the environment of a run whose go command creates the
 // file marker and then waits a minute, in place of each command with an
-// argument that matches the shell pattern block, and returns marker. It
-// skips the test on Windows, which does not run the wrapper's shell script.
+// argument that matches the shell pattern block, and returns marker.
 func blocking(t *testing.T, block string) (env []string, marker string) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("the go wrapper is a shell script")
-	}
 	goCmd, err := exec.LookPath(goCommand)
 	assert.NoError(t, err, "the go command is on the PATH")
 	marker = filepath.Join(t.TempDir(), markerName)
 	env = testbin.Setenv(
 		os.Environ(),
-		pathVar+"="+goBlock+string(filepath.ListSeparator)+os.Getenv(pathVar),
+		pathVar+"="+goWrapper+string(filepath.ListSeparator)+os.Getenv(pathVar),
 		goVar+"="+goCmd,
 		markerVar+"="+marker,
 		blockVar+"="+block,
@@ -548,18 +615,14 @@ func blocking(t *testing.T, block string) (env []string, marker string) {
 
 // slowBuilds returns the environment of a run whose go command waits
 // slowBuild before each command with an argument that matches the shell
-// pattern pattern. It skips the test on Windows, which does not run the
-// wrapper's shell script.
+// pattern pattern.
 func slowBuilds(t *testing.T, pattern string) []string {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("the go wrapper is a shell script")
-	}
 	goCmd, err := exec.LookPath(goCommand)
 	assert.NoError(t, err, "the go command is on the PATH")
 	return testbin.Setenv(
 		os.Environ(),
-		pathVar+"="+goSlow+string(filepath.ListSeparator)+os.Getenv(pathVar),
+		pathVar+"="+goWrapper+string(filepath.ListSeparator)+os.Getenv(pathVar),
 		goVar+"="+goCmd,
 		slowBuildVar+"="+pattern,
 	)

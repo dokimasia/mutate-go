@@ -37,6 +37,9 @@ const (
 	tempVar   = "TEMP"
 )
 
+// pwdVar is the variable of a run's working directory.
+const pwdVar = "PWD"
+
 // tmpPattern is the pattern of the name of a run's temporary directory.
 const tmpPattern = "tmp-"
 
@@ -65,8 +68,8 @@ const (
 type Config struct {
 	// Binary is the path of the test binary.
 	Binary string
-	// Dir is the run's working directory: the directory of the binary's
-	// package.
+	// Dir is the absolute path of the run's working directory: the
+	// directory of the binary's package.
 	Dir string
 	// Work is the directory in which Run makes the run's temporary
 	// directory.
@@ -117,6 +120,10 @@ type Result struct {
 // that memory every pollInterval, and the result states the largest that
 // it read.
 //
+// The binary runs in cfg.Dir with PWD set to cfg.Dir. A test's os.Getwd
+// then returns cfg.Dir and not the path with the links of cfg.Dir
+// resolved. go test runs a test binary the same way.
+//
 // The run ends when the binary exits, whatever its output does. Run then
 // ends the processes that the binary started and left in its group, and
 // reads the rest of the output, for readDelay at most, because a process
@@ -137,7 +144,7 @@ func Run(ctx context.Context, cfg *Config) *Result {
 	tmp, err := os.MkdirTemp(cfg.Work, tmpPattern)
 	if err == nil {
 		defer os.RemoveAll(tmp)
-		cmd.Env = Setenv(cfg.Env, tmpdirVar+"="+tmp, tmpVar+"="+tmp, tempVar+"="+tmp)
+		cmd.Env = Setenv(cfg.Env, tmpdirVar+"="+tmp, tmpVar+"="+tmp, tempVar+"="+tmp, pwdVar+"="+cfg.Dir)
 		g, err = process.Start(cmd, writer, writer)
 	}
 	if err != nil {

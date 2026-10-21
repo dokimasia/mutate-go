@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/mutate/internal/record"
@@ -34,12 +35,6 @@ var schemaPath = filepath.Join("..", "..", "conformance", "spec", "record.schema
 const (
 	fileName    = "github.com%2Fgoogle%2Fbtree.mutate.json"
 	errorPrefix = "record: "
-)
-
-// The modes of the files and the directories that the cases make.
-const (
-	dirMode  = 0o755
-	fileMode = 0o644
 )
 
 // protocol is the run protocol of the vendored definition.
@@ -301,6 +296,10 @@ func TestRecord(t *testing.T) {
 				"returns a file outside the directory through its parent", "b.go", filepath.Join(root, "pkg"),
 				filepath.Join("..", "b.go"),
 			},
+			{
+				"returns the file's path in the root when no relative path leads to it from the directory", "b.go",
+				"relative", filepath.Join(root, "b.go"),
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -312,11 +311,14 @@ func TestRecord(t *testing.T) {
 
 	t.Run("Resolved", func(t *testing.T) {
 		t.Parallel()
-		root, err := filepath.EvalSymlinks(t.TempDir())
+		// The workspace writes the directory before the link, which sorts
+		// after it, so the link on Windows is a link to a directory.
+		root, err := filepath.EvalSymlinks(files.Workspace(t, files.Tree{
+			"pkg":      files.Dir(),
+			"pkg-link": files.Link("pkg"),
+		}))
 		assert.NoError(t, err, "the root resolves")
-		assert.NoError(t, os.Mkdir(filepath.Join(root, "pkg"), dirMode), "the package's directory is made")
-		link := filepath.Join(t.TempDir(), "link")
-		assert.NoError(t, os.Symlink(filepath.Join(root, "pkg"), link), "the link is made")
+		link := filepath.Join(root, "pkg-link")
 		wd, err := os.Getwd()
 		assert.NoError(t, err, "the working directory reads")
 		wd, err = filepath.EvalSymlinks(wd)
@@ -407,8 +409,7 @@ func TestRecord(t *testing.T) {
 
 		t.Run("returns an error when the directory does not exist and cannot be made", func(t *testing.T) {
 			t.Parallel()
-			file := filepath.Join(t.TempDir(), "file")
-			assert.NoError(t, os.WriteFile(file, nil, fileMode), "the file in the directory's place is written")
+			file := filepath.Join(files.Workspace(t, files.Tree{"file": files.Text("")}), "file")
 			_, err := full().Write(filepath.Join(file, "records"))
 			assert.HasError(t, err, "a directory under a file cannot be made")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
@@ -416,8 +417,8 @@ func TestRecord(t *testing.T) {
 
 		t.Run("returns an error when the record file cannot be written", func(t *testing.T) {
 			t.Parallel()
-			dir := t.TempDir()
-			assert.NoError(t, os.Mkdir(filepath.Join(dir, fileName), dirMode), "a directory takes the file's name")
+			// A directory takes the file's name.
+			dir := files.Workspace(t, files.Tree{fileName: files.Dir()})
 			_, err := full().Write(dir)
 			failed := assert.ErrorAs[*fs.PathError](t, err, "the error is the error of the file")
 			assert.Equal(t, filepath.Base(failed.Path), fileName, "the error names the record file")

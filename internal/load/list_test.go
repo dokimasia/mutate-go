@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/mutate/internal/load"
@@ -88,7 +89,7 @@ func TestList(t *testing.T) {
 		t.Run("returns an error when an entry does not decode", func(t *testing.T) {
 			t.Parallel()
 			env, fake := fakeGo(t)
-			write(t, fake, listFile, "{")
+			files.Write(t, fake, files.Tree{listFile: files.Text("{")})
 			_, err := load.List(ctx, &load.Config{Dir: t.TempDir(), Env: env}, []string{"."})
 			assert.HasError(t, err, "an entry that ends early fails")
 			assert.Equal(t, err.Error(), "go list: unexpected EOF", "the error states the decoder's")

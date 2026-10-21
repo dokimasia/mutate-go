@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/load"
 )
@@ -76,7 +77,7 @@ func TestLinking(t *testing.T) {
 				give: func(t *testing.T) load.Config {
 					t.Helper()
 					env, fake := fakeGo(t)
-					write(t, fake, listFile, "{")
+					files.Write(t, fake, files.Tree{listFile: files.Text("{")})
 					return load.Config{Dir: t.TempDir(), Env: env}
 				},
 				prefix: "go list: unexpected EOF",

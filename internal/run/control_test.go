@@ -15,6 +15,7 @@ import (
 
 	"go.dokimi.dev/assert"
 
+	"go.dokimi.dev/mutate/internal/process"
 	"go.dokimi.dev/mutate/internal/record"
 	"go.dokimi.dev/mutate/internal/render"
 	"go.dokimi.dev/mutate/internal/run"
@@ -34,15 +35,15 @@ const messageTail = 8 << 10
 
 // The names in the run's work directory that the tests pin: the pattern of
 // the work directory and the instrumented test binary of the package's own
-// tests.
+// tests. The binary's name ends in .exe on Windows.
 const (
 	workGlob  = "mutate-*"
-	ownBinary = "pkg.test"
+	ownBinary = "pkg.test" + process.ExeSuffix
 )
 
 // ordinaryBinary is the shell pattern of the argument that names the output
 // of the ordinary control run's build.
-const ordinaryBinary = "*/ordinary/pkg.test"
+const ordinaryBinary = "*/ordinary/" + ownBinary
 
 // slowConformance is a test of the package conformance that links count and
 // sleeps a second in the opening control run, which raises its binary's
@@ -558,13 +559,13 @@ func TestControl(t *testing.T) {
 	})
 }
 
-// TestControlEnv sets TMPDIR, the state of the whole process, so neither it
-// nor its subtests run in parallel.
+// TestControlEnv sets the temporary directory of the whole process, so
+// neither it nor its subtests run in parallel.
 func TestControlEnv(t *testing.T) {
 	t.Run("Run", func(t *testing.T) {
 		t.Run("states closing-control-failed when the closing control run does not start", func(t *testing.T) {
 			base := t.TempDir()
-			t.Setenv(tmpVar, base)
+			useTempDir(t, base)
 			// The fourth mutant's verdict removes the test binary, so the
 			// closing control run does not start.
 			runs := 0

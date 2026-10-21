@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/enumerate"
 	"go.dokimi.dev/mutate/internal/load"
@@ -28,12 +29,6 @@ import (
 const (
 	goMod  = "go.mod"
 	module = "module fixture\n\ngo 1.21\n"
-)
-
-// The modes of the files and the directories that the tests write.
-const (
-	fileMode = 0o644
-	dirMode  = 0o755
 )
 
 // mutantVar is the protocol's variable, which states the active mutant.
@@ -549,22 +544,17 @@ func (fx semanticsFixture) expected(names map[*enumerate.Mutant]string, m *enume
 	return out
 }
 
-// fixture writes files into a new directory, with the module file module
-// unless files has one, and loads and enumerates the package there. It only
-// reads files, so parallel tests can share one map.
-func fixture(t *testing.T, files map[string]string) (*load.Package, *enumerate.Result) {
+// fixture writes texts, by slash-separated path, into a workspace of the
+// test, with the module file module unless texts has one, and loads and
+// enumerates the package there. It only reads texts, so parallel tests can
+// share one map.
+func fixture(t *testing.T, texts map[string]string) (*load.Package, *enumerate.Result) {
 	t.Helper()
-	dir := t.TempDir()
-	if _, ok := files[goMod]; !ok {
-		assert.NoError(
-			t,
-			os.WriteFile(filepath.Join(dir, goMod), []byte(module), fileMode),
-			"the module file is written",
-		)
+	tree := files.Tree{goMod: files.Text(module)}
+	for name, text := range texts {
+		tree[name] = files.Text(text)
 	}
-	for name, text := range files {
-		assert.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(text), fileMode), name+" is written")
-	}
+	dir := files.Workspace(t, tree)
 	p, err := load.Load(t.Context(), &load.Config{Dir: dir, Env: os.Environ(), Imports: render.Imports()})
 	assert.NoError(t, err, "the fixture loads")
 	d := spec.Load()

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/load"
 )
@@ -83,12 +85,16 @@ func TestLoad(t *testing.T) {
 
 		t.Run("resolves a symbolic link in the directory", func(t *testing.T) {
 			t.Parallel()
-			dir := moduleDir(t, map[string]string{"a.go": "package fixture\n"})
-			link := filepath.Join(t.TempDir(), "link")
-			assert.NoError(t, os.Symlink(dir, link), "the link is created")
-			p, err := load.Load(ctx, &load.Config{Dir: link, Env: os.Environ()})
+			// The workspace writes the module before the link, which sorts after
+			// it, so the link on Windows is a link to a directory.
+			root := files.Workspace(t, files.Tree{
+				"fixture/" + goMod: files.Text(module),
+				"fixture/a.go":     files.Text("package fixture\n"),
+				"link":             files.Link("fixture"),
+			})
+			p, err := load.Load(ctx, &load.Config{Dir: filepath.Join(root, "link"), Env: os.Environ()})
 			assert.NoError(t, err, "the package loads through the link")
-			dir = resolved(t, dir)
+			dir := resolved(t, filepath.Join(root, "fixture"))
 			expect.Equal(t, p.Dir, dir, "the directory is the link's target")
 			expect.Equal(t, p.Files[0].Path, filepath.Join(dir, "a.go"), "and so is every file's path")
 		})
@@ -125,10 +131,13 @@ func TestLoad(t *testing.T) {
 
 		t.Run("returns language 0 and the package directory as root outside a module", func(t *testing.T) {
 			t.Parallel()
-			gopath := t.TempDir()
+			gopath := files.Workspace(t, files.Tree{
+				"src/legacy/vendor/dep/d.go": files.Text("package dep\n\nconst One = 1\n"),
+				"src/legacy/a.go": files.Text(
+					"package legacy\n\nimport \"dep\"\n\nfunc F(a int) int { return a + dep.One }\n",
+				),
+			})
 			dir := filepath.Join(gopath, "src", "legacy")
-			write(t, dir, "vendor/dep/d.go", "package dep\n\nconst One = 1\n")
-			write(t, dir, "a.go", "package legacy\n\nimport \"dep\"\n\nfunc F(a int) int { return a + dep.One }\n")
 			env := append(os.Environ(), "GO111MODULE=off", "GOPATH="+gopath)
 			p, err := load.Load(ctx, &load.Config{Dir: dir, Env: env})
 			assert.NoError(t, err, "a package of GOPATH loads")
@@ -242,10 +251,13 @@ func TestLoad(t *testing.T) {
 			})
 		}
 
+		// Each case states the text in the error, or the error that it wraps,
+		// such as fs.ErrNotExist, whose text differs from system to system.
 		errs := []struct {
-			name string
-			give func(t *testing.T) load.Config
-			want string
+			name    string
+			give    func(t *testing.T) load.Config
+			want    string
+			wantErr error
 		}{
 			{
 				name: "returns an error for a directory that does not exist",
@@ -253,7 +265,7 @@ func TestLoad(t *testing.T) {
 					t.Helper()
 					return load.Config{Dir: filepath.Join(t.TempDir(), "missing"), Env: os.Environ()}
 				},
-				want: "no such file or directory",
+				wantErr: fs.ErrNotExist,
 			},
 			{
 				name: "returns an error when PATH names no go command",
@@ -271,7 +283,7 @@ func TestLoad(t *testing.T) {
 				give: func(t *testing.T) load.Config {
 					t.Helper()
 					env, fake := fakeGo(t)
-					write(t, fake, envFile, "GOVERSION=go1")
+					files.Write(t, fake, files.Tree{envFile: files.Text("GOVERSION=go1")})
 					return load.Config{Dir: t.TempDir(), Env: env}
 				},
 				want: "go env: invalid character",
@@ -281,7 +293,7 @@ func TestLoad(t *testing.T) {
 				give: func(t *testing.T) load.Config {
 					t.Helper()
 					env, fake := fakeGo(t)
-					write(t, fake, envFile, `{"GOVERSION": "go1.0.0"}`)
+					files.Write(t, fake, files.Tree{envFile: files.Text(`{"GOVERSION": "go1.0.0"}`)})
 					return load.Config{Dir: t.TempDir(), Env: env}
 				},
 				want: "the go command is go1.0.0 and the engine was built by " + runtime.Version(),
@@ -311,7 +323,7 @@ func TestLoad(t *testing.T) {
 					t.Helper()
 					env, fake := fakeGo(t)
 					fakeEnv(t, fake)
-					write(t, fake, listFile, "{")
+					files.Write(t, fake, files.Tree{listFile: files.Text("{")})
 					return load.Config{Dir: t.TempDir(), Env: env}
 				},
 				want: "go list: unexpected EOF",
@@ -322,7 +334,7 @@ func TestLoad(t *testing.T) {
 					t.Helper()
 					env, fake := fakeGo(t)
 					fakeEnv(t, fake)
-					write(t, fake, listFile, "")
+					files.Write(t, fake, files.Tree{listFile: files.Text("")})
 					return load.Config{Dir: t.TempDir(), Env: env}
 				},
 				want: "go list lists no package in ",
@@ -374,7 +386,7 @@ func TestLoad(t *testing.T) {
 					listedFixture(t, fake, dir, nil)
 					return load.Config{Dir: dir, Env: env}
 				},
-				want: "no such file or directory",
+				wantErr: fs.ErrNotExist,
 			},
 			{
 				name: "returns an error when a compiled file does not parse",
@@ -413,19 +425,15 @@ func TestLoad(t *testing.T) {
 					env, fake := fakeGo(t)
 					fakeEnv(t, fake)
 					dir := resolved(t, t.TempDir())
-					rewrite := filepath.Join(t.TempDir(), "c.cgo1.go")
-					write(
-						t,
-						filepath.Dir(rewrite),
-						"c.cgo1.go",
-						"//line "+filepath.Join(dir, "c.go")+":1:1\npackage fixture\n",
-					)
+					rewrite := filepath.Join(files.Workspace(t, files.Tree{
+						"c.cgo1.go": files.Text("//line " + filepath.Join(dir, "c.go") + ":1:1\npackage fixture\n"),
+					}), "c.cgo1.go")
 					listedFixture(t, fake, dir, map[string]any{
 						"GoFiles": nil, "CgoFiles": []string{"c.go"}, "CompiledGoFiles": []string{rewrite},
 					})
 					return load.Config{Dir: dir, Env: env}
 				},
-				want: "no such file or directory",
+				wantErr: fs.ErrNotExist,
 			},
 			{
 				name: "returns an error when a file lies outside the module root",
@@ -446,7 +454,11 @@ func TestLoad(t *testing.T) {
 				cfg := tt.give(t)
 				_, err := load.Load(ctx, &cfg)
 				assert.HasError(t, err, "Load fails")
-				assert.Contains(t, err.Error(), tt.want, "the error states the cause")
+				if tt.wantErr != nil {
+					assert.ErrorIs(t, err, tt.wantErr, "the error wraps the cause")
+				} else {
+					assert.Contains(t, err.Error(), tt.want, "the error states the cause")
+				}
 				assert.False(t, strings.HasPrefix(err.Error(), "load"), "and does not start with the package's name")
 			})
 		}

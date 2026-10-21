@@ -9,12 +9,14 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/record"
 	"go.dokimi.dev/mutate/internal/run"
@@ -134,8 +136,8 @@ func TestSnapshot(t *testing.T) {
 				removed,
 			}
 			digests := make([]string, 0, len(sets))
-			for _, files := range sets {
-				digests = append(digests, runIn(t, module(t, files), run.Config{}).Inputs)
+			for _, set := range sets {
+				digests = append(digests, runIn(t, module(t, set), run.Config{}).Inputs)
 			}
 			assert.NoDuplicates(t, func() ([]string, error) { return digests, nil },
 				"each change of a data file changes the digest, also of a hidden file and below testdata")
@@ -167,8 +169,7 @@ func TestSnapshot(t *testing.T) {
 			digests := make([]string, 0, len(targets))
 			for _, target := range targets {
 				dir := module(t, dataFiles)
-				assert.NoError(t, os.Symlink(target, filepath.Join(dir, linkName)), "the link to a directory is made")
-				assert.NoError(t, os.Symlink(missing, filepath.Join(dir, danglingName)), "the dangling link is made")
+				files.Write(t, dir, files.Tree{linkName: files.Link(target), danglingName: files.Link(missing)})
 				digests = append(digests, runIn(t, dir, run.Config{}).Inputs)
 			}
 			assert.NotEqual(t, digests[1], digests[0], "the digest states each link's target")
@@ -290,11 +291,9 @@ func TestScale(t *testing.T) {
 				t.Skip("a file's mode stops no read on Windows or for root")
 			}
 			dir := module(t, scale)
-			assert.NoError(
-				t,
-				os.WriteFile(filepath.Join(dir, filepath.Dir(conformanceFile), lockedName), nil, lockedMode),
-				"the locked file is written",
-			)
+			files.Write(t, dir, files.Tree{
+				path.Join(path.Dir(conformanceFile), lockedName): files.Text("").WithMode(lockedMode),
+			})
 			rec := runIn(t, dir, run.Config{Suite: []string{conformancePattern}})
 			assert.Equal(t, codes(rec), []spec.ErrorCode{spec.ErrorLoad}, "the suite's files do not read")
 		})
@@ -305,11 +304,7 @@ func TestScale(t *testing.T) {
 				t.Skip("a file's mode stops no read on Windows or for root")
 			}
 			dir := module(t, map[string]string{addFile: add})
-			assert.NoError(
-				t,
-				os.WriteFile(filepath.Join(dir, lockedName), nil, lockedMode),
-				"the locked file is written",
-			)
+			files.Write(t, dir, files.Tree{lockedName: files.Text("").WithMode(lockedMode)})
 			_, err := run.Run(t.Context(), &run.Config{Dir: dir, Env: os.Environ()})
 			assert.ErrorIs(t, err, fs.ErrPermission, "the locked file does not read")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
@@ -321,8 +316,7 @@ func TestScale(t *testing.T) {
 				t.Skip("a directory's mode stops no read on Windows or for root")
 			}
 			dir := module(t, map[string]string{addFile: add, testdataDir + "/in.txt": "in"})
-			assert.NoError(t, os.Mkdir(filepath.Join(dir, testdataDir, lockedName), lockedMode),
-				"the locked directory is made")
+			files.Write(t, dir, files.Tree{path.Join(testdataDir, lockedName): files.Dir().WithMode(lockedMode)})
 			_, err := run.Run(t.Context(), &run.Config{Dir: dir, Env: os.Environ()})
 			assert.ErrorIs(t, err, fs.ErrPermission, "the locked directory does not read")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/load"
 )
@@ -44,15 +45,13 @@ func TestGo(t *testing.T) {
 			t.Parallel()
 			// The path lists an empty directory, a relative one, a directory
 			// whose go is a directory, and one whose go is no command, before
-			// the fake go command.
-			dir := t.TempDir()
-			assert.NoError(t, os.Mkdir(filepath.Join(dir, "go"), dirMode), "a directory named go is created")
-			notExecutable := t.TempDir()
-			write(t, notExecutable, "go", "#!/bin/sh\necho wrong\n")
-			path := strings.Join(
-				[]string{"", "relative", dir, notExecutable, fakeGoDir},
-				string(filepath.ListSeparator),
-			)
+			// the fake go command. Windows has no execute bit, so a file named
+			// go.exe is a command there, and the path leaves that directory out.
+			dirs := []string{"", "relative", files.Workspace(t, files.Tree{goFile: files.Dir()})}
+			if runtime.GOOS != "windows" {
+				dirs = append(dirs, files.Workspace(t, files.Tree{goFile: files.Text("#!/bin/sh\necho wrong\n")}))
+			}
+			path := strings.Join(append(dirs, fakeGoDir), string(filepath.ListSeparator))
 			wd := t.TempDir()
 			out, err := load.Go(ctx, wd, withPath(os.Environ(), path), "pwd")
 			assert.NoError(t, err, "the fake go command runs")

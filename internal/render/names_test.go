@@ -5,13 +5,13 @@ package render_test
 
 import (
 	"maps"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/render"
 )
@@ -86,8 +86,8 @@ func TestNames(t *testing.T) {
 		t.Run("returns an error when a test file does not read", func(t *testing.T) {
 			t.Parallel()
 			p, r := fixture(t, used)
-			assert.NoError(t, os.Symlink(filepath.Join(p.Dir, missing), filepath.Join(p.Dir, "broken_test.go")),
-				"a link to no file is the test file")
+			// A link to no file is the test file.
+			files.Write(t, p.Dir, files.Tree{"broken_test.go": files.Link(missing)})
 			_, err := render.Render(p, r, mutantVar)
 			assert.HasError(t, err, "Render fails")
 			assert.HasPrefix(t, err.Error(), "render: ", "the error starts with the package's name")

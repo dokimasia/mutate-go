@@ -17,6 +17,7 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/testbin"
 )
@@ -194,6 +195,20 @@ func TestRun(t *testing.T) {
 			entries, err := os.ReadDir(work)
 			assert.NoError(t, err, "the work directory reads")
 			expect.Empty(t, entries, "Run removes the temporary directory")
+		})
+
+		t.Run("runs the binary with PWD set to its directory", func(t *testing.T) {
+			t.Parallel()
+			// The workspace writes the directory before the link, which sorts
+			// after it, so the link on Windows is a link to a directory.
+			root := files.Workspace(t, files.Tree{"dir": files.Dir(), "link": files.Link("dir")})
+			dir := filepath.Join(root, "link")
+			res := testbin.Run(t.Context(), &testbin.Config{
+				Binary: binary(t), Dir: dir, Work: t.TempDir(), Env: fakeEnv(environment), Timeout: longDeadline,
+			})
+			assert.NoError(t, res.Err, "the run starts")
+			wd, _, _ := strings.Cut(res.Output.Tail, "\n")
+			assert.Equal(t, wd, dir, "os.Getwd in the binary returns the path through the link")
 		})
 
 		t.Run("returns the error of a binary that does not start", func(t *testing.T) {

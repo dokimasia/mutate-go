@@ -294,10 +294,16 @@ func (r *Record) Tally(protocol *spec.Protocol, bound string) (detected, undetec
 }
 
 // Path returns the path of file, a file of the record, relative to dir, a
-// directory as [Resolved] returns it. Path reads no file system.
+// directory as [Resolved] returns it. When no relative path from dir to the
+// file exists, Path returns the file's path in the root. On Windows a file
+// on another volume than dir has no such path. Path does not read the file
+// system.
 func (r *Record) Path(file, dir string) string {
-	rel, _ := filepath.Rel(dir, filepath.Join(r.Root, filepath.FromSlash(file)))
-	return rel
+	path := filepath.Join(r.Root, filepath.FromSlash(file))
+	if rel, err := filepath.Rel(dir, path); err == nil {
+		return rel
+	}
+	return path
 }
 
 // Resolved returns dir as [Record.Path] reads a directory: absolute, with

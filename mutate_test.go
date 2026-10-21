@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate"
 	"go.dokimi.dev/mutate/internal/record"
@@ -31,12 +32,13 @@ import (
 // of Check's record, pinned.
 const recordDirVar = "DOKIMI_MUTATE_RECORD_DIR"
 
-// The variables of the environment that the tests set: the temporary
-// directory and the threads of a Go program.
-const (
-	tmpVar   = "TMPDIR"
-	procsVar = "GOMAXPROCS"
-)
+// procsVar is the variable of the environment that states the threads of a
+// Go program.
+const procsVar = "GOMAXPROCS"
+
+// tempVars are the variables that name the temporary directory of a
+// process: TMPDIR on Unix, and TMP and TEMP on Windows.
+var tempVars = []string{"TMPDIR", "TMP", "TEMP"}
 
 // The variables of the fixture's environment.
 const (
@@ -62,12 +64,6 @@ const (
 	mutationTestFile = "mutation_test.go"
 	checkDir         = "check"
 	mutationTag      = "mutation"
-)
-
-// The modes of the fixture's files and directories.
-const (
-	fileMode = 0o644
-	dirMode  = 0o755
 )
 
 // goMod is the go.mod of the fixture.
@@ -201,23 +197,15 @@ func failures(t *testing.T, s *seat) []string {
 	return append(lines, s.errors...)
 }
 
-// write writes text into the file name of dir, a slash-separated path, and
-// makes the file's directory.
-func write(t *testing.T, dir, name, text string) {
-	t.Helper()
-	path := filepath.Join(dir, filepath.FromSlash(name))
-	assert.NoError(t, os.MkdirAll(filepath.Dir(path), dirMode), "the directory of "+name+" is made")
-	assert.NoError(t, os.WriteFile(path, []byte(text), fileMode), name+" is written")
-}
-
-// enter writes the fixture's module into a new directory and makes it the
-// working directory of the test process until t ends.
+// enter writes the fixture's module into a workspace of the test and makes
+// it the working directory of the test process until t ends.
 func enter(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-	for name, text := range map[string]string{goModFile: goMod, arithFile: arith, arithTestFile: arithTest} {
-		write(t, dir, name, text)
-	}
+	dir := files.Workspace(t, files.Tree{
+		goModFile:     files.Text(goMod),
+		arithFile:     files.Text(arith),
+		arithTestFile: files.Text(arithTest),
+	})
 	t.Chdir(dir)
 	return dir
 }
@@ -234,21 +222,27 @@ func TestMutate(t *testing.T) {
 			assert.NoError(t, err, "the module's directory reads")
 			// The fixture requires this module, so it needs this module's go
 			// line and the checksums of this module's requirements.
+			mod, err := os.ReadFile(filepath.Join(root, goModFile))
+			assert.NoError(t, err, "the module's go.mod reads")
+			var goLine string
+			for line := range strings.Lines(string(mod)) {
+				if strings.HasPrefix(line, "go ") {
+					goLine = line
+				}
+			}
+			assert.NotEmpty(t, goLine, "the module's go.mod states its go line")
 			sums, err := os.ReadFile(filepath.Join(root, goSumFile))
 			assert.NoError(t, err, "the module's checksums read")
-			dir := t.TempDir()
-			files := map[string]string{
-				goModFile: "module fixture\n\ngo 1.27.0\n\nrequire go.dokimi.dev/mutate v0.0.0\n\n" +
-					"replace go.dokimi.dev/mutate => " + root + "\n",
-				goSumFile:     string(sums),
-				arithFile:     arith,
-				arithTestFile: arithTest,
-				mutationTestFile: "//go:build " + mutationTag + "\n\npackage fixture\n\nimport (\n\t\"testing\"\n\n" +
-					"\t\"go.dokimi.dev/mutate\"\n)\n\nfunc TestMutation(t *testing.T) {\n\tmutate.Check(t)\n}\n",
-			}
-			for name, text := range files {
-				write(t, dir, name, text)
-			}
+			dir := files.Workspace(t, files.Tree{
+				goModFile: files.Text("module fixture\n\n" + goLine + "\nrequire go.dokimi.dev/mutate v0.0.0\n\n" +
+					"replace go.dokimi.dev/mutate => " + root + "\n"),
+				goSumFile:     files.Text(string(sums)),
+				arithFile:     files.Text(arith),
+				arithTestFile: files.Text(arithTest),
+				mutationTestFile: files.Text("//go:build " + mutationTag + "\n\npackage fixture\n\nimport (\n" +
+					"\t\"testing\"\n\n\t\"go.dokimi.dev/mutate\"\n)\n\nfunc TestMutation(t *testing.T) {\n" +
+					"\tmutate.Check(t)\n}\n"),
+			})
 			records := t.TempDir()
 			ctx, cancel := context.WithTimeout(t.Context(), moduleTimeout)
 			defer cancel()
@@ -312,9 +306,13 @@ func TestMutateEnv(t *testing.T) {
 
 		t.Run("counts the tests of the packages that Suite names", func(t *testing.T) {
 			dir := enter(t)
-			write(t, dir, checkDir+"/check.go", "package check\n")
-			write(t, dir, checkDir+"/check_test.go", "package check\n\nimport (\n\t\"testing\"\n\n\t\"fixture\"\n)\n\n"+
-				"func TestSub(t *testing.T) {\n\tif fixture.Sub(5, 3) != 2 {\n\t\tt.Error(\"Sub(5, 3) != 2\")\n\t}\n}\n")
+			files.Write(t, dir, files.Tree{
+				checkDir + "/check.go": files.Text("package check\n"),
+				checkDir + "/check_test.go": files.Text(
+					"package check\n\nimport (\n\t\"testing\"\n\n\t\"fixture\"\n)\n\n" +
+						"func TestSub(t *testing.T) {\n\tif fixture.Sub(5, 3) != 2 {\n\t\tt.Error(\"Sub(5, 3) != 2\")\n\t}\n}\n",
+				),
+			})
 			s := &seat{TB: t}
 			mutate.Check(s, mutate.Suite("./"+checkDir))
 			assert.Equal(t, failures(t, s), uncovered, "the suite's test kills Sub's mutants")
@@ -332,12 +330,9 @@ func TestMutateEnv(t *testing.T) {
 
 		t.Run("mutates the generated files under IncludeGenerated", func(t *testing.T) {
 			dir := enter(t)
-			write(
-				t,
-				dir,
-				genFile,
+			files.Write(t, dir, files.Tree{genFile: files.Text(
 				"// Code generated by hand. DO NOT EDIT.\n\npackage fixture\n\nfunc Double(x int) int { return x * 2 }\n",
-			)
+			)})
 			s := &seat{TB: t}
 			mutate.Check(s, mutate.IncludeGenerated())
 			assert.Equal(t, failures(t, s), slices.Concat(survivors, uncovered, []string{
@@ -418,7 +413,10 @@ func TestMutateEnv(t *testing.T) {
 
 		t.Run("stops the test when the run cannot make its work directory", func(t *testing.T) {
 			enter(t)
-			t.Setenv(tmpVar, filepath.Join(t.TempDir(), "missing"))
+			missing := filepath.Join(t.TempDir(), "missing")
+			for _, variable := range tempVars {
+				t.Setenv(variable, missing)
+			}
 			s := &seat{TB: t}
 			mutate.Check(s)
 			assert.HasPrefix(t, s.fatal, "mutate: run: ", "the fatal failure states the run's error")

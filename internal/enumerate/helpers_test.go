@@ -6,11 +6,11 @@ package enumerate_test
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/enumerate"
 	"go.dokimi.dev/mutate/internal/load"
@@ -24,31 +24,17 @@ const (
 	module = "module fixture\n\ngo 1.21\n"
 )
 
-// The modes of the files and the directories that the tests write.
-const (
-	fileMode = 0o644
-	dirMode  = 0o755
-)
-
-// moduleDir writes files into a new directory, with the module file module
-// unless files has one, and returns the directory. It only reads files, so
-// parallel tests can share one map.
-func moduleDir(t *testing.T, files map[string]string) string {
+// moduleDir writes texts, by slash-separated path, into a workspace of the
+// test, with the module file module unless texts has one, and returns the
+// workspace's directory. It only reads texts, so parallel tests can share
+// one map.
+func moduleDir(t *testing.T, texts map[string]string) string {
 	t.Helper()
-	dir := t.TempDir()
-	if _, ok := files[goMod]; !ok {
-		assert.NoError(
-			t,
-			os.WriteFile(filepath.Join(dir, goMod), []byte(module), fileMode),
-			"the module file is written",
-		)
+	tree := files.Tree{goMod: files.Text(module)}
+	for name, text := range texts {
+		tree[name] = files.Text(text)
 	}
-	for name, text := range files {
-		path := filepath.Join(dir, name)
-		assert.NoError(t, os.MkdirAll(filepath.Dir(path), dirMode), "the directory of "+name+" is created")
-		assert.NoError(t, os.WriteFile(path, []byte(text), fileMode), name+" is written")
-	}
-	return dir
+	return files.Workspace(t, tree)
 }
 
 // fixture writes files as moduleDir does, and loads the package in the

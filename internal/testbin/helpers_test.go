@@ -15,11 +15,13 @@ import (
 )
 
 // The variables of the environment of the fake test binary: the behaviour
-// that the test binary takes on in place of its tests, and the file into
-// which the binary in the mode orphan writes its child's process ID.
+// that the test binary takes on in place of its tests, the file into which
+// the binary in the mode orphan writes its child's process ID, and the mark
+// that the test process sets for every process that its tests start.
 const (
 	fakeVar    = "TESTBIN_FAKE"
 	pidFileVar = "TESTBIN_PID_FILE"
+	childVar   = "TESTBIN_CHILD"
 )
 
 // The behaviours of the fake test binary.
@@ -54,11 +56,22 @@ const (
 	grownMiB = 256
 )
 
-// TestMain runs the fake test binary when fakeVar names a behaviour, and the
-// package's tests otherwise.
+// TestMain runs the fake test binary when fakeVar names a behaviour. A copy
+// of the test binary that a test starts without a behaviour has childVar
+// set, and exits with the status 2 before any test runs. TestMain otherwise
+// sets childVar for every process that the tests start, and runs the
+// package's tests.
 func TestMain(m *testing.M) {
 	if mode := os.Getenv(fakeVar); mode != "" {
 		os.Exit(fake(mode))
+	}
+	if os.Getenv(childVar) != "" {
+		fmt.Fprintln(os.Stderr, "a test started the test binary without a fake behaviour")
+		os.Exit(2)
+	}
+	if err := os.Setenv(childVar, "1"); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 	os.Exit(m.Run())
 }

@@ -5,6 +5,7 @@ package selection_test
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/mutate/internal/selection"
@@ -21,9 +23,6 @@ import (
 // line number.
 const sumFile = "package fixture\n\nfunc sum(a, b int) int {\n\ttotal := a\n\ttotal += b\n\treturn total\n}\n"
 
-// fileMode is the mode of the files that the tests write.
-const fileMode = 0o644
-
 // docFile is a file of the package, which a diff names relative to the
 // test's working directory, the package's directory.
 const docFile = "doc.go"
@@ -32,15 +31,18 @@ const docFile = "doc.go"
 // skips an input that contains one, so every hunk reads the fuzzed file.
 const newHeader = "+++ "
 
-// diffFiles writes each of files into a new directory and returns the
-// absolute path of each, by name.
-func diffFiles(t *testing.T, files map[string]string) map[string]string {
+// diffFiles writes each of texts into a workspace of the test and returns
+// the absolute path of each, by name.
+func diffFiles(t *testing.T, texts map[string]string) map[string]string {
 	t.Helper()
-	dir := t.TempDir()
+	tree := files.Tree{}
+	for name, text := range texts {
+		tree[name] = files.Text(text)
+	}
+	dir := files.Workspace(t, tree)
 	paths := map[string]string{}
-	for name, text := range files {
+	for name := range texts {
 		paths[name] = filepath.Join(dir, name)
-		assert.NoError(t, os.WriteFile(paths[name], []byte(text), fileMode), name+" is written")
 	}
 	return paths
 }
@@ -309,18 +311,6 @@ func TestDiff(t *testing.T) {
 				"returns an error for a line without a prefix", "+++ %[1]s\n@@ -1 +1 @@\n*package fixture\n",
 				"has no line's prefix",
 			},
-			{
-				"returns an error for a file that does not read", "+++ %[1]s.missing\n@@ -1 +1 @@\n package fixture\n",
-				"no such file",
-			},
-			{
-				"returns an error for a file that does not read before its removed lines",
-				"+++ %[1]s.missing\n@@ -2,1 +1,0 @@\n-package fixture\n", "no such file",
-			},
-			{
-				"returns an error for a file that does not read after removed lines at its top",
-				"+++ %[1]s.missing\n@@ -1,1 +0,0 @@\n-package fixture\n", "no such file",
-			},
 		}
 		for _, tt := range errs {
 			t.Run(tt.name, func(t *testing.T) {
@@ -331,6 +321,30 @@ func TestDiff(t *testing.T) {
 				assert.That(t, err.Error()).
 					HasPrefix("selection: ", "the error starts with the package's name").
 					Contains(tt.want, "and states the cause")
+			})
+		}
+
+		unread := []struct{ name, give string }{
+			{
+				"returns an error for a file that does not read",
+				"+++ %[1]s.missing\n@@ -1 +1 @@\n package fixture\n",
+			},
+			{
+				"returns an error for a file that does not read before its removed lines",
+				"+++ %[1]s.missing\n@@ -2,1 +1,0 @@\n-package fixture\n",
+			},
+			{
+				"returns an error for a file that does not read after removed lines at its top",
+				"+++ %[1]s.missing\n@@ -1,1 +0,0 @@\n-package fixture\n",
+			},
+		}
+		for _, tt := range unread {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				paths := diffFiles(t, map[string]string{"sum.go": sumFile})
+				_, err := selection.ParseDiff(fmt.Sprintf(tt.give, paths["sum.go"]))
+				assert.ErrorIs(t, err, fs.ErrNotExist, "the error wraps the error of the file that does not exist")
+				assert.HasPrefix(t, err.Error(), "selection: ", "the error starts with the package's name")
 			})
 		}
 	})
@@ -351,8 +365,7 @@ func FuzzDiff(f *testing.F) {
 	} {
 		f.Add(seed)
 	}
-	path := filepath.Join(f.TempDir(), "sum.go")
-	assert.NoError(f, os.WriteFile(path, []byte(sumFile), fileMode), "sum.go is written")
+	path := filepath.Join(files.Workspace(f, files.Tree{"sum.go": files.Text(sumFile)}), "sum.go")
 	lines := strings.Count(sumFile, "\n")
 	f.Fuzz(func(t *testing.T, hunks string) {
 		if strings.Contains(hunks, newHeader) {
