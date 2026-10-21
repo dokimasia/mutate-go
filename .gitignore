@@ -1,40 +1,21 @@
-# Binaries and build artefacts
-bin/
-dist/
-artifacts/
-
-# Tests and coverage
-*.test
-*.out
-.ergon/
-
-# Dependencies
-vendor/
+# Managed by ergon init. Add repository settings to .ergon/local/.gitignore and run ergon init sync.
 
 # Editors and IDEs
 .idea/
 .vscode/
-
-# Zed: settings.json is the shared config that points the formatter at
-# golangci-lint and turns on the gopls analyses. Nothing else in .zed is.
-.zed/*
-!.zed/settings.json
 *.swp
 *.swo
 *~
 
-# Agentic / LLM
+# Agents
 .claude/
 .codex/
 .gemini/
-.topoi/
-
-superpowers/
 AGENT.md
 CLAUDE.md
 GEMINI.md
 
-# OS
+# Operating systems
 .DS_Store
 Thumbs.db
 
@@ -42,3 +23,14 @@ Thumbs.db
 .env
 *.local
 secrets.json
+
+# ergon release
+# The publish plan of the release workflow, which a build of a release must not see as a change
+/publish-plan.json
+
+# Go
+bin/
+coverage.out
+*.test
+# The artifacts of ergon release pack, which a build of a release must not see as changes
+/dist/
