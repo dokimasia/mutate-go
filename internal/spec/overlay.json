@@ -1,6 +1,6 @@
 {
   "language": "go",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "comment": "//",
   "generated": "^// Code generated .* DO NOT EDIT\\.$",
   "files": [
@@ -213,6 +213,11 @@
       ],
       "methods": [
         { "name": "Helper", "signature": "func()", "on": "interface" }
+      ]
+    },
+    "parallel": {
+      "apis": [
+        "(*testing.T).Parallel"
       ]
     }
   },

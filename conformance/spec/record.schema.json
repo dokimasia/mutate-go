@@ -230,7 +230,7 @@
       ]
     },
     "family": {
-      "enum": ["logging", "timing", "flags", "capacity", "helper"]
+      "enum": ["logging", "timing", "flags", "capacity", "helper", "parallel"]
     },
     "error": {
       "enum": [

@@ -1,0 +1,15 @@
+{
+  "case": "parallel",
+  "proves": "The mark of a parallel test is suppressed with the rule parallel. A method of another type with the same name is not.",
+  "fixture": "each runs a check on each number in a subtest that it marks parallel through testing.T. lane has a method Parallel of its own, which open calls.",
+  "mutants": [
+    { "scope": "lane.Parallel", "kind": "sbr-delete", "nth": 0, "verdict": "killed", "languages": ["go"] },
+    { "scope": "each", "kind": "sbr-delete", "nth": 0, "verdict": "killed", "languages": ["go"] },
+    { "scope": "each", "kind": "sbr-delete", "nth": 1, "verdict": "killed", "languages": ["go"] },
+    { "scope": "each", "kind": "sbr-delete", "nth": 2, "verdict": "suppressed", "languages": ["go"] },
+    { "scope": "each", "kind": "sbr-delete", "nth": 3, "verdict": "killed", "languages": ["go"] },
+    { "scope": "open", "kind": "sbr-delete", "nth": 0, "verdict": "killed", "languages": ["go"] },
+    { "scope": "open", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "languages": ["go"] }
+  ],
+  "errors": []
+}

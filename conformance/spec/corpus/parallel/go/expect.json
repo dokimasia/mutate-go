@@ -1,0 +1,135 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "lane.Parallel",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9e71824cabf27153",
+      "file": "parallel.go",
+      "start": {
+        "line": 15,
+        "column": 2
+      },
+      "end": {
+        "line": 15,
+        "column": 19
+      },
+      "original": "l.parallel = true",
+      "replacement": ""
+    },
+    {
+      "scope": "each",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "898d8d560799d16a",
+      "file": "parallel.go",
+      "start": {
+        "line": 20,
+        "column": 2
+      },
+      "end": {
+        "line": 25,
+        "column": 3
+      },
+      "original": "for _, n := range numbers { t.Run(strconv.Itoa(n), func(t *testing.T) { t.Parallel() check(t, n) }) }",
+      "replacement": ""
+    },
+    {
+      "scope": "each",
+      "kind": "sbr-delete",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "72da7d3e5e5d40f2",
+      "file": "parallel.go",
+      "start": {
+        "line": 21,
+        "column": 3
+      },
+      "end": {
+        "line": 24,
+        "column": 5
+      },
+      "original": "t.Run(strconv.Itoa(n), func(t *testing.T) { t.Parallel() check(t, n) })",
+      "replacement": ""
+    },
+    {
+      "scope": "each",
+      "kind": "sbr-delete",
+      "nth": 2,
+      "occurrence": 0,
+      "key": "72729e17ad5b7ea8",
+      "file": "parallel.go",
+      "start": {
+        "line": 22,
+        "column": 4
+      },
+      "end": {
+        "line": 22,
+        "column": 16
+      },
+      "original": "t.Parallel()",
+      "replacement": "",
+      "rule": "parallel"
+    },
+    {
+      "scope": "each",
+      "kind": "sbr-delete",
+      "nth": 3,
+      "occurrence": 0,
+      "key": "a9900e2dadd82bf0",
+      "file": "parallel.go",
+      "start": {
+        "line": 23,
+        "column": 4
+      },
+      "end": {
+        "line": 23,
+        "column": 15
+      },
+      "original": "check(t, n)",
+      "replacement": ""
+    },
+    {
+      "scope": "open",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7cbe141bafea0b4a",
+      "file": "parallel.go",
+      "start": {
+        "line": 31,
+        "column": 2
+      },
+      "end": {
+        "line": 31,
+        "column": 14
+      },
+      "original": "l.Parallel()",
+      "replacement": ""
+    },
+    {
+      "scope": "open",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "bd3d88333d61de41",
+      "file": "parallel.go",
+      "start": {
+        "line": 32,
+        "column": 2
+      },
+      "end": {
+        "line": 32,
+        "column": 10
+      },
+      "original": "return l",
+      "replacement": "return nil"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

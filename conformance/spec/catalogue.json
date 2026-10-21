@@ -117,6 +117,10 @@
     {
       "id": "helper",
       "description": "Calls that mark a function as a test helper, which change only the location that a failure reports."
+    },
+    {
+      "id": "parallel",
+      "description": "Calls that mark a test as parallel, which change only when the test runs."
     }
   ]
 }
