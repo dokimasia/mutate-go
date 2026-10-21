@@ -57,38 +57,44 @@ func main() {
 func command() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	limit := memory.Limit(os.DirFS(rootDir))
 	c := &cli{
 		stdin:  os.Stdin,
 		stdout: os.Stdout,
 		stderr: os.Stderr,
 		every:  progressEvery,
 		now:    time.Now,
-		budget: memory.Limit(os.DirFS(rootDir)) / quarters * budgetShare,
+		budget: limit / quarters * budgetShare,
+		limit:  limit,
 	}
 	return c.main(ctx, os.Args[1:])
 }
 
 // cli is one run of the command line: its standard streams, the interval
-// of its progress lines and its clock, and the default memory budget of the
-// process.
+// of its progress lines and its clock, the default memory budget of the
+// process, and the memory that the process may use.
 type cli struct {
 	stdin          io.Reader
 	stdout, stderr io.Writer
 	every          time.Duration
 	now            func() time.Time
 	budget         int64
+	limit          int64
 }
 
 // main runs the command line args and returns the exit status. It writes
 // the help to stdout for -h and -help, and the versions for -version. A
 // command line that is not valid gets one line that states the error, and
 // a line on the help. Otherwise main changes to the directory of -C,
-// resolves the selection, the suite and the packages, and tests or lists
-// each package. Before it tests more than one package at once, it counts
-// each package's mutants to order the packages and to size their shares of
-// the threads. When a write to stdout fails, main states the first error
-// on stderr and returns at least exitFailed, because the command did not
-// write its results.
+// resolves the selection, the suite, the packages of -skip and the
+// packages, and tests or lists each package. To test more than one package
+// at once, main first counts each package's mutants, and orders the
+// packages and sizes their shares of the threads by the counts. The memory
+// budget bounds the memory ceilings and the workers of each package's run,
+// and without a budget the memory that the process may use bounds them.
+// When a write to stdout fails, main states the first error on stderr and
+// returns at least exitFailed, because the command did not write its
+// results.
 func (c *cli) main(ctx context.Context, args []string) (status int) {
 	stdout := &lockedWriter{w: c.stdout}
 	defer func() {
@@ -129,7 +135,11 @@ func (c *cli) main(ctx context.Context, args []string) (status int) {
 		}
 		lines = append(append([]selection.Lines{}, lines...), changed...)
 	}
-	suitePaths, ok := suite(ctx, o.suite, out)
+	suitePaths, ok := importPaths(ctx, flagSuite, o.suite, out)
+	if !ok {
+		return exitInvalid
+	}
+	skipPaths, ok := importPaths(ctx, flagSkip, o.skip, out)
 	if !ok {
 		return exitInvalid
 	}
@@ -151,23 +161,28 @@ func (c *cli) main(ctx context.Context, args []string) (status int) {
 			Sample:           o.sample,
 			IncludeGenerated: o.includeGenerated,
 			Confirm:          o.confirm,
+			Memory:           c.limit,
 		},
 		out:      out,
 		progress: &progress{stderr: out.stderr, every: c.every, now: c.now, deadline: deadline},
 		records:  o.records,
+		skip:     skipPaths,
 	}
 	threads := runtime.GOMAXPROCS(0)
 	if o.list {
 		return max(status, schedule(ctx, pkgs, nil, threads, o.parallel, deadline, out, s.list))
 	}
 	if o.budget > 0 {
+		s.cfg.Memory = int64(o.budget)
 		s.cfg.Admit = newBudget(int64(o.budget)).admit
 	}
 	stop := s.progress.watch()
 	defer stop()
+	// The counts order the packages only when two or more of them may run at
+	// once.
 	var weights []int
-	if o.parallel > 1 && len(pkgs) > 1 {
-		weights = weigh(ctx, pkgs, s.cfg, threads, o.parallel)
+	if min(o.parallel, len(pkgs)) > 1 {
+		weights = s.weigh(ctx, pkgs, threads, o.parallel)
 	}
 	return max(status, schedule(ctx, pkgs, weights, threads, o.parallel, deadline, out, s.check))
 }

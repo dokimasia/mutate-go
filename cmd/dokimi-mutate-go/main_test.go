@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 
 	"go.dokimi.dev/assert"
 
+	"go.dokimi.dev/mutate/internal/memory"
 	"go.dokimi.dev/mutate/internal/record"
 )
 
@@ -46,6 +48,93 @@ func TestDouble(t *testing.T) {
 // subProcsVar is the GOMAXPROCS that the package sub of the case of the
 // threads expects.
 const subProcsVar = "FIXTURE_SUB_PROCS"
+
+// The files of the package sub of trio.
+const (
+	trioFile     = "sub/trio.go"
+	trioTestFile = "sub/trio_test.go"
+)
+
+// trio is a package sub of three functions, whose six mutants trioTest
+// kills. trioTest fails unless its binary runs with GOMAXPROCS set to the
+// value of subProcsVar, where that is set.
+const trio = "package sub\n\nfunc Add(a, b int) int { return a + b }\n\nfunc Sub(a, b int) int { return a - b }\n\n" +
+	"func Mul(a, b int) int { return a * b }\n"
+
+var trioTest = fmt.Sprintf(`package sub
+
+import (
+	"os"
+	"testing"
+)
+
+func TestTrio(t *testing.T) {
+	if want := os.Getenv(%[1]q); want != "" && os.Getenv(%[2]q) != want {
+		t.Fatal("the threads are " + os.Getenv(%[2]q))
+	}
+	if Add(2, 3) != 5 || Sub(5, 3) != 2 || Mul(2, 3) != 6 {
+		t.Error("Add, Sub or Mul is wrong")
+	}
+}
+`, subProcsVar, maxProcsVar)
+
+// shareThreads are the threads of the cases of the shares. Under -p 2, the
+// package of 6 mutants starts first with trioShare of them, and the package
+// of 2 mutants gets the addShare that remain.
+const (
+	shareThreads = 8
+	trioShare    = "6"
+	addShare     = "2"
+)
+
+// ballastTest is a test of add that touches 64 MiB in every run, so the
+// peak of its binary is above 64 MiB.
+const ballastTest = `package fixture
+
+import (
+	"runtime"
+	"testing"
+)
+
+func TestAdd(t *testing.T) {
+	buf := make([]byte, 64<<20)
+	for i := range buf {
+		buf[i] = 1
+	}
+	runtime.KeepAlive(buf)
+	if Add(2, 3) != 5 {
+		t.Error("Add(2, 3) != 5")
+	}
+}
+`
+
+// cappedText and cappedBytes are a memory budget below 4 times the peak of
+// ballastTest's binary plus 512 MiB, and above that peak plus 512 MiB, as
+// the text of -memory-budget and in bytes.
+const (
+	cappedText  = "700M"
+	cappedBytes = 700 << 20
+)
+
+// ceiling runs the engine on ballastTest with the memory of the process
+// limit and the command line args, and returns the memory ceiling that the
+// record of the package states.
+func ceiling(t *testing.T, limit int64, args ...string) int64 {
+	t.Helper()
+	enter(t, map[string]string{addFile: add, addTestFile: ballastTest})
+	records := t.TempDir()
+	var out, errs bytes.Buffer
+	c := &cli{stdin: strings.NewReader(""), stdout: &out, stderr: &errs, every: time.Hour, now: time.Now, limit: limit}
+	status := c.main(t.Context(), append(args, "-"+flagRecord, records))
+	assert.Equal(t, status, exitDetected, "the test kills both mutants")
+	data, err := os.ReadFile(filepath.Join(records, record.FileName(fixture)))
+	assert.NoError(t, err, "the package's record reads")
+	var rec record.Record
+	assert.NoError(t, json.Unmarshal(data, &rec), "the record is JSON")
+	assert.Length(t, rec.Limits, 1, "the package's own test binary has limits")
+	assert.NotNil(t, rec.Limits[0].MemoryCeilingBytes, "the engine applies a memory ceiling on Linux")
+	return *rec.Limits[0].MemoryCeilingBytes
+}
 
 // cancelling is a standard output that cancels the command's context at its
 // first write.
@@ -129,6 +218,18 @@ func TestCLIProcess(t *testing.T) {
 			assert.Equal(t, exit.ExitCode(), exitInvalid, "the process exits with the command's status")
 			assert.Equal(t, stderr.String(), "dokimi-mutate-go: -p takes a number of at least 1\n"+usageLine,
 				"the process writes the command's error")
+		})
+
+		t.Run("states three quarters of the memory that the process may use as the default budget", func(t *testing.T) {
+			binary, err := os.Executable()
+			assert.NoError(t, err, "the test binary's path reads")
+			cmd := exec.Command(binary, "-"+flagHelp)
+			cmd.Env = append(os.Environ(), mainVar+"=1")
+			out, err := cmd.Output()
+			assert.NoError(t, err, "the process writes the help and exits with the status 0")
+			want := budgetDefault(memory.Limit(os.DirFS(rootDir)) / quarters * budgetShare)
+			assert.Contains(t, strings.Join(strings.Fields(string(out)), " "), strings.ReplaceAll(want, tie, " "),
+				"the help states the default budget of the process")
 		})
 	})
 }
@@ -279,6 +380,15 @@ func TestCLIEnv(t *testing.T) {
 				"fixture: 4 of 6 mutants detected (66%): 4 killed, 2 not covered\n", "the suite kills Sub's mutants")
 		})
 
+		t.Run("tests no mutant of the packages that -skip names", func(t *testing.T) {
+			enter(t, twoPackages)
+			status, stdout, stderr := call("-"+flagSkip, "./sub", "./...")
+			assert.Equal(t, status, exitDetected, "the package that runs passes")
+			assert.Equal(t, stdout, addKilled+"fixture/sub: no mutant to detect: 2 not selected\n",
+				"the summary of the package of -skip counts its mutants as not selected")
+			assert.Equal(t, stderr, "", "the runs write nothing to stderr")
+		})
+
 		t.Run("tests every package that the patterns name and writes their records", func(t *testing.T) {
 			enter(t, twoPackages)
 			records := t.TempDir()
@@ -306,6 +416,22 @@ func TestCLIEnv(t *testing.T) {
 			}
 		})
 
+		t.Run("caps each memory ceiling at the budget of -memory-budget", func(t *testing.T) {
+			if runtime.GOOS != "linux" {
+				t.Skip("the engine applies a memory ceiling on Linux alone")
+			}
+			assert.Equal(t, ceiling(t, 0, "-"+flagBudget, cappedText), cappedBytes,
+				"the ceiling is the budget, which is below the protocol's factor times the peak")
+		})
+
+		t.Run("caps each memory ceiling at the memory of the process without a budget", func(t *testing.T) {
+			if runtime.GOOS != "linux" {
+				t.Skip("the engine applies a memory ceiling on Linux alone")
+			}
+			assert.Equal(t, ceiling(t, cappedBytes, "-"+flagBudget, "0"), cappedBytes,
+				"the ceiling is the memory that the process may use")
+		})
+
 		t.Run("returns the status of the sample under -sample", func(t *testing.T) {
 			enter(t, arithFiles)
 			status, stdout, stderr := call("-"+flagSample, "2")
@@ -320,6 +446,7 @@ func TestCLIEnv(t *testing.T) {
 		})
 
 		t.Run("divides GOMAXPROCS among the packages and then among the workers", func(t *testing.T) {
+			useThreads(t, shareThreads)
 			enter(t, with(twoPackages, map[string]string{
 				addTestFile: procsTest,
 				"sub/add_test.go": strings.Replace(strings.Replace(procsTest, fixture, "sub", 1), expectedProcsVar,
@@ -336,6 +463,26 @@ func TestCLIEnv(t *testing.T) {
 			status, stdout, stderr := call("-"+flagParallel, "2", "-"+flagWorkers, "2", "./...")
 			assert.Equal(t, status, exitDetected, "each run has the expected threads")
 			assert.Length(t, strings.Split(strings.TrimSpace(stdout), "\n"), 2, "each package has its summary")
+			assert.Equal(t, stderr, "", "the runs write nothing to stderr")
+		})
+
+		t.Run("sizes the shares of the packages by their mutants under -p", func(t *testing.T) {
+			useThreads(t, shareThreads)
+			enter(t, map[string]string{addFile: add, addTestFile: procsTest, trioFile: trio, trioTestFile: trioTest})
+			t.Setenv(expectedProcsVar, addShare)
+			t.Setenv(subProcsVar, trioShare)
+			status, stdout, stderr := call("-"+flagParallel, "2", "./...")
+			assert.Equal(t, status, exitDetected, "each package's binary runs with the share of its mutants")
+			assert.Length(t, strings.Split(strings.TrimSpace(stdout), "\n"), 2, "each package has its summary")
+			assert.Equal(t, stderr, "", "the runs write nothing to stderr")
+		})
+
+		t.Run("tests the packages in the order of go list without -p", func(t *testing.T) {
+			enter(t, map[string]string{addFile: add, addTestFile: addTest, trioFile: trio, trioTestFile: trioTest})
+			status, stdout, stderr := call("./...")
+			assert.Equal(t, status, exitDetected, "both packages pass")
+			assert.Equal(t, stdout, addKilled+"fixture/sub: 6 of 6 mutants detected (100%): 6 killed\n",
+				"the package of 2 mutants runs before the package of 6")
 			assert.Equal(t, stderr, "", "the runs write nothing to stderr")
 		})
 
@@ -465,6 +612,11 @@ func TestCLIEnv(t *testing.T) {
 				enter(t, addFiles)
 				return []string{"-" + flagSuite, "./missing"}
 			}, exitInvalid, name + ": -suite: ./missing: "},
+			{"returns 2 for a pattern of -skip that names no package", func(t *testing.T) []string {
+				t.Helper()
+				enter(t, addFiles)
+				return []string{"-" + flagSkip, "./missing"}
+			}, exitInvalid, name + ": -skip: ./missing: "},
 			{"returns 2 for a go list that fails", func(t *testing.T) []string {
 				t.Helper()
 				t.Setenv(pathVar, fakeGoDir+string(filepath.ListSeparator)+os.Getenv(pathVar))

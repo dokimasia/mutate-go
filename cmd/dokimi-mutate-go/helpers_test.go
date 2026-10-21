@@ -7,14 +7,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"go.dokimi.dev/assert"
+
+	"go.dokimi.dev/mutate/internal/run"
 )
 
 // mainVar is the variable of the environment that makes the test binary
@@ -34,6 +38,10 @@ const (
 	ordinaryVar = "FIXTURE_ORDINARY"
 	// expectedProcsVar is the GOMAXPROCS that procsTest expects.
 	expectedProcsVar = "FIXTURE_PROCS"
+	// goVar names the go command that the wrapper of goLogDir runs, and
+	// goLogVar the file to which the wrapper appends its GOMAXPROCS.
+	goVar    = "FIXTURE_GO"
+	goLogVar = "FIXTURE_GO_LOG"
 )
 
 // The variables of the environment that the tests set or read.
@@ -66,30 +74,39 @@ const goMod = "module fixture\n\ngo 1.21\n"
 const fixture = "fixture"
 
 // fakeGoDir contains a go command that fails when fakeVar is fakeFail, and
-// prints text that is no JSON otherwise. TestMain writes it before any test
-// starts, because a file open for writing while another goroutine forks a
-// process fails exec with ETXTBSY.
-var fakeGoDir string
+// prints text that is no JSON otherwise. goLogDir contains a go command that
+// appends its GOMAXPROCS to the file of goLogVar, and then runs the go
+// command of goVar. TestMain writes both before any test starts, because a
+// file open for writing while another goroutine forks a process fails exec
+// with ETXTBSY.
+var fakeGoDir, goLogDir string
 
-// TestMain runs main when mainVar is set, and otherwise writes the fake go
-// command, runs the tests and removes the fake go command.
+// TestMain runs main when mainVar is set, and otherwise writes the go
+// wrappers, runs the tests and removes the wrappers.
 func TestMain(m *testing.M) {
 	if os.Getenv(mainVar) != "" {
 		main()
 	}
-	dir, err := os.MkdirTemp("", "fakego")
-	if err == nil {
-		fakeGoDir = dir
-		script := fmt.Sprintf("#!/bin/sh\nif [ \"$%s\" = %s ]; then echo \"no list today\" >&2; exit 1; fi\n"+
-			"echo \"{not json\"\n", fakeVar, fakeFail)
-		err = os.WriteFile(filepath.Join(dir, "go"), []byte(script), scriptMode)
+	scripts := map[*string]string{
+		&fakeGoDir: fmt.Sprintf("#!/bin/sh\nif [ \"$%s\" = %s ]; then echo \"no list today\" >&2; exit 1; fi\n"+
+			"echo \"{not json\"\n", fakeVar, fakeFail),
+		&goLogDir: fmt.Sprintf("#!/bin/sh\necho \"$%s\" >> \"$%s\"\nexec \"$%s\" \"$@\"\n",
+			maxProcsVar, goLogVar, goVar),
 	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	for dir, script := range scripts {
+		var err error
+		*dir, err = os.MkdirTemp("", "gowrapper")
+		if err == nil {
+			err = os.WriteFile(filepath.Join(*dir, "go"), []byte(script), scriptMode)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 	code := m.Run()
-	_ = os.RemoveAll(dir)
+	_ = os.RemoveAll(fakeGoDir)
+	_ = os.RemoveAll(goLogDir)
 	os.Exit(code)
 }
 
@@ -219,6 +236,25 @@ func enter(t *testing.T, files map[string]string) string {
 	dir := module(t, files)
 	t.Chdir(dir)
 	return dir
+}
+
+// useThreads sets the GOMAXPROCS of the test process to n until t ends. The
+// shares that a case expects then do not depend on the machine.
+func useThreads(t *testing.T, n int) {
+	t.Helper()
+	previous := runtime.GOMAXPROCS(n)
+	t.Cleanup(func() { runtime.GOMAXPROCS(previous) })
+}
+
+// testSession returns a session whose runs have the environment env and
+// write to stdout and stderr, with the records in records.
+func testSession(env []string, stdout, stderr io.Writer, records string) *session {
+	return &session{
+		cfg:      run.Config{Env: env, Workers: 1},
+		out:      &output{stdout: stdout, stderr: stderr},
+		progress: &progress{stderr: io.Discard, every: time.Hour, now: time.Now},
+		records:  records,
+	}
 }
 
 // call runs the command line args with the empty standard input and without

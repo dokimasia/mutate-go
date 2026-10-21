@@ -9,30 +9,17 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"go.dokimi.dev/assert"
 
 	"go.dokimi.dev/mutate/internal/load"
 	"go.dokimi.dev/mutate/internal/record"
-	"go.dokimi.dev/mutate/internal/run"
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
 // one is the share of a run of one thread, without threads to spare or to
 // borrow.
 var one = share{procs: 1}
-
-// testSession returns a session whose runs have the environment env and
-// write to stdout and stderr, with the records in records.
-func testSession(env []string, stdout, stderr io.Writer, records string) *session {
-	return &session{
-		cfg:      run.Config{Env: env, Workers: 1},
-		out:      &output{stdout: stdout, stderr: stderr},
-		progress: &progress{stderr: io.Discard, every: time.Hour, now: time.Now},
-		records:  records,
-	}
-}
 
 func TestCheck(t *testing.T) {
 	t.Parallel()
@@ -54,6 +41,17 @@ func TestCheck(t *testing.T) {
 			s := testSession(os.Environ(), io.Discard, io.Discard, "")
 			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, one)
 			assert.Equal(t, got, exitUndetected, "Sub's mutants survive")
+		})
+
+		t.Run("tests no mutant of a package that -skip names", func(t *testing.T) {
+			t.Parallel()
+			var out bytes.Buffer
+			s := testSession(os.Environ(), &out, io.Discard, "")
+			s.skip = []string{fixture}
+			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, one)
+			assert.Equal(t, got, exitDetected, "the survivors of Sub do not run")
+			assert.Equal(t, out.String(), "fixture: no mutant to detect: 6 not selected\n",
+				"the summary counts every mutant as not selected")
 		})
 
 		t.Run("returns exitFailed for a run that fails", func(t *testing.T) {
@@ -109,6 +107,17 @@ func TestCheck(t *testing.T) {
 			got := s.list(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, one)
 			assert.Equal(t, got, exitDetected, "a listing runs no test, so failing tests do not fail it")
 			assert.HasSuffix(t, out.String(), "fixture: 6 mutants to test\n", "the listing counts the mutants")
+		})
+
+		t.Run("lists every mutant of a package that -skip names as not selected", func(t *testing.T) {
+			t.Parallel()
+			var out bytes.Buffer
+			s := testSession(os.Environ(), &out, io.Discard, "")
+			s.skip = []string{fixture}
+			got := s.list(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, one)
+			assert.Equal(t, got, exitDetected, "the listing passes")
+			assert.HasSuffix(t, out.String(), "fixture: 0 mutants to test, 6 not selected\n",
+				"the listing counts every mutant as not selected")
 		})
 
 		t.Run("returns exitFailed for an instrumentation that does not type-check", func(t *testing.T) {

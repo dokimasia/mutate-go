@@ -38,9 +38,9 @@ func TestFlags(t *testing.T) {
 			t.Parallel()
 			o, err := parse([]string{
 				"-" + flagLines, "a.go:1-2", "-" + flagLines, "b.go:3-3", "-" + flagDiff, "change.diff",
-				"-" + flagSample, "5", "-" + flagIncludeGenerated, "-" + flagSuite, "./conformance",
-				"-" + flagConfirm, "-" + flagDir, "dir", "-" + flagParallel, "2", "-" + flagWorkers, "3",
-				"-" + flagTimeout, "30m", "-" + flagBudget, "16G", "-" + flagJSON, "-" + flagRecord, "out",
+				"-" + flagSample, "5", "-" + flagIncludeGenerated, "-" + flagSkip, "./kit", "-" + flagSuite,
+				"./conformance", "-" + flagConfirm, "-" + flagDir, "dir", "-" + flagParallel, "2", "-" + flagWorkers,
+				"3", "-" + flagTimeout, "30m", "-" + flagBudget, "16G", "-" + flagJSON, "-" + flagRecord, "out",
 				"-" + flagVersion, "./wire", "./codec",
 			}, 0)
 			assert.NoError(t, err, "every flag parses")
@@ -50,7 +50,8 @@ func TestFlags(t *testing.T) {
 				diff:             "change.diff",
 				sample:           5,
 				includeGenerated: true,
-				suite:            suiteFlag{"./conformance"},
+				skip:             patternsFlag{"./kit"},
+				suite:            patternsFlag{"./conformance"},
 				confirm:          true,
 				parallel:         2,
 				workers:          3,
@@ -194,7 +195,7 @@ func TestFlags(t *testing.T) {
 		})
 	})
 
-	t.Run("suiteFlag", func(t *testing.T) {
+	t.Run("patternsFlag", func(t *testing.T) {
 		t.Parallel()
 
 		t.Run("Set", func(t *testing.T) {
@@ -202,10 +203,10 @@ func TestFlags(t *testing.T) {
 
 			t.Run("adds each pattern", func(t *testing.T) {
 				t.Parallel()
-				var f suiteFlag
+				var f patternsFlag
 				assert.NoError(t, f.Set("./a"), "a pattern is valid")
 				assert.NoError(t, f.Set("./b/..."), "so is another")
-				assert.Equal(t, f, suiteFlag{"./a", "./b/..."}, "the flag collects both patterns")
+				assert.Equal(t, f, patternsFlag{"./a", "./b/..."}, "the flag collects both patterns")
 				assert.Equal(t, f.String(), "", "the flag shows no value")
 			})
 		})

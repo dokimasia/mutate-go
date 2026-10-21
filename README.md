@@ -86,6 +86,10 @@ Selection:
 		package clause. Without the flag, the command mutates such a
 		file only when the comments before its package clause contain
 		the line //dokimi:mutate-include.
+	-skip pattern
+		Test none of the mutants of the packages that pattern names. The
+		summary and the record of each such package count its mutants as
+		not selected. The flag repeats.
 
 Tests:
 
@@ -112,9 +116,11 @@ Execution:
 	-workers n
 		The most mutants of one package to test at once. The default is
 		1. A package tests as many as its share of the threads allows,
-		and more, up to n, on the threads that other packages return.
-		Above 1, tests that share a resource, such as a fixed port, can
-		fail each other, and each such failure counts as a detection.
+		and more, up to n, on the threads that other packages return. It
+		tests no more than fit in the memory budget with their memory
+		ceilings. Above 1, tests that share a resource, such as a fixed
+		port, can fail each other, and each such failure counts as a
+		detection.
 	-timeout d
 		The time limit of the command, such as 30m. A mutant starts only
 		when it can finish before the limit. The mutants that do not
@@ -122,11 +128,16 @@ Execution:
 		that ran. The default, 0, sets no limit.
 	-memory-budget size
 		The memory that the packages tested at once may use, such as
-		16G, with K, M, G or T for powers of 1024. A package starts its
-		mutants when its workers' memory ceilings fit in the budget
-		beside those of the running packages. The default is three
-		quarters of the memory that the process may use, by its cgroup
-		or by the machine. 0 sets no budget.
+		16G, with K, M, G or T for powers of 1024. A mutant's run ends
+		when its test binary and the processes that the binary starts
+		use more than the binary's memory ceiling. The ceiling is at
+		most the budget, and at least the binary's peak without a mutant
+		plus 512 MiB. A package tests as many mutants at once as fit in
+		the budget with their ceilings, and starts them when they fit
+		beside those of the running packages. Without a budget, the
+		memory that the process may use bounds the ceilings. The default
+		is three quarters of the memory that the process may use, by its
+		cgroup or by the machine. 0 sets no budget.
 
 Output:
 
@@ -346,7 +357,7 @@ files targets with a line before the package clause:
 package wire
 ```
 
-The engine suppresses the mutants of five rule families that the catalogue
+The engine suppresses the mutants of six rule families that the catalogue
 defines:
 
 - calls that write log records
@@ -357,6 +368,7 @@ defines:
 - arguments that only size an allocation
 - calls that mark a function as a test helper, such as `t.Helper()`, also
   through a library's own interface with that method
+- calls that mark a test as parallel, `t.Parallel()` of a `*testing.T`
 
 To suppress the mutants of one line, annotate the line with their kinds
 and the reason:
@@ -378,6 +390,18 @@ if v, ok := cache[key]; ok {
 
 No annotation covers a function or a file. The record lists every
 suppressed mutant with its reason, and the score leaves it out.
+
+To leave out every mutant of a package, such as a conformance kit whose
+mutants only a faulty implementation can detect, name the package with
+`-skip`:
+
+```sh
+go run go.dokimi.dev/mutate/cmd/dokimi-mutate-go@latest -skip ./codec/codectest ./...
+```
+
+The command does not build or run the tests of such a package. Its summary
+and its record count each of its mutants as not selected, so a score of
+100% still shows what the run leaves out.
 
 ## Parallelism and limits
 
@@ -401,9 +425,11 @@ suppressed mutant with its reason, and the score leaves it out.
   leave free, divided among them, because a build's threads do not change
   a verdict.
 - A mutant's run of a test binary ends at 10 times that binary's time in
-  the opening control run plus 2 seconds. On Linux, it also ends when its
-  resident memory exceeds 4 times that binary's peak in the opening control
-  run plus 512 MiB.
+  the opening control run plus 2 seconds. On Linux, it also ends when the
+  resident memory of the binary and of the processes that it starts
+  exceeds the binary's memory ceiling. The ceiling is 4 times their peak in
+  the opening control run plus 512 MiB, at most the memory budget, and at
+  least that peak plus 512 MiB.
 - When a test binary has fewer tests than the package has mutants to run,
   the engine runs each of the binary's top-level tests alone once, with no
   mutant active, and records the code that each test executes and its time.
@@ -412,10 +438,13 @@ suppressed mutant with its reason, and the score leaves it out.
   those tests' times plus 2 seconds, so a mutant that hangs in a fast test
   does not wait for the binary's slowest tests.
 - `-memory-budget` admits the runs of a package only while the memory
-  ceilings of every admitted package's runs fit in the budget. The engine
-  ends each run that crosses its ceiling, so the runs together use about
-  the budget at most, by default three quarters of a CI container's memory
-  limit.
+  ceilings of every admitted package's runs fit in the budget. A package
+  runs as many mutants at once as fit in the budget with their ceilings,
+  and at least one. The engine ends each run that crosses its ceiling, so
+  the runs together use about the budget at most, by default three
+  quarters of a CI container's memory limit. Without a budget, and under
+  `mutate.Check`, the memory that the process may use bounds the ceilings
+  and the workers.
 - The mutants run in the order of their keys, which is a pseudo-random
   order that every run of the same code repeats. When `-timeout`, the
   test's deadline or an interrupt ends a run early, the mutants that ran are

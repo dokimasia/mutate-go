@@ -9,7 +9,12 @@ import (
 	"io"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -18,12 +23,20 @@ import (
 	"go.dokimi.dev/assert"
 
 	"go.dokimi.dev/mutate/internal/load"
-	"go.dokimi.dev/mutate/internal/run"
+	"go.dokimi.dev/mutate/internal/testbin"
 )
 
 // overlap is how long each package of the case of the concurrency holds
 // its slot, so the packages that may run at once do.
 const overlap = 20 * time.Millisecond
+
+// The threads and the packages at once of the case of the counts' go
+// commands. 6 divided by 2 gives 3, which no other arithmetic of the two
+// gives.
+const (
+	countThreads  = 6
+	countParallel = 2
+)
 
 // listed returns packages of the import paths, in a directory of none.
 func listed(paths ...string) []load.Listed {
@@ -72,8 +85,44 @@ func TestPlan(t *testing.T) {
 				{ImportPath: fixture, Dir: module(t, addFiles)},
 				{ImportPath: fixture, Dir: module(t, arithFiles)},
 			}
-			got := weigh(t.Context(), pkgs, run.Config{Env: os.Environ()}, 4, 2)
-			assert.Equal(t, got, []int{2, 6}, "add has 2 mutants to test and arith 6")
+			got := testSession(os.Environ(), io.Discard, io.Discard, "").weigh(t.Context(), pkgs, 4, 1)
+			assert.Equal(t, got, []int{2, 6}, "add has 2 mutants to test and arith 6, counted one at a time")
+		})
+
+		t.Run("runs the go commands of each count with the threads divided by the packages at once",
+			func(t *testing.T) {
+				t.Parallel()
+				if runtime.GOOS == "windows" {
+					t.Skip("the go wrapper is a shell script")
+				}
+				goCmd, err := exec.LookPath("go")
+				assert.NoError(t, err, "the go command is on the PATH")
+				log := filepath.Join(t.TempDir(), "gomaxprocs")
+				env := testbin.Setenv(
+					os.Environ(),
+					pathVar+"="+goLogDir+string(filepath.ListSeparator)+os.Getenv(pathVar),
+					goVar+"="+goCmd,
+					goLogVar+"="+log,
+				)
+				pkgs := []load.Listed{
+					{ImportPath: fixture, Dir: module(t, addFiles)},
+					{ImportPath: fixture, Dir: module(t, arithFiles)},
+				}
+				testSession(env, io.Discard, io.Discard, "").weigh(t.Context(), pkgs, countThreads, countParallel)
+				data, err := os.ReadFile(log)
+				assert.NoError(t, err, "the go commands of the counts log their threads")
+				assert.Equal(t, slices.Compact(strings.Fields(string(data))),
+					[]string{strconv.Itoa(countThreads / countParallel)},
+					"every go command runs with the threads divided by the packages at once")
+			},
+		)
+
+		t.Run("counts no mutant of a package that -skip names", func(t *testing.T) {
+			t.Parallel()
+			s := testSession(os.Environ(), io.Discard, io.Discard, "")
+			s.skip = []string{fixture}
+			got := s.weigh(t.Context(), []load.Listed{{ImportPath: fixture, Dir: module(t, arithFiles)}}, 4, 1)
+			assert.Equal(t, got, []int{0}, "a run of the package tests none of its mutants")
 		})
 	})
 
@@ -381,16 +430,17 @@ func TestPlanEnv(t *testing.T) {
 		})
 	})
 
-	t.Run("suite", func(t *testing.T) {
+	t.Run("importPaths", func(t *testing.T) {
 		t.Run("returns no import path for no pattern", func(t *testing.T) {
-			paths, ok := suite(t.Context(), nil, &output{stdout: io.Discard, stderr: io.Discard})
+			paths, ok := importPaths(t.Context(), flagSuite, nil, &output{stdout: io.Discard, stderr: io.Discard})
 			assert.True(t, ok, "no pattern resolves trivially")
 			assert.Nil(t, paths, "and names no package")
 		})
 
 		t.Run("returns the import paths of the packages that the patterns name", func(t *testing.T) {
 			enter(t, twoPackages)
-			paths, ok := suite(t.Context(), []string{"./sub"}, &output{stdout: io.Discard, stderr: io.Discard})
+			paths, ok := importPaths(t.Context(), flagSuite, []string{"./sub"},
+				&output{stdout: io.Discard, stderr: io.Discard})
 			assert.True(t, ok, "the pattern resolves")
 			assert.Equal(t, paths, []string{fixture + "/sub"}, "the suite names the package by its import path")
 		})
@@ -401,7 +451,8 @@ func TestPlanEnv(t *testing.T) {
 				with(addFiles, map[string]string{"check/check.go": "package check\n\nimport _ \"fixture/missing\"\n"}),
 			)
 			var errs bytes.Buffer
-			_, ok := suite(t.Context(), []string{"./check"}, &output{stdout: io.Discard, stderr: &errs})
+			_, ok := importPaths(t.Context(), flagSuite, []string{"./check"},
+				&output{stdout: io.Discard, stderr: &errs})
 			assert.False(t, ok, "the package does not load")
 			assert.HasPrefix(t, errs.String(), name+": -suite: fixture/check: package fixture/missing is not in ",
 				"the error names the package and its dependency")
@@ -411,9 +462,9 @@ func TestPlanEnv(t *testing.T) {
 			t.Setenv(pathVar, fakeGoDir+string(filepath.ListSeparator)+os.Getenv(pathVar))
 			t.Setenv(fakeVar, fakeFail)
 			var errs bytes.Buffer
-			_, ok := suite(t.Context(), []string{"./check"}, &output{stdout: io.Discard, stderr: &errs})
+			_, ok := importPaths(t.Context(), flagSkip, []string{"./check"}, &output{stdout: io.Discard, stderr: &errs})
 			assert.False(t, ok, "go list fails")
-			assert.HasPrefix(t, errs.String(), name+": -suite: go list ", "the error names the flag")
+			assert.HasPrefix(t, errs.String(), name+": -skip: go list ", "the error names the flag")
 		})
 	})
 }

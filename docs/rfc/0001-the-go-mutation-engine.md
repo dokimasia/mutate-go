@@ -4,7 +4,7 @@ title: The Go mutation engine
 author: Roy Klopper <roy.klopper@stealthscale.io>
 status: Draft
 created: 2026-10-02
-updated: 2026-10-06
+updated: 2026-10-20
 discussion: none
 supersedes: none
 superseded-by: none
@@ -125,11 +125,13 @@ type Option struct {
 // Workers sets the most mutants that run concurrently, 1 by default.
 //
 // Each mutant runs in a process of its own, so n above 1 runs up to n
-// copies of the package's tests concurrently, and at most GOMAXPROCS. Tests
-// that share a resource outside their temporary directory, such as a fixed
-// port, then fail each other, and the failures count as kills. Every run,
-// the control runs included, gets GOMAXPROCS divided by n, and at least 1.
-// Workers panics for n below 1.
+// copies of the package's tests concurrently, and at most GOMAXPROCS. On
+// Linux, Check also runs no more copies than fit in the memory that the
+// process may use with their memory ceilings. Tests that share a resource
+// outside their temporary directory, such as a fixed port, then fail each
+// other, and the failures count as kills. Every run, the control runs
+// included, gets GOMAXPROCS divided by n, and at least 1. Workers panics
+// for n below 1.
 func Workers(n int) Option
 
 // Suite adds the tests of other packages to the tests that count for the
@@ -217,8 +219,14 @@ the help, so no second description of a flag exists. The sections below
 state the design of the mechanisms behind the flags.
 
 - `-C dir` changes the working directory before the command resolves the
-  packages, the suite's patterns and every path of `-lines`, `-diff` and
-  `-record`, as the go command's `-C` does.
+  packages, the patterns of `-suite` and `-skip`, and every path of
+  `-lines`, `-diff` and `-record`, as the go command's `-C` does.
+- `-skip pattern` leaves out the packages that the pattern names, as
+  `go list` resolves it in the working directory, and repeats. Each such
+  package gets the empty selection of a package that a diff does not
+  touch: no build, every mutant `not-selected`, and a summary and a record
+  that count them. A pattern that `go list` cannot resolve stops the
+  command before any run starts.
 - `-list` loads and enumerates each package, and type-checks its
   instrumented source, and stops before the build. It prints one line per
   mutant, with `to test` or the verdict that the enumeration decides, and
@@ -273,7 +281,7 @@ dokimi-mutate-go: <import path>: <done> of <total> mutants done, <undetected> un
 |---|---|
 | 0 | Every counted mutant was detected, and every run completed |
 | 1 | A package has a mutant that survived or that no test covers |
-| 2 | The command line or an input is invalid: an unknown flag, a value out of range, a directory of `-C` that does not exist, a diff that does not read or does not match the files, or a pattern of packages or of `-suite` that `go list` cannot resolve |
+| 2 | The command line or an input is invalid: an unknown flag, a value out of range, a directory of `-C` that does not exist, a diff that does not read or does not match the files, or a pattern of packages, of `-suite` or of `-skip` that `go list` cannot resolve |
 | 3 | A run failed: a package does not load or build, its tests fail without a mutant, a run changed a file of the package, a record does not write, `-timeout` or a signal ended the run, or the command cannot write to standard output |
 
 When more than one status applies, the command exits with the highest.
@@ -330,15 +338,21 @@ package for its count, and schedules the packages by the counts:
 `-memory-budget` keeps the packages that run at once within a budget of
 memory:
 
-- After its opening control run, a package's runs may use its workers
-  times the largest memory ceiling of its test binaries. The package waits
-  until that fits in the budget beside the runs of the packages that the
-  command admitted. A package that needs more on its own starts when no
-  other package runs, so every package starts.
+- Each memory ceiling is at most the budget, and at least the binary's
+  peak plus 512 MiB, as mutate-spec's run protocol states.
+- After its opening control run, a package starts as many workers as fit
+  in the budget with the largest memory ceiling of its test binaries, at
+  least one and at most `-workers`. The package waits until the workers'
+  ceilings fit in the budget beside the runs of the packages that the
+  command admitted. A package whose one ceiling exceeds the budget starts
+  when no other package runs, so every package starts.
 - The default budget is three quarters of the memory that the process may
   use: the machine's `MemTotal`, or the least `memory.max` of the
   process's cgroup v2 and its ancestors when that is less. A systemd scope
   or a CI container states such a limit.
+- `-memory-budget 0` admits every package at once. The memory that the
+  process may use then bounds the ceilings and the workers in place of the
+  budget. `mutate.Check` applies that bound too.
 - The engine ends each run that crosses its ceiling, so the runs together
   use about the budget at most. The kernel's out-of-memory killer then
   does not end a test binary, which would give its mutant `error` and fail
@@ -562,10 +576,18 @@ The engine also enforces the limits from outside the binary:
 - **Deadline.** 5 s after the deadline, the engine sends `SIGKILL` to the
   process group. This stops a hang that the testing package's timer cannot
   stop, such as one during package initialization.
-- **Memory ceiling, on Linux.** The engine reads the process's resident
-  pages from `/proc/<pid>/statm` every 25 ms, and sends `SIGKILL` to the
-  process group when they exceed the ceiling. The control run's peak comes
-  from `ru_maxrss` in the `rusage` that `wait4` returns.
+- **Memory ceiling, on Linux.** Every 25 ms, the engine adds up the
+  resident pages that `/proc/<pid>/statm` states for each process of the
+  process group, and sends `SIGKILL` to the group when the sum exceeds the
+  ceiling. A process is in the group when the fifth field of its
+  `/proc/<pid>/stat` states the group's ID. The engine reads that field
+  once per process, at the first read that lists the process. With 1,063
+  processes on the machine, a listing of `/proc` took 0.29 ms, and a read
+  of every process's stat beside it took 2.96 ms.
+- **Peak, on Linux.** The control run's peak is the larger of `ru_maxrss`
+  in the `rusage` that `wait4` returns and the largest sum that the engine
+  read. `ru_maxrss` states the largest of the binary and the children that
+  it waited for, and the sum states the processes that ran at once.
 - **Elsewhere.** On macOS the engine does not apply a memory ceiling, and
   each binary's `memoryCeilingBytes` in the record is `null`. On Windows it
   does not apply one either, and it kills only the test binary, because the
@@ -621,10 +643,11 @@ repeats.
 
 Each worker's test binaries get the package's share of the threads divided
 by the workers, and at least 1, for the whole run. A package starts as many
-workers as its share allows, at most the workers that the caller asks for.
+workers as its share allows, at most the workers that the caller asks for,
+and at most as many as fit in the memory budget with their ceilings.
 Under the command, once no package is left to start, a package whose
 workers all run borrows the threads of another worker from the threads that
-the other packages returned, up to the workers that the caller asks for.
+the other packages returned, up to the workers that fit.
 The worker gives them back when its last run ends. A borrowed worker runs
 its test binaries with the same threads as the others, so the limits of the
 opening control run apply to every run.
@@ -764,7 +787,8 @@ The `inputs` digest is the SHA-256 of these fields:
 | Builds | One `go test -c` per package, and one per other package of its suite. 0.24 to 0.44 s per package on three packages. Under confirmation, the same again for the ordinary control run, one per survivor and test binary that executed its site, and one per mutant without coverage and test binary |
 | Build cache | 4.0 to 8.7 MB per package on three packages |
 | Time | Two runs of the suite, a run of each top-level test alone where a binary has fewer tests than mutants to run, and each covered mutant's run, each at most the sum of the binaries' deadlines. Under confirmation, also the ordinary control run and each confirmed mutant's builds and run: 0.12 s per survivor on go-humanize |
-| Memory | Workers times one test binary, each bounded by the ceiling on Linux |
+| Memory | The workers that fit in the memory budget times one test binary and the processes that it starts, each run bounded by its ceiling on Linux |
+| Memory reads | One listing of `/proc` per run every 25 ms, 0.29 ms with 1,063 processes, and one read of the stat of each new process |
 | Disk | The instrumented files, the helper file, one test binary and the trace, in a directory removed when the run ends |
 
 With no mutant active, the instrumented binary ran decimal's suite 1.9%
@@ -856,6 +880,13 @@ verdict.
   that share a port or a file fail each other.
 - **The memory ceiling exists on Linux only.** macOS and Windows runs are
   bounded by the deadline alone, and Windows has not been run.
+- **A process that leaves the group escapes the ceiling.** A test that
+  starts a process in a new session or process group runs it outside the
+  sum of the run's memory.
+- **A small budget slows a run down.** A budget that fits fewer ceilings
+  than `-workers` runs fewer mutants at once. A budget below a binary's
+  peak plus 512 MiB runs one mutant at a time, with a ceiling above the
+  budget.
 
 ## Open questions
 

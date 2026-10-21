@@ -49,51 +49,33 @@ func packages(ctx context.Context, patterns []string, out *output) ([]load.Liste
 	return pkgs, len(pkgs) == len(listed)
 }
 
-// suite resolves the patterns of -suite in the working directory, as the
-// command resolves the packages, and returns the import paths of the
-// packages that they name. Each run resolves its suite in its package's
-// directory, where an import path names the same package as in the working
-// directory, whatever symbolic links lead to either. It writes the error of
-// each pattern that does not resolve, and of each package that go list
-// states an error of, and reports false for either.
-func suite(ctx context.Context, patterns []string, out *output) ([]string, bool) {
+// importPaths resolves the patterns of the flag flagName, -suite or -skip,
+// in the working directory, as the command resolves the packages, and
+// returns the import paths of the packages that they name. An import path
+// names the same package in every directory of the module, whatever
+// symbolic links lead to the directory, so each run resolves its suite in
+// its package's directory, and -skip compares import paths. importPaths
+// writes the error of each pattern that does not resolve, and of each
+// package that go list states an error of, after the flag's name, and
+// reports false for either.
+func importPaths(ctx context.Context, flagName string, patterns []string, out *output) ([]string, bool) {
 	if len(patterns) == 0 {
 		return nil, true
 	}
 	listed, err := load.List(ctx, load.Config{Dir: workingDir, Env: os.Environ()}, patterns)
 	if err != nil {
-		out.errorf("-%s: %v", flagSuite, err)
+		out.errorf("-%s: %v", flagName, err)
 		return nil, false
 	}
 	var paths []string
 	for _, l := range listed {
 		if problem := l.Problem(); problem != "" {
-			out.errorf("-%s: %s: %s", flagSuite, l.ImportPath, problem)
+			out.errorf("-%s: %s: %s", flagName, l.ImportPath, problem)
 			continue
 		}
 		paths = append(paths, l.ImportPath)
 	}
 	return paths, len(paths) == len(listed)
-}
-
-// weigh returns the number of mutants that a run of cfg would test in each
-// of pkgs, as run.Count counts them, for at most parallel packages at once.
-// Each count's go commands get threads divided by parallel, and at least 1.
-func weigh(ctx context.Context, pkgs []load.Listed, cfg run.Config, threads, parallel int) []int {
-	weights := make([]int, len(pkgs))
-	slots := make(chan struct{}, parallel)
-	var wg sync.WaitGroup
-	for i, pkg := range pkgs {
-		slots <- struct{}{}
-		c := cfg
-		c.Dir, c.Procs = pkg.Dir, max(1, threads/parallel)
-		wg.Go(func() {
-			weights[i] = run.Count(ctx, c)
-			<-slots
-		})
-	}
-	wg.Wait()
-	return weights
 }
 
 // schedule calls test for each of pkgs, for at most parallel packages at
@@ -228,4 +210,24 @@ func schedule(
 	}
 	wg.Wait()
 	return status
+}
+
+// weigh returns the number of mutants that the session's run would test in
+// each of pkgs, as run.Count counts them, for at most parallel packages at
+// once. A package that -skip names counts none. Each count's go commands get
+// threads divided by parallel, and at least 1.
+func (s *session) weigh(ctx context.Context, pkgs []load.Listed, threads, parallel int) []int {
+	weights := make([]int, len(pkgs))
+	slots := make(chan struct{}, parallel)
+	var wg sync.WaitGroup
+	for i, pkg := range pkgs {
+		slots <- struct{}{}
+		c := s.config(pkg, share{procs: max(1, threads/parallel)})
+		wg.Go(func() {
+			weights[i] = run.Count(ctx, c)
+			<-slots
+		})
+	}
+	wg.Wait()
+	return weights
 }

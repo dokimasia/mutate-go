@@ -9,10 +9,10 @@ import (
 )
 
 // budget admits the runs of packages while the memory that they may use at
-// once fits in total bytes. A package's runs may use its workers times the
-// largest memory ceiling of its test binaries. A package whose runs need
-// more than total on their own starts when no other package's runs are
-// admitted, so every package starts.
+// once fits in total bytes. A package's runs may use the workers that fit in
+// total times the largest memory ceiling of its test binaries. A package
+// whose runs need more than total on their own starts when no other
+// package's runs are admitted, so every package starts.
 //
 // # Concurrency
 //

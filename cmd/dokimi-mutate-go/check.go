@@ -5,10 +5,12 @@ package main
 
 import (
 	"context"
+	"slices"
 
 	"go.dokimi.dev/mutate/internal/load"
 	"go.dokimi.dev/mutate/internal/record"
 	"go.dokimi.dev/mutate/internal/run"
+	"go.dokimi.dev/mutate/internal/selection"
 )
 
 // The command's exit statuses. When more than one applies, the command
@@ -26,13 +28,28 @@ const (
 )
 
 // session is the state that every package's run of one command line
-// shares: the configuration of each run, the output, the progress, and the
-// directory of -record, empty for none.
+// shares: the configuration of each run, the output and the progress.
 type session struct {
 	cfg      run.Config
 	out      *output
 	progress *progress
-	records  string
+	// records is the directory of -record, or empty for none.
+	records string
+	// skip lists the import paths of the packages that -skip names.
+	skip []string
+}
+
+// config returns the configuration of the run of pkg with its share of the
+// threads: the session's, in pkg's directory. A package that -skip names
+// gets an empty selection, so its run tests none of its mutants, and its
+// record states each of them as not selected.
+func (s *session) config(pkg load.Listed, sh share) run.Config {
+	cfg := s.cfg
+	cfg.Dir, cfg.Procs, cfg.Spare, cfg.Borrow = pkg.Dir, sh.procs, sh.spare, sh.borrow
+	if slices.Contains(s.skip, pkg.ImportPath) {
+		cfg.Lines = []selection.Lines{}
+	}
+	return cfg
 }
 
 // check runs mutation testing on pkg with its share of the threads, and
@@ -41,8 +58,7 @@ type session struct {
 // states otherwise. It writes each listed mutant's line when the mutant's
 // verdict is final, and the run's result when the run ends.
 func (s *session) check(ctx context.Context, pkg load.Listed, sh share) int {
-	cfg := s.cfg
-	cfg.Dir, cfg.Procs, cfg.Spare, cfg.Borrow = pkg.Dir, sh.procs, sh.spare, sh.borrow
+	cfg := s.config(pkg, sh)
 	cfg.Verdict = func(m record.Mutant, mutants int, path string) {
 		s.progress.verdict(pkg.ImportPath, m, mutants)
 		s.out.line(m, path)
@@ -70,8 +86,8 @@ func (s *session) check(ctx context.Context, pkg load.Listed, sh share) int {
 // type-check, and exitDetected otherwise. It writes the listing when it
 // ends.
 func (s *session) list(ctx context.Context, pkg load.Listed, sh share) int {
-	cfg := s.cfg
-	cfg.Dir, cfg.Procs, cfg.Spare, cfg.List = pkg.Dir, sh.procs, sh.spare, true
+	cfg := s.config(pkg, sh)
+	cfg.List = true
 	rec, err := run.Run(ctx, cfg)
 	if err != nil {
 		s.out.errorf("%s: %v", pkg.ImportPath, err)
