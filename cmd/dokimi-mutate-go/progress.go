@@ -17,7 +17,7 @@ import (
 
 // progress tracks the packages that run, and writes a line on each to
 // stderr at every interval every, measured by now. deadline is when
-// -timeout ends the runs, or zero without -timeout.
+// --timeout ends the runs, or zero without --timeout.
 //
 // # Concurrency
 //
@@ -114,7 +114,7 @@ func (p *progress) watch() (stop func()) {
 // the time left at that rate. Once a mutant is not-run, no further mutant
 // starts, and the line states how many will not run and that the run waits
 // for the mutants that still run and the closing control run. Under
-// -timeout, the line ends with the time until the timeout.
+// --timeout, the line ends with the time until the timeout.
 func (p *progress) tick() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -139,10 +139,12 @@ func (p *progress) tick() {
 			left := time.Duration(float64(s.total-s.done) / rate * float64(time.Second))
 			line += fmt.Sprintf(", %.1f mutants a second, about %s left", rate, left.Round(time.Second))
 		}
-		if left := p.deadline.Sub(now); !p.deadline.IsZero() && left > 0 {
-			line += fmt.Sprintf(", -%s in %s", flagTimeout, left.Round(time.Second))
-		} else if !p.deadline.IsZero() {
-			line += fmt.Sprintf(", -%s passed", flagTimeout)
+		if !p.deadline.IsZero() {
+			if left := p.deadline.Sub(now); left > 0 {
+				line += fmt.Sprintf(", %s%s in %s", flagPrefix, flagTimeout, left.Round(time.Second))
+			} else {
+				line += fmt.Sprintf(", %s%s passed", flagPrefix, flagTimeout)
+			}
 		}
 		fmt.Fprintf(p.stderr, "%s: %s: %s\n", name, pkg, line)
 	}

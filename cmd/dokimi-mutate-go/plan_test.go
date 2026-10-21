@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -92,15 +91,12 @@ func TestPlan(t *testing.T) {
 		t.Run("runs the go commands of each count with the threads divided by the packages at once",
 			func(t *testing.T) {
 				t.Parallel()
-				if runtime.GOOS == "windows" {
-					t.Skip("the go wrapper is a shell script")
-				}
-				goCmd, err := exec.LookPath("go")
+				goCmd, err := exec.LookPath(goCommand)
 				assert.NoError(t, err, "the go command is on the PATH")
 				log := filepath.Join(t.TempDir(), "gomaxprocs")
 				env := testbin.Setenv(
 					os.Environ(),
-					pathVar+"="+goLogDir+string(filepath.ListSeparator)+os.Getenv(pathVar),
+					pathVar+"="+fakeGoDir+string(filepath.ListSeparator)+os.Getenv(pathVar),
 					goVar+"="+goCmd,
 					goLogVar+"="+log,
 				)
@@ -361,7 +357,7 @@ func TestPlan(t *testing.T) {
 				"starts no package after the deadline",
 				false,
 				time.Now().Add(-time.Second),
-				name + ": a: not tested, because -timeout passed before the package started\n",
+				name + ": a: not tested, because --timeout passed before the package started\n",
 			},
 			{
 				"starts no package after the context ends",
@@ -399,15 +395,18 @@ func TestPlan(t *testing.T) {
 func TestPlanEnv(t *testing.T) {
 	t.Run("packages", func(t *testing.T) {
 		t.Run("returns the packages that the patterns name", func(t *testing.T) {
-			dir := enter(t, twoPackages)
-			var errs bytes.Buffer
-			pkgs, ok := packages(t.Context(), []string{"./..."}, &output{stdout: io.Discard, stderr: &errs})
-			assert.True(t, ok, "every pattern resolves")
-			resolved, err := filepath.EvalSymlinks(dir)
+			// The working directory is the module's directory with its links
+			// and the short names of Windows resolved, as go list states it.
+			dir, err := filepath.EvalSymlinks(module(t, twoPackages))
 			assert.NoError(t, err, "the module's directory resolves")
+			t.Chdir(dir)
+			var errs bytes.Buffer
+			pkgs, ok := packages(t.Context(), os.Environ(), []string{"./..."},
+				&output{stdout: io.Discard, stderr: &errs})
+			assert.True(t, ok, "every pattern resolves")
 			assert.Equal(t, pkgs, []load.Listed{
-				{ImportPath: fixture, Dir: resolved},
-				{ImportPath: fixture + "/sub", Dir: filepath.Join(resolved, "sub")},
+				{ImportPath: fixture, Dir: dir},
+				{ImportPath: fixture + "/sub", Dir: filepath.Join(dir, "sub")},
 			}, "go list states each package with its directory")
 			assert.Empty(t, errs.String(), "the packages state no error")
 		})
@@ -415,7 +414,8 @@ func TestPlanEnv(t *testing.T) {
 		t.Run("writes the error of a pattern that names no package and reports false", func(t *testing.T) {
 			enter(t, addFiles)
 			var errs bytes.Buffer
-			pkgs, ok := packages(t.Context(), []string{".", "./missing"}, &output{stdout: io.Discard, stderr: &errs})
+			pkgs, ok := packages(t.Context(), os.Environ(), []string{".", "./missing"},
+				&output{stdout: io.Discard, stderr: &errs})
 			assert.False(t, ok, "a pattern does not resolve")
 			assert.Length(t, pkgs, 1, "the package that resolves remains")
 			assert.HasPrefix(t, errs.String(), name+": ./missing: ", "the error names the pattern")
@@ -425,7 +425,7 @@ func TestPlanEnv(t *testing.T) {
 			t.Setenv(pathVar, fakeGoDir+string(filepath.ListSeparator)+os.Getenv(pathVar))
 			t.Setenv(fakeVar, fakeFail)
 			var errs bytes.Buffer
-			_, ok := packages(t.Context(), []string{"."}, &output{stdout: io.Discard, stderr: &errs})
+			_, ok := packages(t.Context(), os.Environ(), []string{"."}, &output{stdout: io.Discard, stderr: &errs})
 			assert.False(t, ok, "go list fails")
 			assert.Contains(t, errs.String(), "no list today", "the error states the go command's message")
 		})
@@ -433,14 +433,15 @@ func TestPlanEnv(t *testing.T) {
 
 	t.Run("importPaths", func(t *testing.T) {
 		t.Run("returns no import path for no pattern", func(t *testing.T) {
-			paths, ok := importPaths(t.Context(), flagSuite, nil, &output{stdout: io.Discard, stderr: io.Discard})
+			paths, ok := importPaths(t.Context(), os.Environ(), flagSuite, nil,
+				&output{stdout: io.Discard, stderr: io.Discard})
 			assert.True(t, ok, "no pattern resolves trivially")
 			assert.Nil(t, paths, "and names no package")
 		})
 
 		t.Run("returns the import paths of the packages that the patterns name", func(t *testing.T) {
 			enter(t, twoPackages)
-			paths, ok := importPaths(t.Context(), flagSuite, []string{"./sub"},
+			paths, ok := importPaths(t.Context(), os.Environ(), flagSuite, []string{"./sub"},
 				&output{stdout: io.Discard, stderr: io.Discard})
 			assert.True(t, ok, "the pattern resolves")
 			assert.Equal(t, paths, []string{fixture + "/sub"}, "the suite names the package by its import path")
@@ -452,10 +453,11 @@ func TestPlanEnv(t *testing.T) {
 				with(addFiles, map[string]string{"check/check.go": "package check\n\nimport _ \"fixture/missing\"\n"}),
 			)
 			var errs bytes.Buffer
-			_, ok := importPaths(t.Context(), flagSuite, []string{"./check"},
+			_, ok := importPaths(t.Context(), os.Environ(), flagSuite, []string{"./check"},
 				&output{stdout: io.Discard, stderr: &errs})
 			assert.False(t, ok, "the package does not load")
-			assert.HasPrefix(t, errs.String(), name+": -suite: fixture/check: package fixture/missing is not in ",
+			assert.HasPrefix(t, errs.String(),
+				name+": "+flagPrefix+flagSuite+": fixture/check: package fixture/missing is not in ",
 				"the error names the package and its dependency")
 		})
 
@@ -463,9 +465,10 @@ func TestPlanEnv(t *testing.T) {
 			t.Setenv(pathVar, fakeGoDir+string(filepath.ListSeparator)+os.Getenv(pathVar))
 			t.Setenv(fakeVar, fakeFail)
 			var errs bytes.Buffer
-			_, ok := importPaths(t.Context(), flagSkip, []string{"./check"}, &output{stdout: io.Discard, stderr: &errs})
+			_, ok := importPaths(t.Context(), os.Environ(), flagSkip, []string{"./check"},
+				&output{stdout: io.Discard, stderr: &errs})
 			assert.False(t, ok, "go list fails")
-			assert.HasPrefix(t, errs.String(), name+": -skip: go list ", "the error names the flag")
+			assert.HasPrefix(t, errs.String(), name+": "+flagPrefix+flagSkip+": go list ", "the error names the flag")
 		})
 	})
 }

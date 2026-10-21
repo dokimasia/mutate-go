@@ -82,8 +82,14 @@ func TestProgress(t *testing.T) {
 				time.Time{},
 				"2 of 10 mutants done, 1 undetected, 8 not run, waiting for the closing control run",
 			},
-			{"states the time until -timeout", nil, start.Add(92 * time.Second), "running, -timeout in 1m30s"},
-			{"states that -timeout passed", nil, start.Add(-time.Second), "running, -timeout passed"},
+			{"states the time until --timeout", nil, start.Add(92 * time.Second), "running, --timeout in 1m30s"},
+			{"states that --timeout passed", nil, start.Add(-time.Second), "running, --timeout passed"},
+			{
+				"states that --timeout passed at the deadline",
+				nil,
+				start.Add(2 * time.Second),
+				"running, --timeout passed",
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

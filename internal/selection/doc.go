@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Package selection reads the lines that a run selects: an entry of the
-// command's -lines, the entries of the variable that mutate.Check reads,
+// command's --lines, the entries of the variable that mutate.Check reads,
 // and the lines that a unified diff changes.
 //
 // A selection is a list of [Lines], each a range of lines of a file. A run

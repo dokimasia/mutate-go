@@ -32,15 +32,15 @@ const (
 type session struct {
 	out      *output
 	progress *progress
-	// records is the directory of -record, or empty for none.
+	// records is the directory of --record, or empty for none.
 	records string
-	// skip lists the import paths of the packages that -skip names.
+	// skip lists the import paths of the packages that --skip names.
 	skip []string
 	cfg  run.Config
 }
 
 // config returns the configuration of the run of pkg with its share of the
-// threads: the session's, in pkg's directory. A package that -skip names
+// threads: the session's, in pkg's directory. A package that --skip names
 // gets an empty selection, so its run tests none of its mutants, and its
 // record states each of them as not selected.
 func (s *session) config(pkg load.Listed, sh share) run.Config {
@@ -103,7 +103,7 @@ func (s *session) list(ctx context.Context, pkg load.Listed, sh share) int {
 // exitStatus returns the exit status of the run whose record is rec:
 // exitFailed for a run that fails, exitUndetected for a run with a mutant
 // that survived or that no test covers, and exitDetected otherwise. A run
-// that the limit of -sample ended exits by its sample, whose mutants the
+// that the limit of --sample ended exits by its sample, whose mutants the
 // score counts, so a mutant without coverage after the sample does not
 // change the status.
 func exitStatus(rec *record.Record) int {

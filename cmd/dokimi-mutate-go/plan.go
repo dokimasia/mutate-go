@@ -6,7 +6,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"os"
 	"slices"
 	"sync"
 	"time"
@@ -29,11 +28,11 @@ type share struct {
 }
 
 // packages returns the packages that the patterns name, as go list resolves
-// them in the working directory. It writes the error of each package that
-// go list states, and reports false when go list fails or a package has an
-// error, so the command line is invalid.
-func packages(ctx context.Context, patterns []string, out *output) ([]load.Listed, bool) {
-	listed, err := load.List(ctx, &load.Config{Dir: workingDir, Env: os.Environ()}, patterns)
+// them in the working directory with the environment env. It writes the
+// error of each package that go list states, and reports false when go list
+// fails or a package has an error, so the command line is invalid.
+func packages(ctx context.Context, env, patterns []string, out *output) ([]load.Listed, bool) {
+	listed, err := load.List(ctx, &load.Config{Dir: workingDir, Env: env}, patterns)
 	if err != nil {
 		out.errorf("%v", err)
 		return nil, false
@@ -49,28 +48,28 @@ func packages(ctx context.Context, patterns []string, out *output) ([]load.Liste
 	return pkgs, len(pkgs) == len(listed)
 }
 
-// importPaths resolves the patterns of the flag flagName, -suite or -skip,
-// in the working directory, as the command resolves the packages, and
-// returns the import paths of the packages that they name. An import path
-// names the same package in every directory of the module, whatever
-// symbolic links lead to the directory, so each run resolves its suite in
-// its package's directory, and -skip compares import paths. importPaths
-// writes the error of each pattern that does not resolve, and of each
-// package that go list states an error of, after the flag's name, and
-// reports false for either.
-func importPaths(ctx context.Context, flagName string, patterns []string, out *output) ([]string, bool) {
+// importPaths resolves the patterns of the flag flagName, --suite or
+// --skip, in the working directory with the environment env, as the command
+// resolves the packages, and returns the import paths of the packages that
+// they name. An import path names the same package in every directory of
+// the module, whatever symbolic links lead to the directory, so each run
+// resolves its suite in its package's directory, and --skip compares import
+// paths. importPaths writes the error of each pattern that does not
+// resolve, and of each package that go list states an error of, after the
+// flag, and reports false for either.
+func importPaths(ctx context.Context, env []string, flagName string, patterns []string, out *output) ([]string, bool) {
 	if len(patterns) == 0 {
 		return nil, true
 	}
-	listed, err := load.List(ctx, &load.Config{Dir: workingDir, Env: os.Environ()}, patterns)
+	listed, err := load.List(ctx, &load.Config{Dir: workingDir, Env: env}, patterns)
 	if err != nil {
-		out.errorf("-%s: %v", flagName, err)
+		out.errorf("%s%s: %v", flagPrefix, flagName, err)
 		return nil, false
 	}
 	var paths []string
 	for _, l := range listed {
 		if problem := l.Problem(); problem != "" {
-			out.errorf("-%s: %s: %s", flagName, l.ImportPath, problem)
+			out.errorf("%s%s: %s: %s", flagPrefix, flagName, l.ImportPath, problem)
 			continue
 		}
 		paths = append(paths, l.ImportPath)
@@ -175,7 +174,7 @@ func schedule(
 		if ctx.Err() != nil {
 			why = "the command was interrupted"
 		} else if !deadline.IsZero() && time.Now().After(deadline) {
-			why = "-" + flagTimeout + " passed before the package started"
+			why = flagPrefix + flagTimeout + " passed before the package started"
 		}
 		if why != "" {
 			status = max(status, exitFailed)
@@ -214,7 +213,7 @@ func schedule(
 
 // weigh returns the number of mutants that the session's run would test in
 // each of pkgs, as run.Count counts them, for at most parallel packages at
-// once. A package that -skip names counts none. Each count's go commands get
+// once. A package that --skip names counts none. Each count's go commands get
 // threads divided by parallel, and at least 1.
 func (s *session) weigh(ctx context.Context, pkgs []load.Listed, threads, parallel int) []int {
 	weights := make([]int, len(pkgs))

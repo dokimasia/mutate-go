@@ -4,20 +4,22 @@
 package main
 
 import (
-	"bytes"
-	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
-	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
+	"go.stealthscale.io/cli/clitest"
 
+	"go.dokimi.dev/mutate/internal/process"
 	"go.dokimi.dev/mutate/internal/run"
 )
 
@@ -38,8 +40,8 @@ const (
 	ordinaryVar = "FIXTURE_ORDINARY"
 	// expectedProcsVar is the GOMAXPROCS that procsTest expects.
 	expectedProcsVar = "FIXTURE_PROCS"
-	// goVar names the go command that the wrapper of goLogDir runs, and
-	// goLogVar the file to which the wrapper appends its GOMAXPROCS.
+	// goVar names the go command that the fake go command of fakeGoDir runs,
+	// and goLogVar the file to which the fake first appends its GOMAXPROCS.
 	goVar    = "FIXTURE_GO"
 	goLogVar = "FIXTURE_GO_LOG"
 )
@@ -47,15 +49,31 @@ const (
 // The variables of the environment that the tests set or read.
 const (
 	pathVar     = "PATH"
-	tmpVar      = "TMPDIR"
 	maxProcsVar = "GOMAXPROCS"
 )
 
-// The modes of the fixtures' directories and files.
+// optionVarPrefix starts the environment variable of each option of the
+// command, which go.stealthscale.io/cli derives from the command's name.
+const optionVarPrefix = "DOKIMI_MUTATE_GO_"
+
+// tempVars are the variables that name the temporary directory of a
+// process: TMPDIR on Unix, and TMP and TEMP on Windows.
+var tempVars = []string{"TMPDIR", "TMP", "TEMP"}
+
+// The modes of the fake go command, which TestMain writes before any test
+// starts, and of the file to which the fake appends.
 const (
-	dirMode    = 0o755
-	fileMode   = 0o644
-	scriptMode = 0o755
+	commandMode = 0o755
+	fileMode    = 0o644
+)
+
+// The names of the fake go command. Its directory has the pattern
+// fakePattern, and the fake takes on the name goCommand. Its file name is
+// goName, because Windows runs a command only with the suffix .exe.
+const (
+	fakePattern = "fakego"
+	goCommand   = "go"
+	goName      = goCommand + process.ExeSuffix
 )
 
 // The names of the fixtures' files.
@@ -73,41 +91,90 @@ const goMod = "module fixture\n\ngo 1.21\n"
 // fixture is the import path of the fixtures' package.
 const fixture = "fixture"
 
-// fakeGoDir contains a go command that fails when fakeVar is fakeFail, and
-// prints text that is no JSON otherwise. goLogDir contains a go command that
-// appends its GOMAXPROCS to the file of goLogVar, and then runs the go
-// command of goVar. TestMain writes both before any test starts, because a
-// file open for writing while another goroutine forks a process fails exec
-// with ETXTBSY.
-var fakeGoDir, goLogDir string
+// fakeGoDir is the directory of a fake go command. The command is a copy of
+// the test binary, which TestMain runs as the fake because its name is
+// goName:
+//   - Where goVar is set, it appends its GOMAXPROCS to the file of goLogVar,
+//     runs the go command of goVar with its arguments and its standard
+//     streams, and exits with the go command's status.
+//   - Otherwise it writes "no list today" to its standard error and exits
+//     with the status 1 when fakeVar is fakeFail, and prints text that is
+//     no JSON when it is not.
+//
+// TestMain writes it before any test starts, because a file that is open
+// for writing while another goroutine forks a process fails exec with
+// ETXTBSY.
+var fakeGoDir string
 
-// TestMain runs main when mainVar is set, and otherwise writes the go
-// wrappers, runs the tests and removes the wrappers.
+// TestMain runs the fake go command when the test binary's name is goName,
+// and main when mainVar is set. It otherwise writes the fake go command, runs
+// the tests and removes the fake.
 func TestMain(m *testing.M) {
+	if filepath.Base(os.Args[0]) == goName {
+		os.Exit(runFakeGo(os.Args[1:]))
+	}
 	if os.Getenv(mainVar) != "" {
 		main()
 	}
-	scripts := map[*string]string{
-		&fakeGoDir: fmt.Sprintf("#!/bin/sh\nif [ \"$%s\" = %s ]; then echo \"no list today\" >&2; exit 1; fi\n"+
-			"echo \"{not json\"\n", fakeVar, fakeFail),
-		&goLogDir: fmt.Sprintf("#!/bin/sh\necho \"$%s\" >> \"$%s\"\nexec \"$%s\" \"$@\"\n",
-			maxProcsVar, goLogVar, goVar),
+	dir, err := os.MkdirTemp("", fakePattern)
+	if err == nil {
+		fakeGoDir = dir
+		err = copySelf(filepath.Join(dir, goName))
 	}
-	for dir, script := range scripts {
-		var err error
-		*dir, err = os.MkdirTemp("", "gowrapper")
-		if err == nil {
-			err = os.WriteFile(filepath.Join(*dir, "go"), []byte(script), scriptMode)
-		}
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 	code := m.Run()
 	_ = os.RemoveAll(fakeGoDir)
-	_ = os.RemoveAll(goLogDir)
 	os.Exit(code)
+}
+
+// copySelf copies the test binary to path, as a file that its owner may
+// execute.
+func copySelf(path string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(self)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, commandMode)
+}
+
+// runFakeGo runs as the fake go command of fakeGoDir with the arguments args,
+// and returns its exit status.
+func runFakeGo(args []string) int {
+	goCmd := os.Getenv(goVar)
+	if goCmd == "" {
+		if os.Getenv(fakeVar) == fakeFail {
+			fmt.Fprintln(os.Stderr, "no list today")
+			return 1
+		}
+		fmt.Fprintln(os.Stdout, "{not json")
+		return 0
+	}
+	f, err := os.OpenFile(os.Getenv(goLogVar), os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileMode)
+	if err == nil {
+		_, err = fmt.Fprintln(f, os.Getenv(maxProcsVar))
+		err = errors.Join(err, f.Close())
+	}
+	if err == nil {
+		//nolint:noctx // the fake go command runs outside any test, and the run that started it ends it
+		cmd := exec.Command(goCmd, args...)
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		err = cmd.Run()
+	}
+	if exit, ok := errors.AsType[*exec.ExitError](err); ok {
+		return exit.ExitCode()
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
 }
 
 // arith is a package with a function that its tests check, one that they
@@ -208,32 +275,30 @@ func TestAdd(t *testing.T) {
 }
 `, maxProcsVar, expectedProcsVar)
 
-// module writes files, by slash-separated path, and goMod into a new
-// directory, and returns the directory.
-func module(t *testing.T, files map[string]string) string {
+// module writes texts, by slash-separated path, into a workspace of the
+// test, with goMod as the go.mod unless texts has one, and returns the
+// workspace's directory.
+func module(t *testing.T, texts map[string]string) string {
 	t.Helper()
-	dir := t.TempDir()
-	for name, text := range files {
-		path := filepath.Join(dir, filepath.FromSlash(name))
-		assert.NoError(t, os.MkdirAll(filepath.Dir(path), dirMode), "the fixture's directory is made")
-		assert.NoError(t, os.WriteFile(path, []byte(text), fileMode), "the fixture's file is written")
+	tree := files.Tree{goModFile: files.Text(goMod)}
+	for name, text := range texts {
+		tree[name] = files.Text(text)
 	}
-	assert.NoError(t, os.WriteFile(filepath.Join(dir, goModFile), []byte(goMod), fileMode), "the go.mod is written")
-	return dir
+	return files.Workspace(t, tree)
 }
 
-// with returns a copy of files with the files of more added or replaced.
-func with(files, more map[string]string) map[string]string {
-	out := maps.Clone(files)
+// with returns a copy of texts with the files of more added or replaced.
+func with(texts, more map[string]string) map[string]string {
+	out := maps.Clone(texts)
 	maps.Copy(out, more)
 	return out
 }
 
-// enter writes the module of files, as module does, and makes it the
+// enter writes the module of texts as module does. The module is the
 // working directory of the test process until t ends.
-func enter(t *testing.T, files map[string]string) string {
+func enter(t *testing.T, texts map[string]string) string {
 	t.Helper()
-	dir := module(t, files)
+	dir := module(t, texts)
 	t.Chdir(dir)
 	return dir
 }
@@ -257,12 +322,24 @@ func testSession(env []string, stdout, stderr io.Writer, records string) *sessio
 	}
 }
 
-// call runs the command line args with the empty standard input and without
-// a default memory budget, and returns its exit status, its standard output
-// and its standard error. It writes no progress line.
-func call(args ...string) (status int, stdout, stderr string) {
-	var out, errs bytes.Buffer
-	c := &cli{stdin: strings.NewReader(""), stdout: &out, stderr: &errs, every: time.Hour, now: time.Now}
-	status = c.main(context.Background(), args)
-	return status, out.String(), errs.String()
+// call runs the command line args with the environment that environ returns
+// and the empty standard input, without a default memory budget, and
+// returns the result of the run. It does not write a progress line.
+func call(t *testing.T, args ...string) clitest.Result {
+	t.Helper()
+	c := &cli{every: time.Hour, now: time.Now}
+	return clitest.Main(t.Context(), c.main, &clitest.Input{Args: args, Vars: environ()})
+}
+
+// environ returns the environment of the test process without the
+// variables of the command's options, so a variable of the machine does not
+// set an option of a run.
+func environ() map[string]string {
+	vars := map[string]string{}
+	for _, kv := range os.Environ() {
+		if key, value, ok := strings.Cut(kv, "="); ok && !strings.HasPrefix(key, optionVarPrefix) {
+			vars[key] = value
+		}
+	}
+	return vars
 }

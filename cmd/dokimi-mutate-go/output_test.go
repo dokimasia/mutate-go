@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -26,6 +27,15 @@ var mutantLine = record.Mutant{
 
 // writers is the number of goroutines that write through one lockedWriter.
 const writers = 100
+
+// errFull is the error of every write to full.
+var errFull = errors.New("no space left on device")
+
+// full is a writer whose every write fails, as a write to a full device does.
+type full struct{}
+
+// Write returns 0 and errFull.
+func (full) Write([]byte) (int, error) { return 0, errFull }
 
 func TestOutput(t *testing.T) {
 	t.Parallel()

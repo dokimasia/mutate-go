@@ -5,4 +5,7 @@ module go.dokimi.dev/mutate
 
 go 1.27.2
 
-require go.dokimi.dev/assert v0.5.1
+require (
+	go.dokimi.dev/assert v0.5.1
+	go.stealthscale.io/cli v0.6.0
+)

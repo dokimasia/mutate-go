@@ -11,8 +11,10 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/expect"
 	"go.dokimi.dev/assert/golden"
 	"go.dokimi.dev/assert/prop"
+	"go.stealthscale.io/cli/clitest"
 
 	"go.dokimi.dev/mutate/internal/record"
 )
@@ -37,7 +39,7 @@ const (
 const docHeader = "// Copyright Dokimasia B.V. 2026\n// SPDX-License-Identifier: MIT\n\n" +
 	"// TestHelp writes this file from the help with -update. Edit the help in help.go.\n\n"
 
-// docSubject starts the package comment, before the help's first word.
+// docSubject starts the package comment, before the summary.
 const docSubject = "Command "
 
 // word generates a word of a few letters, or of the tie that joins two.
@@ -45,11 +47,12 @@ var word = prop.String(prop.Alphabet("abcdefghijklmnopqrstuvwxyz"+tie), prop.Min
 
 func TestHelp(t *testing.T) {
 	t.Parallel()
-	var b strings.Builder
-	help(&b, nil)
-	text := b.String()
+	// The help of a process without a note on its memory budget, as the
+	// documentation states it.
+	c := &cli{}
+	text := clitest.Main(t.Context(), c.main, &clitest.Input{Args: []string{flagPrefix + flagHelp}}).Stdout
 
-	t.Run("help", func(t *testing.T) {
+	t.Run("helpText", func(t *testing.T) {
 		t.Parallel()
 
 		t.Run("writes the help that doc.go states", func(t *testing.T) {
@@ -68,21 +71,24 @@ func TestHelp(t *testing.T) {
 			golden.MatchAt(t, readmeFile, []byte(before+helpStart+text+helpEnd+after), golden.ShouldUpdate())
 		})
 
-		t.Run("lists each flag of the table in the table's order", func(t *testing.T) {
+		t.Run("lists the flag of each name among the options", func(t *testing.T) {
 			t.Parallel()
-			flags := make([]string, 0, len(commandFlags))
-			for _, opt := range commandFlags {
-				flags = append(flags, "\n"+flagIndent+"-"+opt.name)
+			_, opts, found := strings.Cut(text, "\nOptions:\n")
+			assert.True(t, found, "the help has a section of options")
+			for _, f := range []string{
+				flagLines, flagDiff, flagSample, flagIncludeGenerated, flagSkip, flagSuite, flagConfirm,
+				flagDirectory, flagParallel, flagWorkers, flagTimeout, flagBudget, flagJSON, flagRecord, flagList,
+				flagVersion, flagHelp,
+			} {
+				expect.Contains(t, opts, flagPrefix+f+" ", "the section of options lists the flag")
 			}
-			assert.ContainsInOrder(t, text, flags, "the help lists every flag")
 		})
 
-		t.Run("appends a computed default to its flag's description", func(t *testing.T) {
+		t.Run("adds the note to the paragraph on the memory budget", func(t *testing.T) {
 			t.Parallel()
-			var b strings.Builder
-			help(&b, map[string]string{flagBudget: budgetDefault(9 << 30)})
-			assert.Contains(t, strings.Join(strings.Fields(b.String()), " "),
-				"0 sets no budget. Here the default is 9.0 GiB.", "the help states the default of this process")
+			got := helpText(budgetDefault(9 << 30))
+			assert.Contains(t, strings.Join(strings.Fields(got), " "),
+				"then bounds the ceilings. Here the default is 9.0 GiB.", "the help states the default of this process")
 		})
 
 		t.Run("writes each tie as a space", func(t *testing.T) {
@@ -114,16 +120,14 @@ func TestHelp(t *testing.T) {
 		}
 	})
 
-	t.Run("version", func(t *testing.T) {
+	t.Run("versions", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("writes the versions of the engine, the catalogue, the overlay and the toolchain", func(t *testing.T) {
+		t.Run("returns the versions of the engine, the catalogue, the overlay and the toolchain", func(t *testing.T) {
 			t.Parallel()
-			var b strings.Builder
-			version(&b)
 			info, _ := debug.ReadBuildInfo()
-			assert.Equal(t, b.String(), name+" "+record.EngineVersion(info)+"\ncatalogue "+definition.Version+
-				"\noverlay "+definition.Overlay.Version+"\ntoolchain "+runtime.Version()+"\n",
+			assert.Equal(t, versions(), name+" "+record.EngineVersion(info)+"\ncatalogue "+definition.Version+
+				"\noverlay "+definition.Overlay.Version+"\ntoolchain "+runtime.Version(),
 				"each line states a name and its version")
 		})
 	})
@@ -138,15 +142,15 @@ func TestHelp(t *testing.T) {
 					words := c.Draw(prop.List(word, prop.MinSize(1), prop.MaxSize(30)), "words")
 					width := c.Draw(prop.Integer(1, 40), "width")
 					var b strings.Builder
-					wrap(&b, strings.Join(words, " "), usageIndent, width)
+					wrap(&b, strings.Join(words, " "), exampleIndent, width)
 					units := make([]string, 0, len(words))
 					var got []string
 					for _, w := range words {
 						units = append(units, strings.ReplaceAll(w, tie, " "))
 					}
 					for line := range strings.Lines(b.String()) {
-						assert.HasPrefix(c, line, usageIndent, "each line starts with the indentation")
-						body := strings.TrimSuffix(strings.TrimPrefix(line, usageIndent), "\n")
+						assert.HasPrefix(c, line, exampleIndent, "each line starts with the indentation")
+						body := strings.TrimSuffix(strings.TrimPrefix(line, exampleIndent), "\n")
 						if len(body) > width {
 							assert.Contains(c, units, body, "a line longer than the width is one word")
 						}
@@ -159,20 +163,19 @@ func TestHelp(t *testing.T) {
 	})
 }
 
-// documentation returns doc.go as the help text states it: the header, the
-// help as the package comment with docSubject before its first word, and
-// the package clause.
-func documentation(text string) string {
+// documentation returns doc.go as the help states it: the header, the
+// package comment and the package clause. The comment opens with docSubject
+// and the summary, and shows the help as preformatted lines.
+func documentation(help string) string {
 	var b strings.Builder
 	b.WriteString(docHeader)
-	for line := range strings.SplitSeq(strings.TrimSuffix(docSubject+text, "\n"), "\n") {
-		switch {
-		case line == "":
+	b.WriteString("// " + docSubject + summary + "\n//\n// " + name + " " + flagPrefix + flagHelp +
+		" writes this help:\n//\n")
+	for line := range strings.Lines(help) {
+		if line = strings.TrimSuffix(line, "\n"); line == "" {
 			b.WriteString("//\n")
-		case strings.HasPrefix(line, flagIndent):
-			b.WriteString("//" + line + "\n")
-		default:
-			b.WriteString("// " + line + "\n")
+		} else {
+			b.WriteString("//\t" + line + "\n")
 		}
 	}
 	b.WriteString("package main\n")

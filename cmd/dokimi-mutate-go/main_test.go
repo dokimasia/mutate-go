@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,16 +19,19 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/files"
+	gocli "go.stealthscale.io/cli"
+	"go.stealthscale.io/cli/clitest"
 
 	"go.dokimi.dev/mutate/internal/memory"
 	"go.dokimi.dev/mutate/internal/record"
+	"go.dokimi.dev/mutate/internal/selection"
 )
-
-// usageLine ends the output of a command line that is not valid.
-const usageLine = "Run '" + name + " -help' for usage.\n"
 
 // generatedFile is a generated file of the package fixture, and
 // generatedTest a test that checks its function.
@@ -78,9 +82,9 @@ func TestTrio(t *testing.T) {
 }
 `, subProcsVar, maxProcsVar)
 
-// shareThreads are the threads of the cases of the shares. Under -p 2, the
-// package of 6 mutants starts first with trioShare of them, and the package
-// of 2 mutants gets the addShare that remain.
+// shareThreads are the threads of the cases of the shares. Under --parallel
+// 2, the package of 6 mutants starts first with trioShare of them, and the
+// package of 2 mutants gets the addShare that remain.
 const (
 	shareThreads = 8
 	trioShare    = "6"
@@ -110,11 +114,26 @@ func TestAdd(t *testing.T) {
 
 // cappedText and cappedBytes are a memory budget below 4 times the peak of
 // ballastTest's binary plus 512 MiB, and above that peak plus 512 MiB, as
-// the text of -memory-budget and in bytes.
+// the text of --memory-budget and in bytes.
 const (
 	cappedText  = "700M"
 	cappedBytes = 700 << 20
 )
+
+// currentPackage is the pattern of the package in the current directory,
+// which the command tests when the command line names none.
+const currentPackage = "."
+
+// The diff files of the cases of --diff. A run reads changeDiff, staleDiff
+// does not match the files of the fixture, and missingDiff does not exist.
+const (
+	changeDiff  = "change.diff"
+	staleDiff   = "stale.diff"
+	missingDiff = "missing.diff"
+)
+
+// errClose is the error of the Close of an unclosable file.
+var errClose = errors.New("input/output error")
 
 // ceiling runs the engine on ballastTest with the memory of the process
 // limit and the command line args, and returns the memory ceiling that the
@@ -123,10 +142,11 @@ func ceiling(t *testing.T, limit int64, args ...string) int64 {
 	t.Helper()
 	enter(t, map[string]string{addFile: add, addTestFile: ballastTest})
 	records := t.TempDir()
-	var out, errs bytes.Buffer
-	c := &cli{stdin: strings.NewReader(""), stdout: &out, stderr: &errs, every: time.Hour, now: time.Now, limit: limit}
-	status := c.main(t.Context(), append(args, "-"+flagRecord, records))
-	assert.Equal(t, status, exitDetected, "the test kills both mutants")
+	c := &cli{every: time.Hour, now: time.Now, limit: limit}
+	res := clitest.Main(t.Context(), c.main, &clitest.Input{
+		Args: append(args, flagPrefix+flagRecord, records), Vars: environ(),
+	})
+	assert.Equal(t, res.Status, exitDetected, "the test kills both mutants")
 	data, err := os.ReadFile(filepath.Join(records, record.FileName(fixture)))
 	assert.NoError(t, err, "the package's record reads")
 	var rec record.Record
@@ -134,6 +154,22 @@ func ceiling(t *testing.T, limit int64, args ...string) int64 {
 	assert.Length(t, rec.Limits, 1, "the package's own test binary has limits")
 	assert.NotNil(t, rec.Limits[0].MemoryCeilingBytes, "the engine applies a memory ceiling on Linux")
 	return *rec.Limits[0].MemoryCeilingBytes
+}
+
+// declared runs the app of the command line args with the variables vars,
+// and returns the options that the handler of the run receives. The handler
+// takes the place of handle, so the run does not test a package.
+func declared(t *testing.T, vars map[string]string, args ...string) *options {
+	t.Helper()
+	app := (&cli{}).app()
+	var got *options
+	app.Handle(func(_ context.Context, r *gocli.Run[options, options]) error {
+		got = r.Config()
+		return nil
+	})
+	env, _ := clitest.NewEnv(&clitest.Input{Args: args, Vars: vars})
+	assert.NoError(t, app.Execute(t.Context(), env), "the command line is valid")
+	return got
 }
 
 // cancelling is a standard output that cancels the command's context at its
@@ -149,56 +185,180 @@ func (c *cancelling) Write(data []byte) (int, error) {
 	return c.Buffer.Write(data)
 }
 
-// errFull is the error of every write to full.
-var errFull = errors.New("no space left on device")
+// unclosable is a file whose Close fails with errClose.
+type unclosable struct {
+	fs.File
+}
 
-// full is a standard output whose every write fails, as a write to a full
-// device does.
-type full struct{}
+// Close returns errClose.
+func (unclosable) Close() error {
+	return errClose
+}
 
-// Write writes nothing and returns errFull.
-func (full) Write([]byte) (int, error) { return 0, errFull }
+// admitsUpTo checks that admit is the admission of a budget of total bytes.
+// Runs of total bytes fit beside each other, and 1 byte more does not fit.
+// The context of the admissions has ended, so admit returns at once.
+func admitsUpTo(t *testing.T, admit func(context.Context, int64) (func(), bool), total int64) {
+	t.Helper()
+	assert.NotNil(t, admit, "the runs of the packages wait for an admission")
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	first, ok := admit(ctx, total-1)
+	assert.True(t, ok, "the first runs fit")
+	defer first()
+	second, ok := admit(ctx, 1)
+	assert.True(t, ok, "runs of the rest of the budget fit beside them")
+	defer second()
+	_, ok = admit(ctx, 1)
+	assert.False(t, ok, "runs of 1 byte more do not fit")
+}
 
 func TestCLI(t *testing.T) {
 	t.Parallel()
+
+	t.Run("app", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("declares the default of each option", func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, declared(t, nil), &options{Parallel: 1, Workers: 1, Packages: []string{currentPackage}},
+				"the command tests the current package with one worker at a time", assert.EquateEmpty())
+		})
+
+		t.Run("declares the flag of each option", func(t *testing.T) {
+			t.Parallel()
+			budget := size(16 << 30)
+			got := declared(t, nil,
+				flagPrefix+flagLines, "a.go:1-2", flagPrefix+flagLines, "b.go:3-3", flagPrefix+flagDiff, changeDiff,
+				flagPrefix+flagSample, "5", flagPrefix+flagIncludeGenerated, flagPrefix+flagSkip, "./kit",
+				flagPrefix+flagSuite, "./conformance", flagPrefix+flagConfirm, "-C", "dir", "-p", "2",
+				flagPrefix+flagWorkers, "3", flagPrefix+flagTimeout, "30m", flagPrefix+flagBudget, "16G",
+				flagPrefix+flagJSON, flagPrefix+flagRecord, "out", "./wire", "./codec",
+			)
+			assert.Equal(t, got, &options{
+				MemoryBudget: &budget,
+				Diff:         changeDiff,
+				Directory:    "dir",
+				Record:       "out",
+				Lines: []selection.Lines{
+					{Path: "a.go", First: 1, Last: 2},
+					{Path: "b.go", First: 3, Last: 3},
+				},
+				Skip:             []string{"./kit"},
+				Suite:            []string{"./conformance"},
+				Packages:         []string{"./wire", "./codec"},
+				Sample:           5,
+				Parallel:         2,
+				Workers:          3,
+				Timeout:          30 * time.Minute,
+				IncludeGenerated: true,
+				Confirm:          true,
+				JSON:             true,
+			}, "the options state the value of each flag")
+		})
+
+		t.Run("declares the environment variable of each option", func(t *testing.T) {
+			t.Parallel()
+			got := declared(t, map[string]string{optionVarPrefix + "WORKERS": "4", optionVarPrefix + "LIST": "true"})
+			expect.Equal(t, got.Workers, 4, "the variable of --workers sets the workers")
+			expect.True(t, got.List, "and the variable of --list the listing")
+		})
+	})
 
 	t.Run("main", func(t *testing.T) {
 		t.Parallel()
 
 		t.Run("writes the help to stdout and returns 0 for -h", func(t *testing.T) {
 			t.Parallel()
-			status, stdout, stderr := call("-h")
-			assert.Equal(t, status, exitDetected, "the help is no error")
-			assert.That(t, stdout).
-				HasPrefix(name+" measures how well the tests of Go packages detect faults.\n", "the help starts")
-			assert.Equal(t, stderr, "", "the help writes nothing to stderr")
+			res := call(t, "-h")
+			assert.Equal(t, res.Status, exitDetected, "the help is no error")
+			assert.That(t, res.Stdout).
+				HasPrefix("Usage: "+name+" [options] [PACKAGES...]\n\n"+summary+"\n", "the help starts")
+			assert.Equal(t, res.Stderr, "", "the help writes nothing to stderr")
 		})
 
-		t.Run("writes the error and a line on the help for a command line that is not valid", func(t *testing.T) {
+		t.Run("writes the error and a suggestion for a flag that is not defined", func(t *testing.T) {
 			t.Parallel()
-			status, stdout, stderr := call("-wokers", "2")
-			assert.Equal(t, status, exitInvalid, "the command line is not valid")
-			assert.Equal(t, stdout, "", "the command writes nothing to stdout")
-			assert.Equal(t, stderr, name+": flag provided but not defined: -wokers\n"+usageLine,
-				"the error is one line, and the pointer to the help another")
+			res := call(t, "--wokers", "2")
+			assert.Equal(t, res.Status, exitInvalid, "the command line is not valid")
+			assert.Equal(t, res.Stdout, "", "the command writes nothing to stdout")
+			assert.Equal(t, res.Stderr, name+": unknown flag --wokers (did you mean --workers?)\n",
+				"the error names the flag and the flag that the command declares")
 		})
 
-		t.Run("writes the versions and returns 0 for -version", func(t *testing.T) {
+		t.Run("writes the error with the variable that sets a number below its range", func(t *testing.T) {
 			t.Parallel()
-			status, stdout, _ := call("-" + flagVersion)
-			assert.Equal(t, status, exitDetected, "the versions are no error")
-			assert.ContainsInOrder(t, stdout, []string{name + " ", "\ncatalogue ", "\noverlay ", "\ntoolchain "},
+			c := &cli{every: time.Hour, now: time.Now}
+			vars := map[string]string{optionVarPrefix + "WORKERS": "0"}
+			res := clitest.Main(t.Context(), c.main, &clitest.Input{Vars: vars})
+			assert.Equal(t, res.Status, exitInvalid, "the variable is not valid")
+			assert.Equal(t, res.Stderr, name+`: invalid --workers "0" from env DOKIMI_MUTATE_GO_WORKERS: `+
+				"want a number of at least 1\n", "the error names the variable")
+		})
+
+		t.Run("writes the versions and returns 0 for --version", func(t *testing.T) {
+			t.Parallel()
+			res := call(t, flagPrefix+flagVersion)
+			assert.Equal(t, res.Status, exitDetected, "the versions are no error")
+			assert.ContainsInOrder(t, res.Stdout, []string{name + " ", "\ncatalogue ", "\noverlay ", "\ntoolchain "},
 				"the command states each version")
+		})
+
+		t.Run("returns 2 for a diff on standard input that does not read", func(t *testing.T) {
+			t.Parallel()
+			c := &cli{every: time.Hour, now: time.Now}
+			res := clitest.Main(t.Context(), c.main, &clitest.Input{
+				Args: []string{flagPrefix + flagDiff, stdinPath}, FailStdin: true,
+			})
+			assert.Equal(t, res.Status, exitInvalid, "the diff is not valid")
+			assert.Equal(t, res.Stderr, name+": "+flagPrefix+flagDiff+": "+clitest.ErrStdin.Error()+"\n",
+				"the error names the flag and the error of the read")
 		})
 
 		t.Run("returns 3 when standard output does not write", func(t *testing.T) {
 			t.Parallel()
-			var errs bytes.Buffer
-			c := &cli{stdin: strings.NewReader(""), stdout: full{}, stderr: &errs, every: time.Hour, now: time.Now}
-			status := c.main(t.Context(), []string{"-" + flagVersion})
-			assert.Equal(t, status, exitFailed, "the command could not write the versions")
-			assert.Equal(t, errs.String(), name+": standard output: "+errFull.Error()+"\n",
-				"the error names the stream and its error")
+			c := &cli{every: time.Hour, now: time.Now}
+			res := clitest.Main(t.Context(), c.main, &clitest.Input{
+				Args: []string{flagPrefix + flagVersion}, FailStdout: true,
+			})
+			assert.Equal(t, res.Status, exitFailed, "the command could not write the versions")
+			assert.Equal(t, res.Stderr, name+": cli: write the version: "+clitest.ErrStdout.Error()+"\n",
+				"the error names the output and its error")
+		})
+	})
+
+	t.Run("admission", func(t *testing.T) {
+		t.Parallel()
+		c := &cli{budget: 8, limit: 16}
+
+		t.Run("returns the default budget and its admission without --memory-budget", func(t *testing.T) {
+			t.Parallel()
+			bound, admit := c.admission(&options{})
+			assert.Equal(t, bound, int64(8), "the default budget bounds the ceilings and the workers")
+			admitsUpTo(t, admit, 8)
+		})
+
+		t.Run("returns the budget of --memory-budget and its admission", func(t *testing.T) {
+			t.Parallel()
+			budget := size(4)
+			bound, admit := c.admission(&options{MemoryBudget: &budget})
+			assert.Equal(t, bound, int64(4), "the budget of the flag bounds the ceilings and the workers")
+			admitsUpTo(t, admit, 4)
+		})
+
+		t.Run("returns the memory of the process and no admission for --memory-budget 0", func(t *testing.T) {
+			t.Parallel()
+			budget := size(0)
+			bound, admit := c.admission(&options{MemoryBudget: &budget})
+			assert.Equal(t, bound, int64(16), "the memory that the process may use bounds the ceilings and the workers")
+			assert.Nil(t, admit, "the runs of the packages start at once")
+		})
+
+		t.Run("returns the memory of the process and no admission without a default budget", func(t *testing.T) {
+			t.Parallel()
+			bound, admit := (&cli{limit: 16}).admission(&options{})
+			assert.Equal(t, bound, int64(16), "the memory that the process may use bounds the ceilings and the workers")
+			assert.Nil(t, admit, "the runs of the packages start at once")
 		})
 	})
 }
@@ -210,20 +370,20 @@ func TestCLIProcess(t *testing.T) {
 		t.Run("exits with the status of the command line of the process", func(t *testing.T) {
 			binary, err := os.Executable()
 			assert.NoError(t, err, "the test binary's path reads")
-			cmd := exec.CommandContext(t.Context(), binary, "-"+flagParallel, "0")
+			cmd := exec.CommandContext(t.Context(), binary, "-p", "0")
 			cmd.Env = append(os.Environ(), mainVar+"=1")
 			var stderr bytes.Buffer
 			cmd.Stderr = &stderr
 			exit := assert.ErrorAs[*exec.ExitError](t, cmd.Run(), "the process fails")
 			assert.Equal(t, exit.ExitCode(), exitInvalid, "the process exits with the command's status")
-			assert.Equal(t, stderr.String(), "dokimi-mutate-go: -p takes a number of at least 1\n"+usageLine,
-				"the process writes the command's error")
+			want := name + `: invalid --parallel "0" from flag --parallel: want a number of at least 1` + "\n"
+			assert.Equal(t, stderr.String(), want, "the process writes the command's error")
 		})
 
 		t.Run("states three quarters of the memory that the process may use as the default budget", func(t *testing.T) {
 			binary, err := os.Executable()
 			assert.NoError(t, err, "the test binary's path reads")
-			cmd := exec.CommandContext(t.Context(), binary, "-"+flagHelp)
+			cmd := exec.CommandContext(t.Context(), binary, flagPrefix+flagHelp)
 			cmd.Env = append(os.Environ(), mainVar+"=1")
 			out, err := cmd.Output()
 			assert.NoError(t, err, "the process writes the help and exits with the status 0")
@@ -240,128 +400,143 @@ func TestCLIEnv(t *testing.T) {
 	t.Run("main", func(t *testing.T) {
 		t.Run("prints the line of each undetected mutant when its verdict is final", func(t *testing.T) {
 			enter(t, arithFiles)
-			status, stdout, stderr := call()
-			assert.Equal(t, status, exitUndetected, "mutants survive")
-			assert.Equal(t, stdout, arithLines, "the lines follow the verdicts")
-			assert.Equal(t, stderr, "", "the run writes nothing to stderr")
+			res := call(t)
+			assert.Equal(t, res.Status, exitUndetected, "mutants survive")
+			assert.Equal(t, res.Stdout, arithLines, "the lines follow the verdicts")
+			assert.Equal(t, res.Stderr, "", "the run writes nothing to stderr")
 		})
 
 		t.Run("returns 0 when the tests detect every mutant", func(t *testing.T) {
 			enter(t, addFiles)
-			status, stdout, stderr := call("-"+flagWorkers, "2")
-			assert.Equal(t, status, exitDetected, "every mutant is killed")
-			assert.Equal(t, stdout, addKilled, "the summary states the run")
-			assert.Equal(t, stderr, "", "the run writes nothing to stderr")
+			res := call(t, flagPrefix+flagWorkers, "2")
+			assert.Equal(t, res.Status, exitDetected, "every mutant is killed")
+			assert.Equal(t, res.Stdout, addKilled, "the summary states the run")
+			assert.Equal(t, res.Stderr, "", "the run writes nothing to stderr")
 		})
 
 		t.Run("returns 3 when the record of a run does not write to standard output", func(t *testing.T) {
 			enter(t, addFiles)
-			var errs bytes.Buffer
-			c := &cli{stdin: strings.NewReader(""), stdout: full{}, stderr: &errs, every: time.Hour, now: time.Now}
-			status := c.main(t.Context(), []string{"-" + flagJSON})
-			assert.Equal(t, status, exitFailed, "every mutant is killed, and the command could not write the record")
-			assert.Equal(t, errs.String(), name+": standard output: "+errFull.Error()+"\n",
+			c := &cli{every: time.Hour, now: time.Now}
+			res := clitest.Main(t.Context(), c.main, &clitest.Input{
+				Args: []string{flagPrefix + flagJSON}, Vars: environ(), FailStdout: true,
+			})
+			assert.Equal(t, res.Status, exitFailed, "every mutant is killed, and the record does not write")
+			assert.Equal(t, res.Stderr, name+": standard output: "+clitest.ErrStdout.Error()+"\n",
 				"the error names the stream and its error")
 		})
 
 		t.Run("tests the packages in the directory of -C", func(t *testing.T) {
 			dir := module(t, arithFiles)
 			t.Chdir(t.TempDir())
-			status, stdout, _ := call("-"+flagDir, dir)
-			assert.Equal(t, status, exitUndetected, "mutants survive")
-			assert.Equal(t, stdout, arithLines, "the paths are relative to the directory of -C")
+			res := call(t, "-C", dir)
+			assert.Equal(t, res.Status, exitUndetected, "mutants survive")
+			assert.Equal(t, res.Stdout, arithLines, "the paths are relative to the directory of -C")
 		})
 
 		t.Run("returns 2 for a directory of -C that does not exist", func(t *testing.T) {
 			t.Chdir(t.TempDir())
-			status, _, stderr := call("-"+flagDir, "missing")
-			assert.Equal(t, status, exitInvalid, "the input is not valid")
-			assert.HasPrefix(t, stderr, name+": -C: chdir missing: ", "the error names the directory")
+			res := call(t, "-C", "missing")
+			assert.Equal(t, res.Status, exitInvalid, "the input is not valid")
+			assert.HasPrefix(t, res.Stderr, name+": "+flagPrefix+flagDirectory+": chdir missing: ",
+				"the error names the directory")
 		})
 
-		t.Run("confirms each survivor in its ordinary build under -confirm", func(t *testing.T) {
+		t.Run("confirms each survivor in its ordinary build under --confirm", func(t *testing.T) {
 			// TestSub checks Sub only in an ordinary build, so the
 			// confirmation kills both of Sub's survivors.
 			enter(t, arithFiles)
 			t.Setenv(ordinaryVar, "1")
-			status, stdout, stderr := call("-" + flagConfirm)
-			assert.Equal(t, status, exitUndetected, "the mutants without coverage remain")
-			assert.Equal(t, stdout, "arith.go:7:26: not covered: return x * 2 became return 0 (sbr-zero)\n"+
+			res := call(t, flagPrefix+flagConfirm)
+			assert.Equal(t, res.Status, exitUndetected, "the mutants without coverage remain")
+			assert.Equal(t, res.Stdout, "arith.go:7:26: not covered: return x * 2 became return 0 (sbr-zero)\n"+
 				"arith.go:7:33: not covered: x * 2 became x / 2 (aor)\n"+
 				"fixture: 4 of 6 mutants detected (66%): 4 killed, 2 not covered\n", "the confirmations kill Sub's")
-			assert.Equal(t, stderr, "", "the run writes nothing to stderr")
+			assert.Equal(t, res.Stderr, "", "the run writes nothing to stderr")
 		})
 
-		t.Run("tests the lines of -lines", func(t *testing.T) {
+		t.Run("tests the lines of --lines", func(t *testing.T) {
 			enter(t, arithFiles)
-			status, stdout, _ := call("-"+flagLines, "arith.go:5-5", "-"+flagLines, "arith.go:6-6")
-			assert.Equal(t, status, exitUndetected, "Sub's mutants survive")
-			assert.Equal(t, stdout, "arith.go:5:26: survived: return a - b became return 0 (sbr-zero)\n"+
+			res := call(t, flagPrefix+flagLines, "arith.go:5-5", flagPrefix+flagLines, "arith.go:6-6")
+			assert.Equal(t, res.Status, exitUndetected, "Sub's mutants survive")
+			assert.Equal(t, res.Stdout, "arith.go:5:26: survived: return a - b became return 0 (sbr-zero)\n"+
 				"arith.go:5:33: survived: a - b became a + b (aor)\n"+
 				"fixture: 0 of 2 mutants detected (0%): 2 survived, 4 not selected\n", "the run tests Sub alone")
 		})
 
-		t.Run("resolves the paths of -lines in the directory of -C", func(t *testing.T) {
+		t.Run("resolves the paths of --lines in the directory of -C", func(t *testing.T) {
 			dir := module(t, arithFiles)
 			t.Chdir(t.TempDir())
-			status, stdout, _ := call("-"+flagDir, dir, "-"+flagLines, "arith.go:5-6")
-			assert.Equal(t, status, exitUndetected, "Sub's mutants survive")
-			assert.Equal(t, stdout, "arith.go:5:26: survived: return a - b became return 0 (sbr-zero)\n"+
+			res := call(t, "-C", dir, flagPrefix+flagLines, "arith.go:5-6")
+			assert.Equal(t, res.Status, exitUndetected, "Sub's mutants survive")
+			assert.Equal(t, res.Stdout, "arith.go:5:26: survived: return a - b became return 0 (sbr-zero)\n"+
 				"arith.go:5:33: survived: a - b became a + b (aor)\n"+
 				"fixture: 0 of 2 mutants detected (0%): 2 survived, 4 not selected\n",
 				"the entry names the file in the directory of -C")
 		})
 
-		t.Run("tests the lines that the diff of -diff changes", func(t *testing.T) {
-			dir := enter(t, arithFiles)
+		t.Run("tests the lines that the diff of --diff changes", func(t *testing.T) {
+			enter(t, arithFiles)
 			diff := "--- a/arith.go\n+++ b/arith.go\n@@ -5 +5 @@\n" +
 				"-func Sub(a, b int) int { return b - a }\n+func Sub(a, b int) int { return a - b }\n"
-			assert.NoError(
-				t,
-				os.WriteFile(filepath.Join(dir, "change.diff"), []byte(diff), fileMode),
-				"the diff writes",
-			)
-			status, stdout, stderr := call("-"+flagDiff, "change.diff")
-			assert.Equal(t, status, exitUndetected, "Sub's mutants survive")
-			assert.Equal(t, stdout, "arith.go:5:26: survived: return a - b became return 0 (sbr-zero)\n"+
+			c := &cli{every: time.Hour, now: time.Now}
+			res := clitest.Main(t.Context(), c.main, &clitest.Input{
+				Args: []string{flagPrefix + flagDiff, changeDiff}, Vars: environ(),
+				Files: clitest.Files{changeDiff: diff},
+			})
+			assert.Equal(t, res.Status, exitUndetected, "Sub's mutants survive")
+			assert.Equal(t, res.Stdout, "arith.go:5:26: survived: return a - b became return 0 (sbr-zero)\n"+
 				"arith.go:5:33: survived: a - b became a + b (aor)\n"+
 				"fixture: 0 of 2 mutants detected (0%): 2 survived, 4 not selected\n", "the run tests the changed line")
-			assert.Equal(t, stderr, "", "the run writes nothing to stderr")
+			assert.Equal(t, res.Stderr, "", "the run writes nothing to stderr")
 		})
 
 		t.Run("tests no mutant for an empty diff on standard input", func(t *testing.T) {
 			enter(t, arithFiles)
-			status, stdout, stderr := call("-"+flagDiff, stdinPath)
-			assert.Equal(t, status, exitDetected, "a run without a mutant passes")
-			assert.Equal(t, stdout, "fixture: no mutant to detect: 6 not selected\n", "no line is selected")
-			assert.Equal(t, stderr, "", "the run writes nothing to stderr")
+			res := call(t, flagPrefix+flagDiff, stdinPath)
+			assert.Equal(t, res.Status, exitDetected, "a run without a mutant passes")
+			assert.Equal(t, res.Stdout, "fixture: no mutant to detect: 6 not selected\n", "no line is selected")
+			assert.Equal(t, res.Stderr, "", "the run writes nothing to stderr")
 		})
 
 		t.Run("returns 2 for a diff that does not read or does not match the files", func(t *testing.T) {
-			dir := enter(t, arithFiles)
+			enter(t, arithFiles)
 			stale := "+++ b/arith.go\n@@ -5 +5 @@\n-func Sub(a, b int) int { return a - b }\n" +
 				"+func Sub(a, b int) int { return b - a }\n"
-			assert.NoError(
-				t,
-				os.WriteFile(filepath.Join(dir, "stale.diff"), []byte(stale), fileMode),
-				"the diff writes",
-			)
 			arithPath, err := filepath.Abs(arithFile)
 			assert.NoError(t, err, "the file's path resolves")
+			missing := &fs.PathError{Op: "open", Path: missingDiff, Err: fs.ErrNotExist}
 			tests := []struct{ give, want string }{
-				{"missing.diff", name + ": -diff: open missing.diff: no such file or directory\n"},
-				{"stale.diff", name + ": -diff: selection: the diff states line 5 of " + arithPath +
-					" otherwise than the file, so it is out of date\n"},
+				{missingDiff, name + ": " + flagPrefix + flagDiff + ": " + missing.Error() + "\n"},
+				{staleDiff, name + ": " + flagPrefix + flagDiff + ": selection: the diff states line 5 of " +
+					arithPath + " otherwise than the file, so it is out of date\n"},
 			}
 			for _, tt := range tests {
-				status, stdout, stderr := call("-"+flagDiff, tt.give)
-				assert.Equal(t, status, exitInvalid, "the diff is not valid")
-				assert.Equal(t, stdout, "", "no package runs")
-				assert.Equal(t, stderr, tt.want, "the error states the diff's problem")
+				c := &cli{every: time.Hour, now: time.Now}
+				res := clitest.Main(t.Context(), c.main, &clitest.Input{
+					Args: []string{flagPrefix + flagDiff, tt.give}, Vars: environ(),
+					Files: clitest.Files{staleDiff: stale},
+				})
+				assert.Equal(t, res.Status, exitInvalid, "the diff is not valid")
+				assert.Equal(t, res.Stdout, "", "no package runs")
+				assert.Equal(t, res.Stderr, tt.want, "the error states the diff's problem")
 			}
 		})
 
-		t.Run("counts the tests of the packages of -suite", func(t *testing.T) {
+		t.Run("returns 2 for a diff whose file does not close", func(t *testing.T) {
+			enter(t, arithFiles)
+			diff, err := fstest.MapFS{changeDiff: {}}.Open(changeDiff)
+			assert.NoError(t, err, "the diff opens")
+			env, out := clitest.NewEnv(&clitest.Input{
+				Args: []string{flagPrefix + flagDiff, changeDiff}, Vars: environ(),
+			})
+			env.Open = func(string) (fs.File, error) { return unclosable{diff}, nil }
+			c := &cli{every: time.Hour, now: time.Now}
+			assert.Equal(t, c.main(t.Context(), env), exitInvalid, "the diff is not valid")
+			assert.Equal(t, out.Stderr(), name+": "+flagPrefix+flagDiff+": "+errClose.Error()+"\n",
+				"the error names the flag and the error of the close")
+		})
+
+		t.Run("counts the tests of the packages of --suite", func(t *testing.T) {
 			dir := enter(t, with(arithFiles, map[string]string{
 				"check/check.go": "package check\n",
 				"check/check_test.go": "package check\n\nimport (\n\t\"testing\"\n\n\t\"fixture\"\n)\n\n" +
@@ -370,57 +545,56 @@ func TestCLIEnv(t *testing.T) {
 			// The working directory is a symbolic link to the module, and each
 			// run resolves the suite in the package's directory, which go list
 			// states without the link.
-			link := filepath.Join(t.TempDir(), "link")
-			assert.NoError(t, os.Symlink(dir, link), "the link is made")
-			t.Chdir(link)
-			status, stdout, _ := call("-"+flagSuite, "./check", "-"+flagSuite, "fixture/missing/...")
-			assert.Equal(t, status, exitUndetected, "the mutants without coverage remain")
-			assert.Equal(t, stdout, "arith.go:7:26: not covered: return x * 2 became return 0 (sbr-zero)\n"+
+			links := files.Workspace(t, files.Tree{"link": files.Link(filepath.ToSlash(dir))})
+			t.Chdir(filepath.Join(links, "link"))
+			res := call(t, flagPrefix+flagSuite, "./check", flagPrefix+flagSuite, "fixture/missing/...")
+			assert.Equal(t, res.Status, exitUndetected, "the mutants without coverage remain")
+			assert.Equal(t, res.Stdout, "arith.go:7:26: not covered: return x * 2 became return 0 (sbr-zero)\n"+
 				"arith.go:7:33: not covered: x * 2 became x / 2 (aor)\n"+
 				"fixture: 4 of 6 mutants detected (66%): 4 killed, 2 not covered\n", "the suite kills Sub's mutants")
 		})
 
-		t.Run("tests no mutant of the packages that -skip names", func(t *testing.T) {
+		t.Run("tests no mutant of the packages that --skip names", func(t *testing.T) {
 			enter(t, twoPackages)
-			status, stdout, stderr := call("-"+flagSkip, "./sub", "./...")
-			assert.Equal(t, status, exitDetected, "the package that runs passes")
-			assert.Equal(t, stdout, addKilled+"fixture/sub: no mutant to detect: 2 not selected\n",
-				"the summary of the package of -skip counts its mutants as not selected")
-			assert.Equal(t, stderr, "", "the runs write nothing to stderr")
+			res := call(t, flagPrefix+flagSkip, "./sub", "./...")
+			assert.Equal(t, res.Status, exitDetected, "the package that runs passes")
+			assert.Equal(t, res.Stdout, addKilled+"fixture/sub: no mutant to detect: 2 not selected\n",
+				"the summary of the package of --skip counts its mutants as not selected")
+			assert.Equal(t, res.Stderr, "", "the runs write nothing to stderr")
 		})
 
 		t.Run("tests every package that the patterns name and writes their records", func(t *testing.T) {
 			enter(t, twoPackages)
 			records := t.TempDir()
-			status, stdout, stderr := call("-"+flagParallel, "2", "-"+flagRecord, records, "./...")
-			assert.Equal(t, status, exitDetected, "both packages pass")
-			assert.Permutation(t, strings.Split(strings.TrimSpace(stdout), "\n"),
+			res := call(t, "-p", "2", flagPrefix+flagRecord, records, "./...")
+			assert.Equal(t, res.Status, exitDetected, "both packages pass")
+			assert.Permutation(t, strings.Split(strings.TrimSpace(res.Stdout), "\n"),
 				[]string{"fixture/sub: 2 of 2 mutants detected (100%): 2 killed", strings.TrimSpace(addKilled)},
 				"each package has its summary")
-			assert.Equal(t, stderr, "", "the runs write nothing to stderr")
+			assert.Equal(t, res.Stderr, "", "the runs write nothing to stderr")
 			for _, file := range []string{record.FileName(fixture), record.FileName(fixture + "/sub")} {
 				_, err := os.Stat(filepath.Join(records, file))
 				assert.NoError(t, err, "each package's record exists")
 			}
 		})
 
-		t.Run("tests the packages within the memory of -memory-budget", func(t *testing.T) {
+		t.Run("tests the packages within the memory of --memory-budget", func(t *testing.T) {
 			// One byte admits the runs of one package at a time, and 0 sets no
 			// budget. Both runs test both packages.
 			for _, budget := range []string{"1", "0"} {
 				enter(t, twoPackages)
-				status, stdout, stderr := call("-"+flagParallel, "2", "-"+flagBudget, budget, "./...")
-				assert.Equal(t, status, exitDetected, "both packages pass")
-				assert.Length(t, strings.Split(strings.TrimSpace(stdout), "\n"), 2, "each package has its summary")
-				assert.Equal(t, stderr, "", "the runs write nothing to stderr")
+				res := call(t, "-p", "2", flagPrefix+flagBudget, budget, "./...")
+				assert.Equal(t, res.Status, exitDetected, "both packages pass")
+				assert.Length(t, strings.Split(strings.TrimSpace(res.Stdout), "\n"), 2, "each package has its summary")
+				assert.Equal(t, res.Stderr, "", "the runs write nothing to stderr")
 			}
 		})
 
-		t.Run("caps each memory ceiling at the budget of -memory-budget", func(t *testing.T) {
+		t.Run("caps each memory ceiling at the budget of --memory-budget", func(t *testing.T) {
 			if runtime.GOOS != "linux" {
 				t.Skip("the engine applies a memory ceiling on Linux alone")
 			}
-			assert.Equal(t, ceiling(t, 0, "-"+flagBudget, cappedText), cappedBytes,
+			assert.Equal(t, ceiling(t, 0, flagPrefix+flagBudget, cappedText), cappedBytes,
 				"the ceiling is the budget, which is below the protocol's factor times the peak")
 		})
 
@@ -428,18 +602,18 @@ func TestCLIEnv(t *testing.T) {
 			if runtime.GOOS != "linux" {
 				t.Skip("the engine applies a memory ceiling on Linux alone")
 			}
-			assert.Equal(t, ceiling(t, cappedBytes, "-"+flagBudget, "0"), cappedBytes,
+			assert.Equal(t, ceiling(t, cappedBytes, flagPrefix+flagBudget, "0"), cappedBytes,
 				"the ceiling is the memory that the process may use")
 		})
 
-		t.Run("returns the status of the sample under -sample", func(t *testing.T) {
+		t.Run("returns the status of the sample under --sample", func(t *testing.T) {
 			enter(t, arithFiles)
-			status, stdout, stderr := call("-"+flagSample, "2")
-			assert.Equal(t, status, exitUndetected, "the sample's status is the status of its mutants")
-			assert.Contains(t, stdout, "fixture: 2 of a sample of ", "the summary states the sample")
+			res := call(t, flagPrefix+flagSample, "2")
+			assert.Equal(t, res.Status, exitUndetected, "the sample's status is the status of its mutants")
+			assert.Contains(t, res.Stdout, "fixture: 2 of a sample of ", "the summary states the sample")
 			assert.HasSuffix(
 				t,
-				stderr,
+				res.Stderr,
 				name+": fixture: 2 mutants did not run: the caller limits the run to 2 mutants\n",
 				"the note states the mutants beyond the sample",
 			)
@@ -460,64 +634,64 @@ func TestCLIEnv(t *testing.T) {
 			first := max(1, (threads+1)/2)
 			t.Setenv(expectedProcsVar, strconv.Itoa(max(1, first/2)))
 			t.Setenv(subProcsVar, strconv.Itoa(max(1, max(1, threads-first)/2)))
-			status, stdout, stderr := call("-"+flagParallel, "2", "-"+flagWorkers, "2", "./...")
-			assert.Equal(t, status, exitDetected, "each run has the expected threads")
-			assert.Length(t, strings.Split(strings.TrimSpace(stdout), "\n"), 2, "each package has its summary")
-			assert.Equal(t, stderr, "", "the runs write nothing to stderr")
+			res := call(t, "-p", "2", flagPrefix+flagWorkers, "2", "./...")
+			assert.Equal(t, res.Status, exitDetected, "each run has the expected threads")
+			assert.Length(t, strings.Split(strings.TrimSpace(res.Stdout), "\n"), 2, "each package has its summary")
+			assert.Equal(t, res.Stderr, "", "the runs write nothing to stderr")
 		})
 
-		t.Run("sizes the shares of the packages by their mutants under -p", func(t *testing.T) {
+		t.Run("sizes the shares of the packages by their mutants under --parallel", func(t *testing.T) {
 			useThreads(t, shareThreads)
 			enter(t, map[string]string{addFile: add, addTestFile: procsTest, trioFile: trio, trioTestFile: trioTest})
 			t.Setenv(expectedProcsVar, addShare)
 			t.Setenv(subProcsVar, trioShare)
-			status, stdout, stderr := call("-"+flagParallel, "2", "./...")
-			assert.Equal(t, status, exitDetected, "each package's binary runs with the share of its mutants")
-			assert.Length(t, strings.Split(strings.TrimSpace(stdout), "\n"), 2, "each package has its summary")
-			assert.Equal(t, stderr, "", "the runs write nothing to stderr")
+			res := call(t, flagPrefix+flagParallel, "2", "./...")
+			assert.Equal(t, res.Status, exitDetected, "each package's binary runs with the share of its mutants")
+			assert.Length(t, strings.Split(strings.TrimSpace(res.Stdout), "\n"), 2, "each package has its summary")
+			assert.Equal(t, res.Stderr, "", "the runs write nothing to stderr")
 		})
 
-		t.Run("tests the packages in the order of go list without -p", func(t *testing.T) {
+		t.Run("tests the packages in the order of go list without --parallel", func(t *testing.T) {
 			enter(t, map[string]string{addFile: add, addTestFile: addTest, trioFile: trio, trioTestFile: trioTest})
-			status, stdout, stderr := call("./...")
-			assert.Equal(t, status, exitDetected, "both packages pass")
-			assert.Equal(t, stdout, addKilled+"fixture/sub: 6 of 6 mutants detected (100%): 6 killed\n",
+			res := call(t, "./...")
+			assert.Equal(t, res.Status, exitDetected, "both packages pass")
+			assert.Equal(t, res.Stdout, addKilled+"fixture/sub: 6 of 6 mutants detected (100%): 6 killed\n",
 				"the package of 2 mutants runs before the package of 6")
-			assert.Equal(t, stderr, "", "the runs write nothing to stderr")
+			assert.Equal(t, res.Stderr, "", "the runs write nothing to stderr")
 		})
 
-		t.Run("writes each package's record as one line of JSON under -json", func(t *testing.T) {
+		t.Run("writes each package's record as one line of JSON under --json", func(t *testing.T) {
 			enter(t, addFiles)
-			status, stdout, stderr := call("-" + flagJSON)
-			assert.Equal(t, status, exitDetected, "the run passes")
-			assert.Equal(t, strings.Count(stdout, "\n"), 1, "the record is one line")
+			res := call(t, flagPrefix+flagJSON)
+			assert.Equal(t, res.Status, exitDetected, "the run passes")
+			assert.Equal(t, strings.Count(res.Stdout, "\n"), 1, "the record is one line")
 			var rec record.Record
-			assert.NoError(t, json.Unmarshal([]byte(stdout), &rec), "the line is a record")
+			assert.NoError(t, json.Unmarshal([]byte(res.Stdout), &rec), "the line is a record")
 			assert.Equal(t, rec.Target.Name, fixture, "the record states the package")
 			assert.Equal(t, rec.Score, new(1.0), "and its score")
-			assert.Equal(t, stderr, "", "the run writes nothing to stderr")
+			assert.Equal(t, res.Stderr, "", "the run writes nothing to stderr")
 		})
 
-		t.Run("lists the mutants of each package and runs no test under -list", func(t *testing.T) {
+		t.Run("lists the mutants of each package and runs no test under --list", func(t *testing.T) {
 			enter(t, arithFiles)
 			t.Setenv(failVar, "1")
-			status, stdout, stderr := call("-" + flagList)
-			assert.Equal(t, status, exitDetected, "a listing of a package whose tests fail passes")
-			assert.Equal(t, stdout, "arith.go:3:26: to test: return a + b becomes return 0 (sbr-zero)\n"+
+			res := call(t, flagPrefix+flagList)
+			assert.Equal(t, res.Status, exitDetected, "a listing of a package whose tests fail passes")
+			assert.Equal(t, res.Stdout, "arith.go:3:26: to test: return a + b becomes return 0 (sbr-zero)\n"+
 				"arith.go:3:33: to test: a + b becomes a - b (aor)\n"+
 				"arith.go:5:26: to test: return a - b becomes return 0 (sbr-zero)\n"+
 				"arith.go:5:33: to test: a - b becomes a + b (aor)\n"+
 				"arith.go:7:26: to test: return x * 2 becomes return 0 (sbr-zero)\n"+
 				"arith.go:7:33: to test: x * 2 becomes x / 2 (aor)\n"+
 				"fixture: 6 mutants to test\n", "the listing states each mutant")
-			assert.Equal(t, stderr, "", "the listing writes nothing to stderr")
+			assert.Equal(t, res.Stderr, "", "the listing writes nothing to stderr")
 		})
 
-		t.Run("tests the mutants of the generated files under -include-generated", func(t *testing.T) {
+		t.Run("tests the mutants of the generated files under --include-generated", func(t *testing.T) {
 			enter(t, map[string]string{"gen.go": generatedFile, "gen_test.go": generatedTest})
-			status, stdout, _ := call("-" + flagIncludeGenerated)
-			assert.Equal(t, status, exitDetected, "the test detects the generated file's mutants")
-			assert.Equal(t, stdout,
+			res := call(t, flagPrefix+flagIncludeGenerated)
+			assert.Equal(t, res.Status, exitDetected, "the test detects the generated file's mutants")
+			assert.Equal(t, res.Stdout,
 				"fixture: 2 of 2 mutants detected (100%): 2 killed, 1 generated file with 2 mutants included\n",
 				"the summary states the included file")
 		})
@@ -527,10 +701,10 @@ func TestCLIEnv(t *testing.T) {
 			func(t *testing.T) {
 				enter(t, arithFiles)
 				t.Setenv(failVar, "1")
-				status, stdout, stderr := call()
-				assert.Equal(t, status, exitFailed, "the opening control run fails")
-				assert.Equal(t, stdout, "fixture: the run failed: 6 not run\n", "the summary states the failure")
-				assert.That(t, stderr).
+				res := call(t)
+				assert.Equal(t, res.Status, exitFailed, "the opening control run fails")
+				assert.Equal(t, res.Stdout, "fixture: the run failed: 6 not run\n", "the summary states the failure")
+				assert.That(t, res.Stderr).
 					HasPrefix(name+": fixture: control-failed: the tests fail with no mutant active: TestAdd failed\n",
 						"the note states the run error").
 					HasSuffix("\n"+name+": fixture: 6 mutants did not run: the opening control run failed\n",
@@ -538,21 +712,21 @@ func TestCLIEnv(t *testing.T) {
 			},
 		)
 
-		t.Run("starts no package after -timeout", func(t *testing.T) {
+		t.Run("starts no package after --timeout", func(t *testing.T) {
 			enter(t, addFiles)
-			status, stdout, stderr := call("-"+flagTimeout, "1ns")
-			assert.Equal(t, status, exitFailed, "the package does not start")
-			assert.Equal(t, stdout, "", "no package runs")
-			assert.Equal(t, stderr, name+": fixture: not tested, because -timeout passed before the package started\n",
-				"the note states why")
+			res := call(t, flagPrefix+flagTimeout, "1ns")
+			assert.Equal(t, res.Status, exitFailed, "the package does not start")
+			assert.Equal(t, res.Stdout, "", "no package runs")
+			assert.Equal(t, res.Stderr, name+": fixture: not tested, because "+flagPrefix+flagTimeout+
+				" passed before the package started\n", "the note states why")
 		})
 
-		t.Run("starts no mutant that would not end before -timeout", func(t *testing.T) {
+		t.Run("starts no mutant that would not end before --timeout", func(t *testing.T) {
 			enter(t, addFiles)
-			status, stdout, stderr := call("-"+flagTimeout, "3s")
-			assert.Equal(t, status, exitFailed, "the mutants do not start")
-			assert.Equal(t, stdout, "fixture: the run failed: 2 not run\n", "the summary states the failure")
-			assert.HasPrefix(t, stderr,
+			res := call(t, flagPrefix+flagTimeout, "3s")
+			assert.Equal(t, res.Status, exitFailed, "the mutants do not start")
+			assert.Equal(t, res.Stdout, "fixture: the run failed: 2 not run\n", "the summary states the failure")
+			assert.HasPrefix(t, res.Stderr,
 				name+": fixture: 2 mutants did not run: the caller's deadline leaves too little time for the ",
 				"the note states why")
 		})
@@ -563,8 +737,16 @@ func TestCLIEnv(t *testing.T) {
 			defer cancel()
 			out := &cancelling{cancel: cancel}
 			var errs bytes.Buffer
-			c := &cli{stdin: strings.NewReader(""), stdout: out, stderr: &errs, every: time.Hour, now: time.Now}
-			status := c.main(ctx, []string{"./..."})
+			vars := environ()
+			env := &gocli.Env{
+				Args:    []string{"./..."},
+				Lookup:  gocli.Vars(vars),
+				Environ: gocli.Environ(vars),
+				Stdout:  out,
+				Stderr:  &errs,
+			}
+			c := &cli{every: time.Hour, now: time.Now}
+			status := c.main(ctx, env)
 			assert.Equal(t, status, exitFailed, "the interrupted package fails")
 			assert.Equal(t, out.String(), addKilled, "the first package runs")
 			assert.Equal(t, errs.String(), name+": fixture/sub: not tested, because the command was interrupted\n",
@@ -579,20 +761,16 @@ func TestCLIEnv(t *testing.T) {
 				addTestFile: "package fixture\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\nfunc TestAdd(t *testing.T) {\n" +
 					"\ttime.Sleep(200 * time.Millisecond)\n\tif Add(2, 3) != 5 {\n\t\tt.Error(\"Add(2, 3) != 5\")\n\t}\n}\n",
 			})
-			var out, errs bytes.Buffer
-			c := &cli{
-				stdin: strings.NewReader(""), stdout: &out, stderr: &errs, every: 10 * time.Millisecond,
-				now: time.Now,
-			}
-			status := c.main(t.Context(), nil)
-			assert.Equal(t, status, exitDetected, "the run passes")
-			lines := strings.Split(strings.TrimSuffix(errs.String(), "\n"), "\n")
+			c := &cli{every: 10 * time.Millisecond, now: time.Now}
+			res := clitest.Main(t.Context(), c.main, &clitest.Input{Vars: environ()})
+			assert.Equal(t, res.Status, exitDetected, "the run passes")
+			lines := strings.Split(strings.TrimSuffix(res.Stderr, "\n"), "\n")
 			progress := regexp.MustCompile(`^` + name + `: fixture: (running|[0-2] of 2 mutants done, 0 undetected, ` +
 				`[0-9]+\.[0-9] mutants a second, about [0-9hms.]+ left)$`)
 			assert.False(t, slices.ContainsFunc(lines, func(l string) bool { return !progress.MatchString(l) }),
 				"stderr contains progress lines alone")
 			assert.Equal(t, lines[0], name+": fixture: running", "the first line precedes the first verdict")
-			assert.Contains(t, errs.String(), "\n"+name+": fixture: 1 of 2 mutants done, 0 undetected, ",
+			assert.Contains(t, res.Stderr, "\n"+name+": fixture: 1 of 2 mutants done, 0 undetected, ",
 				"a later line states the mutants done")
 		})
 
@@ -607,24 +785,26 @@ func TestCLIEnv(t *testing.T) {
 				enter(t, map[string]string{addFile: add})
 				return []string{"./missing"}
 			}, exitInvalid, name + ": ./missing: "},
-			{"returns 2 for a pattern of -suite that names no package", func(t *testing.T) []string {
+			{"returns 2 for a pattern of --suite that names no package", func(t *testing.T) []string {
 				t.Helper()
 				enter(t, addFiles)
-				return []string{"-" + flagSuite, "./missing"}
-			}, exitInvalid, name + ": -suite: ./missing: "},
-			{"returns 2 for a pattern of -skip that names no package", func(t *testing.T) []string {
+				return []string{flagPrefix + flagSuite, "./missing"}
+			}, exitInvalid, name + ": " + flagPrefix + flagSuite + ": ./missing: "},
+			{"returns 2 for a pattern of --skip that names no package", func(t *testing.T) []string {
 				t.Helper()
 				enter(t, addFiles)
-				return []string{"-" + flagSkip, "./missing"}
-			}, exitInvalid, name + ": -skip: ./missing: "},
+				return []string{flagPrefix + flagSkip, "./missing"}
+			}, exitInvalid, name + ": " + flagPrefix + flagSkip + ": ./missing: "},
 			{"returns 2 for a go list that fails", func(t *testing.T) []string {
 				t.Helper()
+				enter(t, addFiles)
 				t.Setenv(pathVar, fakeGoDir+string(filepath.ListSeparator)+os.Getenv(pathVar))
 				t.Setenv(fakeVar, fakeFail)
 				return nil
 			}, exitInvalid, name + ": go list -e -json=ImportPath,Dir,Error,DepsErrors .: exit status 1\nno list today"},
 			{"returns 2 for a go list that prints no JSON", func(t *testing.T) []string {
 				t.Helper()
+				enter(t, addFiles)
 				t.Setenv(pathVar, fakeGoDir+string(filepath.ListSeparator)+os.Getenv(pathVar))
 				return nil
 			}, exitInvalid, name + ": go list: invalid character"},
@@ -636,20 +816,23 @@ func TestCLIEnv(t *testing.T) {
 			{"returns 3 for a run that cannot make its work directory", func(t *testing.T) []string {
 				t.Helper()
 				enter(t, addFiles)
-				t.Setenv(tmpVar, filepath.Join(t.TempDir(), "missing"))
+				missing := filepath.Join(t.TempDir(), "missing")
+				for _, variable := range tempVars {
+					t.Setenv(variable, missing)
+				}
 				return nil
 			}, exitFailed, name + ": fixture: run: "},
 			{"returns 3 for a record that cannot be written", func(t *testing.T) []string {
 				t.Helper()
 				dir := enter(t, addFiles)
-				return []string{"-" + flagRecord, filepath.Join(dir, addFile)}
+				return []string{flagPrefix + flagRecord, filepath.Join(dir, addFile)}
 			}, exitFailed, name + ": record: "},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				status, _, stderr := call(tt.setup(t)...)
-				assert.Equal(t, status, tt.status, "the exit status states the class of the failure")
-				assert.Contains(t, stderr, tt.want, "the error states the failure")
+				res := call(t, tt.setup(t)...)
+				assert.Equal(t, res.Status, tt.status, "the exit status states the class of the failure")
+				assert.Contains(t, res.Stderr, tt.want, "the error states the failure")
 			})
 		}
 	})
