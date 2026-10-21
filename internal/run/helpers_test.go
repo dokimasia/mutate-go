@@ -69,7 +69,7 @@ const (
 // whose argument matches slowBuildVar's pattern, and ordinaryOutput is the
 // pattern of the output of an ordinary control run's build.
 const (
-	slowBuild      = 10 * time.Second
+	slowBuild      = 20 * time.Second
 	ordinaryOutput = "*/ordinary/*"
 )
 
@@ -677,20 +677,25 @@ func cancelInPhase(t *testing.T, phase string, cfg run.Config) *record.Record {
 	return cancelAt(t, module(t, map[string]string{addFile: add, addTestFile: blocker}), cfg, marker)
 }
 
-// traceRemover returns a test main of the package pkg that removes the
+// traceTruncator returns a test main of the package pkg that empties the
 // trace file before the tests run, so the trace lacks the instrumentation's
-// start mark.
-func traceRemover(pkg string) string {
+// start mark. The instrumented package has the trace open while the tests
+// run, and Windows does not remove an open file.
+func traceTruncator(pkg string) string {
 	return fmt.Sprintf(`package %s
 
 import (
+	"fmt"
 	"os"
 	"testing"
 )
 
 func TestMain(m *testing.M) {
 	if trace := os.Getenv(%q); trace != "" {
-		_ = os.Remove(trace)
+		if err := os.Truncate(trace, 0); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 	os.Exit(m.Run())
 }

@@ -400,7 +400,7 @@ func TestControl(t *testing.T) {
 
 		t.Run("states not-instrumented when the trace lacks the start mark", func(t *testing.T) {
 			t.Parallel()
-			dir := module(t, with(arithFiles, map[string]string{mainTestFile: traceRemover("fixture")}))
+			dir := module(t, with(arithFiles, map[string]string{mainTestFile: traceTruncator("fixture")}))
 			rec := runIn(t, dir, run.Config{})
 			assert.Equal(t, codes(rec), []spec.ErrorCode{spec.ErrorNotInstrumented}, "the binary did not trace")
 			assert.Equal(t, verdicts(rec), arithNotRun, "no mutant runs")
@@ -420,7 +420,7 @@ func TestControl(t *testing.T) {
 
 		t.Run("names the package of the suite whose test binary does not trace", func(t *testing.T) {
 			t.Parallel()
-			dir := module(t, with(scale, map[string]string{conformanceMainFile: traceRemover("conformance")}))
+			dir := module(t, with(scale, map[string]string{conformanceMainFile: traceTruncator("conformance")}))
 			rec := runIn(t, dir, run.Config{Suite: []string{conformancePattern}})
 			assert.Equal(t, codes(rec), []spec.ErrorCode{spec.ErrorNotInstrumented}, "the binary did not trace")
 			assert.HasPrefix(t, rec.Errors[0].Message,

@@ -312,14 +312,15 @@ func TestSchedule(t *testing.T) {
 
 		t.Run("gives a survivor not-run when the time left does not cover its confirmation", func(t *testing.T) {
 			t.Parallel()
-			// The ordinary control run's build waits slowBuild, and about 9
+			// The ordinary control run's build waits slowBuild, and about 20
 			// seconds are left when the mutants start. That time covers twice
 			// a mutant's deadline of about 2 seconds, and not a confirmation,
-			// which also needs the time of the builds.
+			// which also needs the 20 seconds of the builds. A machine whose
+			// builds take 15 seconds more still starts the mutants.
 			rec := runIn(t, module(t, survivors), run.Config{
 				Env:      slowBuilds(t, ordinaryOutput),
 				Confirm:  true,
-				Deadline: time.Now().Add(22 * time.Second),
+				Deadline: time.Now().Add(42 * time.Second),
 			})
 			assert.Equal(t, verdicts(rec), "Sub sbr-zero 0: not-run\nSub aor 0: not-run\n",
 				"both mutants run and survive, and neither confirmation starts")
@@ -329,13 +330,13 @@ func TestSchedule(t *testing.T) {
 		t.Run("starts no mutant without coverage when the time left does not cover its confirmation",
 			func(t *testing.T) {
 				t.Parallel()
-				// As for the survivors, about 9 seconds are left when the mutants
+				// As for the survivors, about 20 seconds are left when the mutants
 				// start, and a mutant without coverage runs in its confirmation
 				// alone, which needs the ordinary control run's builds too.
 				rec := runIn(t, module(t, uncovered), run.Config{
 					Env:      slowBuilds(t, ordinaryOutput),
 					Confirm:  true,
-					Deadline: time.Now().Add(22 * time.Second),
+					Deadline: time.Now().Add(42 * time.Second),
 				})
 				assert.Equal(t, verdicts(rec), addNotRun, "no mutant starts")
 				assert.Equal(t, rec.Mutants[0].Reason, tooLateReason, "the record states why no mutant starts")

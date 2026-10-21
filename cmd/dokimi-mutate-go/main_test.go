@@ -713,8 +713,15 @@ func TestCLIEnv(t *testing.T) {
 		)
 
 		t.Run("starts no package after --timeout", func(t *testing.T) {
+			// The clock of the command returns the time of a minute ago, so the
+			// limit of --timeout has passed when the package would start. The
+			// clock of Windows advances once per tick, so a limit of 1ns from
+			// now has not always passed there when the package starts.
 			enter(t, addFiles)
-			res := call(t, flagPrefix+flagTimeout, "1ns")
+			c := &cli{every: time.Hour, now: func() time.Time { return time.Now().Add(-time.Minute) }}
+			res := clitest.Main(t.Context(), c.main, &clitest.Input{
+				Args: []string{flagPrefix + flagTimeout, "1s"}, Vars: environ(),
+			})
 			assert.Equal(t, res.Status, exitFailed, "the package does not start")
 			assert.Equal(t, res.Stdout, "", "no package runs")
 			assert.Equal(t, res.Stderr, name+": fixture: not tested, because "+flagPrefix+flagTimeout+

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -132,11 +133,16 @@ func TestAlone(t *testing.T) {
 			name string
 			more map[string]string
 			env  []string
+			// windows is the reason that the case does not run on Windows, or
+			// empty for a case that runs there.
+			windows string
 		}{
 			{name: "runs the whole suite for each mutant when a test fails alone", env: []string{dependsVar + "=1"}},
 			{
 				name: "runs the whole suite for each mutant when the trace of a test alone does not read",
 				more: map[string]string{mainTestFile: aloneTrace("_ = os.Remove(trace)")},
+				windows: "Windows does not remove the trace while the instrumented package has it open, " +
+					"so the trace of a test reads",
 			},
 			{
 				name: "runs the whole suite for each mutant when the trace of a test alone lacks the start mark",
@@ -146,6 +152,9 @@ func TestAlone(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
+				if tt.windows != "" && runtime.GOOS == "windows" {
+					t.Skip(tt.windows)
+				}
 				rec, firsts := runOrdered(t, run.Config{}, tt.more, tt.env...)
 				assert.Equal(t, verdicts(rec), arithVerdicts, "each mutant has the verdict of its run")
 				assert.Empty(t, rec.Errors, "a run of a test alone is no control run")
