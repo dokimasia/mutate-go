@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package enumerate
@@ -101,53 +101,53 @@ type Function struct {
 type Site struct {
 	File  *load.File
 	Scope string
+	// Node is the expression or the statement of the site.
+	Node ast.Node
+	// Func is the function that a Zero site returns from, and nil for any
+	// other site.
+	Func *Function
+	// TypeArg names the operands' type where the site's instrumented form
+	// calls a generic function of its own, and the name denotes that type
+	// at the site. It is empty where the call infers the type.
+	TypeArg string
+	// Mutants lists the site's mutants in catalogue order.
+	Mutants []*Mutant
 	// Start and End are byte offsets in File.Text. End is exclusive.
 	Start, End int
 	// StartPos and EndPos are the positions of Start and End.
 	StartPos, EndPos Position
 	Form             Form
-	// Node is the expression or the statement of the site.
-	Node ast.Node
 	// Op is the site's operator: the binary operator, the operator of a
 	// compound assignment without its =, or the increment or decrement.
 	Op token.Token
-	// TypeArg names the operands' type where the site's instrumented form
-	// calls a generic function of its own, and the name denotes that type
-	// at the site. It is empty where the call infers the type.
-	TypeArg string
-	// Func is the function that a Zero site returns from, and nil for any
-	// other site.
-	Func *Function
-	// Mutants lists the site's mutants in catalogue order.
-	Mutants []*Mutant
 }
 
 // Mutant is one mutant of a site.
 type Mutant struct {
 	Site *Site
 	Kind spec.Kind
-	// Op is the operator that the mutant writes in place of the site's,
-	// or token.ILLEGAL for a kind that writes no operator.
-	Op token.Token
 	// Key identifies the mutant across runs.
-	Key        string
-	Occurrence int
+	Key string
 	// Original and Replacement are the site's source and the mutant's,
 	// as a record states them.
 	Original, Replacement string
-	Status                Status
 	// Rule is the rule family that suppresses the mutant.
 	Rule spec.Family
 	// Reason is the reason of the annotation that suppresses the mutant,
 	// or why the toolchain rejects it.
 	Reason string
+	// Op is the operator that the mutant writes in place of the site's,
+	// or token.ILLEGAL for a kind that does not write an operator.
+	Op         token.Token
+	Occurrence int
+	Status     Status
 }
 
 // Skip is one site of a catalogue class that has no mutant.
 type Skip struct {
 	File       string
-	Start, End Position
 	Reason     spec.SkipReason
+	Start, End Position
 }
 
 // Problem is a run error that the enumeration finds.
@@ -182,10 +182,10 @@ type Generated struct {
 
 // Enumerate lists the mutants of p's source files under the definition d,
 // with the selection and the generated files that opts states.
-func Enumerate(p *load.Package, d spec.Definition, opts Options) *Result {
+func Enumerate(p *load.Package, d *spec.Definition, opts Options) *Result {
 	e := &enumerator{
 		pkg:          p,
-		def:          d,
+		def:          *d,
 		include:      opts.IncludeGenerated,
 		families:     map[string]spec.Family{},
 		classes:      map[spec.Kind]spec.Class{},
@@ -253,23 +253,10 @@ func (e *enumerator) generated() []Generated {
 }
 
 type enumerator struct {
-	pkg *load.Package
-	def spec.Definition
-	// include reports whether the enumeration includes generated files.
-	include  bool
+	pkg      *load.Package
 	families map[string]spec.Family
 	classes  map[spec.Kind]spec.Class
 	rank     map[spec.Kind]int
-	sites    []*Site
-	skips    []skip
-	// annotations lists every annotation in the order of the files and their
-	// comments, and covers lists them by the line that each covers.
-	// suppressions lists the suppressions of each file in the order that the
-	// enumeration makes them.
-	annotations  []*annotation
-	covers       map[fileLine][]*annotation
-	suppressions map[*load.File][]suppression
-	problems     []Problem
 	// names contains each name that an annotation can list: a kind, a
 	// class, and the keyword of every kind.
 	names map[string]bool
@@ -282,12 +269,25 @@ type enumerator struct {
 	operands  map[ast.Expr]bool
 	results   map[*types.Var]spec.Family
 	unwritten map[*types.Var]bool
+	// annotations lists every annotation in the order of the files and their
+	// comments, and covers lists them by the line that each covers.
+	// suppressions lists the suppressions of each file in the order that the
+	// enumeration makes them.
+	annotations  []*annotation
+	covers       map[fileLine][]*annotation
+	suppressions map[*load.File][]suppression
+	problems     []Problem
+	skips        []skip
+	sites        []*Site
+	def          spec.Definition
+	// include reports whether the enumeration includes generated files.
+	include bool
 }
 
 type skip struct {
 	f          *load.File
-	start, end int
 	reason     spec.SkipReason
+	start, end int
 }
 
 func (e *enumerator) off(pos token.Pos) int { return e.pkg.Fset.File(pos).Offset(pos) }
@@ -348,7 +348,7 @@ func scopeOf(d *ast.FuncDecl) string {
 	case *ast.IndexListExpr:
 		t = x.X
 	}
-	return t.(*ast.Ident).Name + "." + d.Name.Name
+	return types.ExprString(t) + "." + d.Name.Name
 }
 
 func (e *enumerator) result(lines []Range) *Result {

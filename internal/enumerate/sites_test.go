@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package enumerate_test
@@ -572,6 +572,7 @@ func generic[T any](v T) (T, []T) {
 	return v, nil
 }
 `})
+			//nolint:dupword // the expected text contains nil once for each result
 			assert.Equal(t, listing(r, string(spec.SBRZero)),
 				`all sbr-zero 0: return n, f, c, s, ok, d, nm -> "return 0, 0, 0, \"\", false, 0, \"\""
 refs sbr-zero 0: return p, xs, m, ch, fn, e, u -> "return nil, nil, nil, nil, nil, nil, nil"

@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package testbin_test
@@ -64,7 +64,7 @@ func runFake(t *testing.T, ctx context.Context, mode string, cfg testbin.Config)
 	}
 	var res *testbin.Result
 	assert.CompletesWithin(t, ended, func(context.Context) error {
-		res = testbin.Run(ctx, cfg)
+		res = testbin.Run(ctx, &cfg)
 		return nil
 	}, "the run ends within its limits")
 	return res
@@ -181,7 +181,7 @@ func TestRun(t *testing.T) {
 		t.Run("runs the binary in its directory with a temporary directory of its own", func(t *testing.T) {
 			t.Parallel()
 			dir, work := t.TempDir(), t.TempDir()
-			res := testbin.Run(t.Context(), testbin.Config{
+			res := testbin.Run(t.Context(), &testbin.Config{
 				Binary: binary(t), Dir: dir, Work: work, Env: fakeEnv(environment), Timeout: longDeadline,
 			})
 			assert.NoError(t, res.Err, "the run starts")
@@ -198,7 +198,7 @@ func TestRun(t *testing.T) {
 
 		t.Run("returns the error of a binary that does not start", func(t *testing.T) {
 			t.Parallel()
-			res := testbin.Run(t.Context(), testbin.Config{
+			res := testbin.Run(t.Context(), &testbin.Config{
 				Binary: filepath.Join(t.TempDir(), "missing"), Work: t.TempDir(), Timeout: longDeadline,
 			})
 			assert.HasError(t, res.Err, "a missing binary does not start")
@@ -207,7 +207,7 @@ func TestRun(t *testing.T) {
 
 		t.Run("returns the error of a work directory that does not exist", func(t *testing.T) {
 			t.Parallel()
-			res := testbin.Run(t.Context(), testbin.Config{
+			res := testbin.Run(t.Context(), &testbin.Config{
 				Binary: binary(t), Work: filepath.Join(t.TempDir(), "missing"), Timeout: longDeadline,
 			})
 			assert.HasError(t, res.Err, "a run without its temporary directory does not start")

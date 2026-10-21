@@ -11,6 +11,11 @@ superseded-by: none
 produces-adr: tbd
 ---
 
+<!--
+  ~ Copyright Dokimasia B.V. 2026
+  ~ SPDX-License-Identifier: MIT
+-->
+
 # RFC-0001: The Go mutation engine
 
 ## Summary
@@ -130,8 +135,8 @@ type Option struct {
 // process may use with their memory ceilings. Tests that share a resource
 // outside their temporary directory, such as a fixed port, then fail each
 // other, and the failures count as kills. Every run, the control runs
-// included, gets GOMAXPROCS divided by n, and at least 1. Workers panics
-// for n below 1.
+// included, gets GOMAXPROCS divided by n, and at least 1. Workers counts an
+// n below 1 as 1.
 func Workers(n int) Option
 
 // Suite adds the tests of other packages to the tests that count for the

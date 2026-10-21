@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 //go:build unix
@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -63,7 +65,7 @@ func TestProcess(t *testing.T) {
 		t.Run("starts the command in a process group of its own", func(t *testing.T) {
 			t.Parallel()
 			var out bytes.Buffer
-			cmd := command(sleeps)
+			cmd := command(t.Context(), sleeps)
 			g, err := process.Start(cmd, &out, &out)
 			assert.NoError(t, err, "the command starts")
 			pgid, err := syscall.Getpgid(cmd.Process.Pid)
@@ -81,7 +83,7 @@ func TestProcess(t *testing.T) {
 		t.Run("ends the processes that the command left in its group", func(t *testing.T) {
 			t.Parallel()
 			var out bytes.Buffer
-			g, err := process.Start(command(leaves), &out, &out)
+			g, err := process.Start(command(t.Context(), leaves), &out, &out)
 			assert.NoError(t, err, "the command starts")
 			assert.NoError(t, g.Wait(), "the command exits with the status 0")
 			assert.CompletesWithin(t, ended, func(context.Context) error {
@@ -100,7 +102,7 @@ func TestProcess(t *testing.T) {
 		t.Run("ends the processes that the command started", func(t *testing.T) {
 			t.Parallel()
 			var out lockedBuffer
-			g, err := process.Start(command(waits), &out, &out)
+			g, err := process.Start(command(t.Context(), waits), &out, &out)
 			assert.NoError(t, err, "the command starts")
 			assert.EventuallyTrue(t, ended, func() bool { return out.String() != "" },
 				"the command writes its child's process ID")
@@ -119,7 +121,7 @@ func TestProcess(t *testing.T) {
 		t.Run("closes the output after its delay when a process outside the group keeps it open", func(t *testing.T) {
 			t.Parallel()
 			var out bytes.Buffer
-			g, err := process.Start(command(escapes), &out, &out)
+			g, err := process.Start(command(t.Context(), escapes), &out, &out)
 			assert.NoError(t, err, "the command starts")
 			assert.NoError(t, g.Wait(), "the command exits with the status 0")
 			start := time.Now()
@@ -131,6 +133,16 @@ func TestProcess(t *testing.T) {
 			expect.True(t, alive(child), "while the child outside the group still runs")
 		})
 	})
+}
+
+// childPID returns the process ID that a fake command wrote on the first
+// line of out.
+func childPID(t *testing.T, out string) int {
+	t.Helper()
+	line, _, _ := strings.Cut(out, "\n")
+	pid, err := strconv.Atoi(line)
+	assert.NoError(t, err, "the fake command writes its child's process ID: "+out)
+	return pid
 }
 
 // alive reports whether the process pid exists.

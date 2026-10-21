@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -30,13 +30,13 @@ const (
 // session is the state that every package's run of one command line
 // shares: the configuration of each run, the output and the progress.
 type session struct {
-	cfg      run.Config
 	out      *output
 	progress *progress
 	// records is the directory of -record, or empty for none.
 	records string
 	// skip lists the import paths of the packages that -skip names.
 	skip []string
+	cfg  run.Config
 }
 
 // config returns the configuration of the run of pkg with its share of the
@@ -60,11 +60,11 @@ func (s *session) config(pkg load.Listed, sh share) run.Config {
 func (s *session) check(ctx context.Context, pkg load.Listed, sh share) int {
 	cfg := s.config(pkg, sh)
 	cfg.Verdict = func(m record.Mutant, mutants int, path string) {
-		s.progress.verdict(pkg.ImportPath, m, mutants)
-		s.out.line(m, path)
+		s.progress.verdict(pkg.ImportPath, &m, mutants)
+		s.out.line(&m, path)
 	}
 	s.progress.begin(pkg.ImportPath)
-	rec, err := run.Run(ctx, cfg)
+	rec, err := run.Run(ctx, &cfg)
 	s.progress.end(pkg.ImportPath)
 	if err != nil {
 		s.out.errorf("%s: %v", pkg.ImportPath, err)
@@ -88,7 +88,7 @@ func (s *session) check(ctx context.Context, pkg load.Listed, sh share) int {
 func (s *session) list(ctx context.Context, pkg load.Listed, sh share) int {
 	cfg := s.config(pkg, sh)
 	cfg.List = true
-	rec, err := run.Run(ctx, cfg)
+	rec, err := run.Run(ctx, &cfg)
 	if err != nil {
 		s.out.errorf("%s: %v", pkg.ImportPath, err)
 		return exitFailed
@@ -110,7 +110,7 @@ func exitStatus(rec *record.Record) int {
 	if rec.Failed() {
 		return exitFailed
 	}
-	_, undetected := rec.Tally(definition.Protocol, "")
+	_, undetected := rec.Tally(&definition.Protocol, "")
 	if rec.Sample != nil && rec.Sample.Limit != nil {
 		undetected = rec.Sample.Undetected
 	}

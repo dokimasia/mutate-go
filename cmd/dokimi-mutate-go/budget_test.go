@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -48,7 +48,7 @@ func TestBudget(t *testing.T) {
 			first, _ := b.admit(t.Context(), 8)
 			admitted := make(chan func(), 1)
 			go func() {
-				release, _ := b.admit(context.Background(), 8)
+				release, _ := b.admit(t.Context(), 8)
 				admitted <- release
 			}()
 			time.Sleep(stillWait)

@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package spec
@@ -29,9 +29,9 @@ var files embed.FS
 type Definition struct {
 	// Version is the catalogue's version, which every record states.
 	Version   string
+	Overlay   Overlay
 	Catalogue Catalogue
 	Protocol  Protocol
-	Overlay   Overlay
 }
 
 // Load returns the definition that the engine reads when it runs. The first

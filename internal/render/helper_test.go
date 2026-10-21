@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package render_test
@@ -48,7 +48,7 @@ func TestHelper(t *testing.T) {
 			p, r := fixture(t, used)
 			_, bin := build(t, p, r)
 			trace := filepath.Join(t.TempDir(), "missing", "trace")
-			out, err := commandIn(bin, p.Dir, render.TraceVar+"="+trace).CombinedOutput()
+			out, err := commandIn(t.Context(), bin, p.Dir, render.TraceVar+"="+trace).CombinedOutput()
 			assert.HasError(t, err, "the binary fails")
 			assert.Contains(t, string(out), "panic: mutate: open", "with the error of the trace")
 		})

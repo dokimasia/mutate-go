@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package render
@@ -23,8 +23,8 @@ import (
 
 // span is the range of one site's form in an instrumented text.
 type span struct {
-	start, end int
 	site       *enumerate.Site
+	start, end int
 }
 
 // fileRenderer writes one instrumented file. prefix starts each name of the
@@ -40,10 +40,10 @@ type fileRenderer struct {
 	children map[*enumerate.Site][]*enumerate.Site
 	prefix   string
 	edits    []edit
-	next     int
 	zeros    map[*enumerate.Function]string
-	buf      bytes.Buffer
 	spans    []span
+	buf      bytes.Buffer
+	next     int
 }
 
 // renderFile returns the text of f with each of sites replaced by its
@@ -183,7 +183,7 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		r.writeRange(s.Start, s.End, r.children[s])
 		r.writef(")")
 	case enumerate.Ordered, enumerate.Arithmetic:
-		b := s.Node.(*ast.BinaryExpr)
+		b := s.Node.(*ast.BinaryExpr) //nolint:forcetypeassert // Ordered and Arithmetic sites are binary expressions
 		r.writef("_mutate_s%d%s(", o, typeArgs(s))
 		r.inner(s, b.X)
 		r.writef(", ")
@@ -191,7 +191,7 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		r.inner(s, b.Y)
 		r.writef(")")
 	case enumerate.Compound:
-		a := s.Node.(*ast.AssignStmt)
+		a := s.Node.(*ast.AssignStmt) //nolint:forcetypeassert // a Compound site is an assignment
 		target, value := a.Lhs[0], a.Rhs[0]
 		source := r.text[r.off(target.Pos()):r.off(target.End())]
 		r.buf.Write(source)
@@ -200,7 +200,7 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		r.inner(s, value)
 		r.writef(")")
 	case enumerate.Connector:
-		b := s.Node.(*ast.BinaryExpr)
+		b := s.Node.(*ast.BinaryExpr) //nolint:forcetypeassert // a Connector site is a binary expression
 		var left, right, always int
 		for i, m := range s.Mutants {
 			switch m.Kind {
@@ -228,13 +228,13 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		// the operand's lines once, in the original's copy. The mutant's copy
 		// runs only while the mutant is active, when no site in the operand
 		// is, so it contains no form.
-		st := s.Node.(*ast.IncDecStmt)
+		st := s.Node.(*ast.IncDecStmt) //nolint:forcetypeassert // an IncDec site is an increment or a decrement
 		source := r.text[r.off(st.X.Pos()):r.off(st.X.End())]
 		r.writef("if _mutateIs(%d) { %s%s } else { ", o, oneLine(source), s.Mutants[0].Op)
 		r.inner(s, st.X)
 		r.writef("%s }", st.Tok)
 	case enumerate.IncDecPost:
-		st := s.Node.(*ast.IncDecStmt)
+		st := s.Node.(*ast.IncDecStmt) //nolint:forcetypeassert // an IncDecPost site is an increment or a decrement
 		source := r.text[r.off(st.X.Pos()):r.off(st.X.End())]
 		r.buf.Write(source)
 		r.writef(" = _mutate_s%d%s(%s)", o, typeArgs(s), oneLine(source))
@@ -243,7 +243,7 @@ func (r *fileRenderer) writeSite(s *enumerate.Site) {
 		r.writeRange(s.Start, s.End, r.children[s])
 		r.writef(" != _mutateIs(%d))", o)
 	case enumerate.Minus:
-		u := s.Node.(*ast.UnaryExpr)
+		u := s.Node.(*ast.UnaryExpr) //nolint:forcetypeassert // a Minus site is a unary expression
 		r.writef("_mutate_s%d%s(", o, typeArgs(s))
 		r.newlines(s.Start, r.off(u.X.Pos()))
 		r.inner(s, u.X)

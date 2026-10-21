@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package render
@@ -29,8 +29,8 @@ const zeroVar = namePrefix + "Zero"
 // edit whose start is its end inserts text before the byte at start. Edits
 // of one file do not overlap.
 type edit struct {
-	start, end int
 	text       string
+	start, end int
 }
 
 // zeroBindings returns the edits that give each result of fn a variable

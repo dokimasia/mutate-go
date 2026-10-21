@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package run_test
@@ -492,7 +492,7 @@ func runWith(t *testing.T, ctx context.Context, dir string, cfg run.Config) *rec
 	if cfg.Env == nil {
 		cfg.Env = os.Environ()
 	}
-	rec, err := run.Run(ctx, cfg)
+	rec, err := run.Run(ctx, &cfg)
 	assert.NoError(t, err, "Run returns a record")
 	return rec
 }
@@ -511,7 +511,7 @@ func cancelAt(t *testing.T, dir string, cfg run.Config, marker string) *record.R
 	done := make(chan result, 1)
 	cfg.Dir = dir
 	go func() {
-		rec, err := run.Run(ctx, cfg)
+		rec, err := run.Run(ctx, &cfg)
 		done <- result{rec, err}
 	}()
 	assert.Eventually(t, markerWait, markerPoll, func(tb assert.TB) {
@@ -588,7 +588,7 @@ func verdicts(rec *record.Record) string {
 
 // codes returns the codes of the record's run errors, in order.
 func codes(rec *record.Record) []spec.ErrorCode {
-	var list []spec.ErrorCode
+	list := make([]spec.ErrorCode, 0, len(rec.Errors))
 	for _, e := range rec.Errors {
 		list = append(list, e.Code)
 	}
@@ -597,7 +597,7 @@ func codes(rec *record.Record) []spec.ErrorCode {
 
 // keys returns the keys of the record's mutants, in record order.
 func keys(rec *record.Record) []string {
-	var list []string
+	list := make([]string, 0, len(rec.Mutants))
 	for _, m := range rec.Mutants {
 		list = append(list, m.Key)
 	}

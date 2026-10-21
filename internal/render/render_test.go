@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package render_test
@@ -71,7 +71,7 @@ func TestRender(t *testing.T) {
 					"func g(a int) int {\n\t//dokimi:mutate-skip sbr-zero: a test of the numbering\n\treturn a * 2\n}\n",
 			})
 			prog := instrument(t, p, r)
-			var got []string
+			got := make([]string, 0, len(r.Mutants))
 			for _, m := range r.Mutants {
 				got = append(got, string(m.Kind)+" "+strconv.Itoa(prog.Ordinals[m]))
 			}
@@ -181,7 +181,9 @@ func TestRender(t *testing.T) {
 				assert.NoError(t, err, "the program writes")
 				data, err := os.ReadFile(overlay)
 				assert.NoError(t, err, "the overlay reads")
-				var got struct{ Replace map[string]string }
+				var got struct {
+					Replace map[string]string `json:"Replace"`
+				}
 				assert.NoError(t, json.Unmarshal(data, &got), "the overlay is the go command's JSON")
 				assert.Equal(t, got.Replace, map[string]string{
 					"/pkg/a.go": filepath.Join(dir, "0", "a.go"),

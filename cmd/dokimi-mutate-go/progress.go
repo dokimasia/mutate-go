@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -24,12 +24,13 @@ import (
 // A progress is safe for concurrent use.
 type progress struct {
 	stderr   io.Writer
-	every    time.Duration
 	now      func() time.Time
 	deadline time.Time
-	mu       sync.Mutex
 	// running maps the import path of each package that runs to its tally.
 	running map[string]*tally
+	every   time.Duration
+	// mu guards running.
+	mu sync.Mutex
 }
 
 // tally counts the mutants of one package's run: those with a final verdict
@@ -37,8 +38,8 @@ type progress struct {
 // ended, the ones that will not run, and all, which are 0 until the first
 // verdict. started is when the run of the first mutant that ended started.
 type tally struct {
-	done, undetected, ran, stopped, total int
 	started                               time.Time
+	done, undetected, ran, stopped, total int
 }
 
 // begin starts the tally of the package importPath, whose run starts.
@@ -55,7 +56,7 @@ func (p *progress) begin(importPath string) {
 // verdict is final: as done, or as stopped when m is not-run. mutants is the
 // number of the package's mutants. A mutant with Seconds ran, and the first
 // such mutant marks when the runs started.
-func (p *progress) verdict(importPath string, m record.Mutant, mutants int) {
+func (p *progress) verdict(importPath string, m *record.Mutant, mutants int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	s := p.running[importPath]

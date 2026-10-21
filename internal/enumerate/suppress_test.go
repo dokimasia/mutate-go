@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package enumerate_test
@@ -58,6 +58,7 @@ func pipe(n int) chan int {
 	return make(chan int, n+1)
 }
 `})
+			//nolint:dupword // the expected text contains nil once for each result
 			assert.Equal(t, listing(r, ""), `logs sbr-delete 0: defer log.Println("done") -> "" [logging]
 logs sbr-delete 1: log.Printf("n=%d", n+1) -> "" [logging]
 logs aor 0: n+1 -> "n-1" [logging]
@@ -386,7 +387,7 @@ calls sbr-delete 2: close(ch) -> ""
 calls sbr-delete 3: n = n * 2 -> ""
 calls sbr-delete 4: xs = slices.Grow[[]int, int](xs, n*3) -> ""
 `, "and a go statement of a family's call is suppressed")
-			var files []string
+			files := make([]string, 0, len(r.Skipped))
 			for _, s := range r.Skipped {
 				files = append(files, s.File)
 			}

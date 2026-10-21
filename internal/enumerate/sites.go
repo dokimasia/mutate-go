@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package enumerate
@@ -133,9 +133,9 @@ func (e *enumerator) visit(f *load.File, n, outer, around ast.Node, scope string
 		if x.Op == token.SUB {
 			e.minus(f, x, scope)
 		}
-		e.not(f, x, outer.(ast.Expr), around, scope)
+		e.not(f, x, outer.(ast.Expr), around, scope) //nolint:forcetypeassert // parentheses enclose expressions alone
 	case ast.Expr:
-		e.not(f, x, outer.(ast.Expr), around, scope)
+		e.not(f, x, outer.(ast.Expr), around, scope) //nolint:forcetypeassert // parentheses enclose expressions alone
 	}
 }
 
@@ -604,7 +604,7 @@ func (e *enumerator) isZero(x ast.Expr, dest types.Type) bool {
 		case *types.Struct:
 			elem = func(i int, key ast.Expr) types.Type {
 				if key != nil {
-					return info.Uses[key.(*ast.Ident)].Type()
+					return info.TypeOf(key)
 				}
 				return u.Field(i).Type()
 			}
@@ -678,6 +678,7 @@ func (e *enumerator) unwrittenVariables() map[*types.Var]bool {
 				for _, name := range x.Names {
 					if v, ok := info.Defs[name].(*types.Var); ok && len(x.Values) == 0 &&
 						v.Parent() != e.pkg.Types.Scope() {
+
 						declared[v] = true
 					}
 				}
@@ -791,7 +792,9 @@ func final(list []ast.Stmt) ast.Stmt {
 // hasDefault reports whether the body of a switch or a type switch
 // statement has a default clause.
 func hasDefault(body *ast.BlockStmt) bool {
-	return slices.ContainsFunc(body.List, func(c ast.Stmt) bool { return c.(*ast.CaseClause).List == nil })
+	return slices.ContainsFunc(body.List, func(c ast.Stmt) bool {
+		return c.(*ast.CaseClause).List == nil //nolint:forcetypeassert // the body of a switch contains case clauses alone
+	})
 }
 
 // breaks reports whether s is or contains a break statement without a label

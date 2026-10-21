@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package process
@@ -24,10 +24,10 @@ import (
 // output, and the channel that the goroutines signal on.
 type Group struct {
 	cmd *exec.Cmd
-	// reads contains the read end of each pipe of the output, and copied
-	// receives one value per pipe when the copy of its output ends.
-	reads  []*os.File
+	// copied receives one value per pipe when the copy of its output ends.
 	copied chan struct{}
+	// reads contains the read end of each pipe of the output.
+	reads []*os.File
 }
 
 // Start starts cmd in a process group of its own, and copies its standard
@@ -70,7 +70,7 @@ func Start(cmd *exec.Cmd, stdout, stderr io.Writer) (*Group, error) {
 		for _, r := range g.reads {
 			_ = r.Close()
 		}
-		return nil, err
+		return nil, err //nolint:wrapcheck // Start returns the error of a pipe or of exec.Cmd.Start as it is
 	}
 	g.copied = make(chan struct{}, len(writers))
 	for i, w := range writers {
@@ -93,7 +93,7 @@ func Start(cmd *exec.Cmd, stdout, stderr io.Writer) (*Group, error) {
 func (g *Group) Wait() error {
 	err := g.cmd.Wait()
 	g.Kill()
-	return err
+	return err //nolint:wrapcheck // the caller matches the *exec.ExitError of exec.Cmd.Wait
 }
 
 // Drain waits for the end of the output after Wait, at most for delay, and

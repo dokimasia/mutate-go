@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package selection
@@ -140,6 +140,7 @@ func (d *diff) hunk(lines []string, at int) (int, error) {
 		kind := body[0]
 		if kind == keptLine && (oldCount == 0 || newCount == 0) || kind == addedLine && newCount == 0 ||
 			kind == removedLine && oldCount == 0 {
+
 			return 0, fmt.Errorf("selection: the hunk %q has more lines than its header states", lines[at])
 		}
 		switch kind {
@@ -309,6 +310,7 @@ func hunkHeader(line string) (oldCount, start, newCount int, err error) {
 	fields := strings.Fields(line)
 	if len(fields) < 4 || fields[3] != hunkEnd || !strings.HasPrefix(fields[1], string(removedLine)) ||
 		!strings.HasPrefix(fields[2], string(addedLine)) {
+
 		return 0, 0, 0, fmt.Errorf("selection: the hunk header %q does not parse", line)
 	}
 	_, oldCount, oldOK := hunkRange(fields[1][1:])

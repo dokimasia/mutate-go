@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package run_test
@@ -118,8 +118,9 @@ func TestSnapshot(t *testing.T) {
 
 		t.Run("states each data file of the package in the inputs digest", func(t *testing.T) {
 			t.Parallel()
-			var digests []string
-			for _, files := range []map[string]string{
+			removed := maps.Clone(dataFiles)
+			delete(removed, "testdata/in.txt")
+			sets := []map[string]string{
 				dataFiles,
 				with(dataFiles, map[string]string{"a.go": "package fixture\n\n// A comment.\n"}),
 				with(dataFiles, map[string]string{"testdata/in.txt": "out"}),
@@ -130,12 +131,12 @@ func TestSnapshot(t *testing.T) {
 				with(dataFiles, map[string]string{"testdata/fixture/data.go": "package fixture"}),
 				with(dataFiles, map[string]string{"testdata/.cache/x": "x"}),
 				with(dataFiles, map[string]string{"_data/sub/y.go": "package y"}),
-			} {
+				removed,
+			}
+			digests := make([]string, 0, len(sets))
+			for _, files := range sets {
 				digests = append(digests, runIn(t, module(t, files), run.Config{}).Inputs)
 			}
-			removed := maps.Clone(dataFiles)
-			delete(removed, "testdata/in.txt")
-			digests = append(digests, runIn(t, module(t, removed), run.Config{}).Inputs)
 			assert.NoDuplicates(t, func() ([]string, error) { return digests, nil },
 				"each change of a data file changes the digest, also of a hidden file and below testdata")
 		})
@@ -162,8 +163,9 @@ func TestSnapshot(t *testing.T) {
 			if runtime.GOOS == "windows" {
 				t.Skip("a link needs a privilege on Windows")
 			}
-			var digests []string
-			for _, target := range []string{testdataDir, "assets"} {
+			targets := []string{testdataDir, "assets"}
+			digests := make([]string, 0, len(targets))
+			for _, target := range targets {
 				dir := module(t, dataFiles)
 				assert.NoError(t, os.Symlink(target, filepath.Join(dir, linkName)), "the link to a directory is made")
 				assert.NoError(t, os.Symlink(missing, filepath.Join(dir, danglingName)), "the dangling link is made")
@@ -180,12 +182,15 @@ func TestSnapshot(t *testing.T) {
 			}
 			dir := module(t, dataFiles)
 			base := runIn(t, dir, run.Config{}).Inputs
-			assert.NoError(t, exec.Command(command, filepath.Join(dir, testdataDir, pipeName)).Run(),
-				"the named pipe is made")
+			assert.NoError(
+				t,
+				exec.CommandContext(t.Context(), command, filepath.Join(dir, testdataDir, pipeName)).Run(),
+				"the named pipe is made",
+			)
 			var rec *record.Record
 			assert.CompletesWithin(t, pipeWait, func(ctx context.Context) error {
 				var err error
-				rec, err = run.Run(ctx, run.Config{Dir: dir, Env: os.Environ()})
+				rec, err = run.Run(ctx, &run.Config{Dir: dir, Env: os.Environ()})
 				return err
 			}, "Run opens no named pipe, which would wait for a writer")
 			assert.NotNil(t, rec, "Run returns a record")
@@ -305,7 +310,7 @@ func TestScale(t *testing.T) {
 				os.WriteFile(filepath.Join(dir, lockedName), nil, lockedMode),
 				"the locked file is written",
 			)
-			_, err := run.Run(t.Context(), run.Config{Dir: dir, Env: os.Environ()})
+			_, err := run.Run(t.Context(), &run.Config{Dir: dir, Env: os.Environ()})
 			assert.ErrorIs(t, err, fs.ErrPermission, "the locked file does not read")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
 		})
@@ -318,7 +323,7 @@ func TestScale(t *testing.T) {
 			dir := module(t, map[string]string{addFile: add, testdataDir + "/in.txt": "in"})
 			assert.NoError(t, os.Mkdir(filepath.Join(dir, testdataDir, lockedName), lockedMode),
 				"the locked directory is made")
-			_, err := run.Run(t.Context(), run.Config{Dir: dir, Env: os.Environ()})
+			_, err := run.Run(t.Context(), &run.Config{Dir: dir, Env: os.Environ()})
 			assert.ErrorIs(t, err, fs.ErrPermission, "the locked directory does not read")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
 		})

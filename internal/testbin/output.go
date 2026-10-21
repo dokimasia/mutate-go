@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package testbin
@@ -39,6 +39,11 @@ var (
 
 // Output is what a test binary's output states about its tests.
 type Output struct {
+	// Tail is the end of the output, at most 64 KiB. It contains the lines
+	// that the tests and the runtime write, and the FAIL lines, and leaves
+	// out the lines that state that a test started, paused, continued,
+	// passed or was skipped.
+	Tail string
 	// Failed lists the tests that a FAIL line names, in output order.
 	Failed []string
 	// Running lists the tests that ran code when the run ended, in the order
@@ -55,11 +60,6 @@ type Output struct {
 	Tests []string
 	// TimedOut reports whether the testing package's alarm ended the run.
 	TimedOut bool
-	// Tail is the end of the output, at most 64 KiB. It contains the lines
-	// that the tests and the runtime write, and the FAIL lines, and leaves
-	// out the lines that state that a test started, paused, continued,
-	// passed or was skipped.
-	Tail string
 }
 
 // test is the state of one test that an output states.
@@ -76,10 +76,11 @@ type test struct {
 
 // scanner is the state of one Scan.
 type scanner struct {
-	// tests lists every test that the output names, in the order that it
-	// names them, and index maps each name to its position.
-	tests []test
+	// index maps the name of each test to its position in tests.
 	index map[string]int
+	// tests lists every test that the output names, in the order that it
+	// names them.
+	tests []test
 }
 
 // Scan reads to its end the output of a test binary that runs with
@@ -103,9 +104,9 @@ func Scan(r io.Reader, failed func()) Output {
 	s := &scanner{index: map[string]int{}}
 	reader := bufio.NewReaderSize(r, maxLine)
 	for {
-		var err error
-		line, err = readLine(reader, line)
-		if len(line) > 0 || err == nil {
+		var more bool
+		line, more = readLine(reader, line)
+		if len(line) > 0 || more {
 			progress, framed := bytes.CutPrefix(line, marker)
 			switch {
 			case !framed:
@@ -137,7 +138,7 @@ func Scan(r io.Reader, failed func()) Output {
 				s.tests[s.lookup(ended(progress))].ended = true
 			}
 		}
-		if err != nil {
+		if !more {
 			break
 		}
 	}
@@ -215,13 +216,13 @@ func keep(tail, line []byte) []byte {
 }
 
 // readLine reads the next line into buf, without its line break and cut at
-// maxLine bytes, and returns buf. The rest of a longer line is read and
-// dropped.
-func readLine(r *bufio.Reader, buf []byte) ([]byte, error) {
+// maxLine bytes. It returns buf, and false once the reader ended or failed.
+// The rest of a longer line is read and dropped.
+func readLine(r *bufio.Reader, buf []byte) ([]byte, bool) {
 	data, isPrefix, err := r.ReadLine()
 	buf = append(buf[:0], data...)
 	for isPrefix && err == nil {
 		_, isPrefix, err = r.ReadLine()
 	}
-	return buf, err
+	return buf, err == nil
 }

@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -93,7 +93,7 @@ func TestProgress(t *testing.T) {
 				p := &progress{stderr: &errs, now: func() time.Time { return now }, deadline: tt.deadline}
 				p.begin(fixture)
 				for _, m := range tt.verdicts {
-					p.verdict(fixture, m, 10)
+					p.verdict(fixture, &m, 10)
 				}
 				now = now.Add(2 * time.Second)
 				p.tick()

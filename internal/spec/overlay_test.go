@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package spec_test
@@ -22,8 +22,9 @@ func TestOverlay(t *testing.T) {
 
 		t.Run("has a constant for every skip of the overlay and for no other", func(t *testing.T) {
 			t.Parallel()
-			var reasons []string
-			for _, s := range spec.Load().Overlay.Skips {
+			skips := spec.Load().Overlay.Skips
+			reasons := make([]string, 0, len(skips))
+			for _, s := range skips {
 				reasons = append(reasons, string(s.Reason))
 			}
 			assert.Permutation(t, declared(t, "SkipReason"), reasons,
@@ -37,7 +38,7 @@ func TestOverlay(t *testing.T) {
 		t.Run("keys the rules of each family of the catalogue by its name", func(t *testing.T) {
 			t.Parallel()
 			d := spec.Load()
-			var families []spec.Family
+			families := make([]spec.Family, 0, len(d.Catalogue.Families))
 			for _, f := range d.Catalogue.Families {
 				families = append(families, f.ID)
 			}
@@ -48,7 +49,7 @@ func TestOverlay(t *testing.T) {
 		t.Run("has the rules of every kind of the catalogue", func(t *testing.T) {
 			t.Parallel()
 			d := spec.Load()
-			var kinds []spec.Kind
+			kinds := make([]spec.Kind, 0, len(d.Catalogue.Kinds))
 			for _, k := range d.Catalogue.Kinds {
 				kinds = append(kinds, k.ID)
 			}

@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package load
@@ -45,7 +45,7 @@ type listedTest struct {
 // states an error of a package that patterns name or of one of its
 // dependencies. The error starts with the package's import path, and states
 // the first error that go list states of it, as Listed.Problem returns it.
-func Linking(ctx context.Context, cfg Config, importPath string, patterns []string) ([]Linked, error) {
+func Linking(ctx context.Context, cfg *Config, importPath string, patterns []string) ([]Linked, error) {
 	entries, err := list[listedTest](ctx, cfg.Dir, cfg.Env, append([]string{listTests}, patterns...)...)
 	if err != nil {
 		return nil, err

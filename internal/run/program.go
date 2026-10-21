@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package run
@@ -26,6 +26,16 @@ const ownPattern = "."
 
 // program is one test binary of the run's suite.
 type program struct {
+	// executed contains the first ordinal of each site that the binary's
+	// opening control run executed.
+	executed map[int]bool
+	// sites maps each test of tests to the first ordinal of each site that
+	// the test executed when it ran alone. It is nil when the engine did not
+	// run every test alone.
+	sites map[string]map[int]bool
+	// seconds maps each test of tests to the wall time of its run alone. It
+	// is nil when the engine did not run every test alone.
+	seconds map[string]float64
 	// target is the import path of the package whose tests the binary
 	// runs, or empty for the tests of the run's own package.
 	target string
@@ -33,21 +43,13 @@ type program struct {
 	dir     string
 	bin     string
 	buildID string
-	// executed contains the first ordinal of each site that the binary's
-	// opening control run executed.
-	executed map[int]bool
+	// tests lists the binary's top-level tests in the order in which its
+	// opening control run started them.
+	tests []string
 	// deadline and ceiling are the limits of each run of the binary, from
 	// its opening control run. ceiling is 0 where the engine applies none.
 	deadline time.Duration
 	ceiling  int64
-	// tests lists the binary's top-level tests in the order in which its
-	// opening control run started them. sites contains, for each of them,
-	// the first ordinal of each site that the test executed when it ran
-	// alone, and seconds the wall time of that run. Both are nil when the
-	// engine did not run every test alone.
-	tests   []string
-	sites   map[string]map[int]bool
-	seconds map[string]float64
 }
 
 // part is one run of a test binary within a mutant's run: the flags that
@@ -124,7 +126,7 @@ func (r *runner) execute(
 	timeout, backup time.Duration,
 	stopAtFailure bool,
 ) *testbin.Result {
-	return testbin.Run(ctx, testbin.Config{
+	return testbin.Run(ctx, &testbin.Config{
 		Binary: bin, Dir: p.dir, Work: r.work, Env: env, Args: args, Timeout: timeout, Backup: backup,
 		Ceiling: p.ceiling, StopAtFailure: stopAtFailure,
 	})

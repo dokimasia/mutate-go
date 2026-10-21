@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package process_test
@@ -25,7 +25,7 @@ func TestGroup(t *testing.T) {
 		t.Run("copies the standard output and the standard error to their writers", func(t *testing.T) {
 			t.Parallel()
 			var stdout, stderr bytes.Buffer
-			g, err := process.Start(command(writes), &stdout, &stderr)
+			g, err := process.Start(command(t.Context(), writes), &stdout, &stderr)
 			assert.NoError(t, err, "the command starts")
 			assert.NoError(t, g.Wait(), "the command exits with the status 0")
 			g.Drain(longDelay)
@@ -36,7 +36,7 @@ func TestGroup(t *testing.T) {
 		t.Run("copies both through one pipe in the order of the writes when they are one writer", func(t *testing.T) {
 			t.Parallel()
 			var out bytes.Buffer
-			g, err := process.Start(command(writes), &out, &out)
+			g, err := process.Start(command(t.Context(), writes), &out, &out)
 			assert.NoError(t, err, "the command starts")
 			assert.NoError(t, g.Wait(), "the command exits with the status 0")
 			g.Drain(longDelay)
@@ -46,7 +46,7 @@ func TestGroup(t *testing.T) {
 		t.Run("returns the error of a command that does not start", func(t *testing.T) {
 			t.Parallel()
 			var out bytes.Buffer
-			_, err := process.Start(exec.Command(filepath.Join(t.TempDir(), "missing")), &out, &out)
+			_, err := process.Start(exec.CommandContext(t.Context(), filepath.Join(t.TempDir(), "missing")), &out, &out)
 			assert.HasError(t, err, "a missing command does not start")
 		})
 	})
@@ -57,7 +57,7 @@ func TestGroup(t *testing.T) {
 		t.Run("returns the exit status of a command that fails", func(t *testing.T) {
 			t.Parallel()
 			var out bytes.Buffer
-			g, err := process.Start(command(exits3), &out, &out)
+			g, err := process.Start(command(t.Context(), exits3), &out, &out)
 			assert.NoError(t, err, "the command starts")
 			exit := assert.ErrorAs[*exec.ExitError](t, g.Wait(), "the command fails")
 			assert.Equal(t, exit.ExitCode(), 3, "with its status")
@@ -71,7 +71,7 @@ func TestGroup(t *testing.T) {
 		t.Run("ends the command", func(t *testing.T) {
 			t.Parallel()
 			var out bytes.Buffer
-			g, err := process.Start(command(sleeps), &out, &out)
+			g, err := process.Start(command(t.Context(), sleeps), &out, &out)
 			assert.NoError(t, err, "the command starts")
 			assert.CompletesWithin(t, ended, func(context.Context) error {
 				g.Kill()

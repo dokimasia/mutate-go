@@ -1,0 +1,25 @@
+# Copyright Dokimasia B.V. 2026
+# SPDX-License-Identifier: MIT
+
+linters:
+  settings:
+    wrapcheck:
+      # An error that one package of the module returns from another carries the context of the
+      # package that made it, so the caller does not wrap it a second time.
+      ignore-package-globs:
+        - go.dokimi.dev/mutate/*
+
+formatters:
+  # The formatters leave the vendored definition alone, because its manifest pins the digest of
+  # each file. gofmt would also remove the parentheses around the receivers of the fixture of the
+  # corpus case identity.
+  exclusions:
+    paths:
+      - conformance/spec
+  settings:
+    # The packages of the module form an import group of their own.
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(go.dokimi.dev/mutate)

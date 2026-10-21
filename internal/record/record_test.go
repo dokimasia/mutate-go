@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package record_test
@@ -168,14 +168,14 @@ func TestRecord(t *testing.T) {
 			r := keyed("0", spec.Killed, "1", spec.TimedOut, "2", spec.Exhausted, "3", spec.Survived,
 				"4", spec.NoCoverage, "5", spec.NotViable, "6", spec.Suppressed, "7", spec.NotSelected,
 				"8", spec.Killed, "9", spec.Survived)
-			r.SetScore(protocol, 0)
+			r.SetScore(&protocol, 0)
 			assert.Equal(t, r.Score, new(4.0/7.0), "four of the seven counted mutants are detected")
 		})
 
 		t.Run("sets no score for a run that fails", func(t *testing.T) {
 			t.Parallel()
 			r := keyed("0", spec.Killed, "1", spec.Error)
-			r.SetScore(protocol, 0)
+			r.SetScore(&protocol, 0)
 			assert.Nil(t, r.Score, "a run with a mutant in error has no score")
 		})
 
@@ -183,7 +183,7 @@ func TestRecord(t *testing.T) {
 			t.Parallel()
 			r := keyed("0", spec.Suppressed, "1", spec.NotSelected)
 			r.Score = new(1.0)
-			r.SetScore(protocol, 0)
+			r.SetScore(&protocol, 0)
 			assert.Nil(t, r.Score, "a score of no counted mutant does not exist")
 		})
 
@@ -191,7 +191,7 @@ func TestRecord(t *testing.T) {
 			t.Parallel()
 			r := keyed("5", spec.NotRun, "1", spec.Killed, "4", spec.Killed, "3", spec.NotRun,
 				"2", spec.Survived, "0", spec.Suppressed)
-			r.SetScore(protocol, 0)
+			r.SetScore(&protocol, 0)
 			assert.Equal(t, r.Sample, &record.Sample{Before: "3", Detected: 1, Undetected: 1, Score: new(0.5)},
 				"the keys 0 to 2 are the sample")
 			assert.Nil(t, r.Score, "a run that a deadline ended has no score")
@@ -199,14 +199,14 @@ func TestRecord(t *testing.T) {
 
 		t.Run("states the sample of each run with a not-run mutant", func(t *testing.T) {
 			t.Parallel()
-			var verdicts []spec.Verdict
+			verdicts := make([]spec.Verdict, 0, len(protocol.Verdicts))
 			for _, v := range protocol.Verdicts {
 				verdicts = append(verdicts, v.ID)
 			}
 			list := prop.List(prop.SampledFrom(verdicts...), prop.MinSize(1), prop.MaxSize(12))
 			prop.ForAll(t, "the sample counts the mutants before the least not-run key", func(c *prop.Case) {
 				drawn := c.Draw(list, "verdicts")
-				var slots []int
+				slots := make([]int, 0, len(drawn))
 				for i := range drawn {
 					slots = append(slots, i)
 				}
@@ -220,14 +220,14 @@ func TestRecord(t *testing.T) {
 						before = key
 					}
 				}
-				r.SetScore(protocol, 0)
+				r.SetScore(&protocol, 0)
 				if before == "" {
 					assert.Nil(c, r.Sample, "a run without a not-run mutant has no sample")
 					return
 				}
 				assert.NotNil(c, r.Sample, "a run with a not-run mutant has a sample")
 				assert.Equal(c, r.Sample.Before, before, "the sample ends at the least key of a not-run mutant")
-				detected, undetected := r.Tally(protocol, before)
+				detected, undetected := r.Tally(&protocol, before)
 				assert.Equal(c, [2]int{r.Sample.Detected, r.Sample.Undetected}, [2]int{detected, undetected},
 					"the sample counts the mutants before that key")
 				assert.Nil(c, r.Score, "a run with a not-run mutant and no limit has no score")
@@ -237,7 +237,7 @@ func TestRecord(t *testing.T) {
 		t.Run("sets the caller's limit and the sample's score as the run's score", func(t *testing.T) {
 			t.Parallel()
 			r := keyed("1", spec.Killed, "2", spec.Survived, "3", spec.NotRun, "4", spec.NoCoverage)
-			r.SetScore(protocol, 2)
+			r.SetScore(&protocol, 2)
 			want := &record.Sample{Before: "3", Limit: new(2), Detected: 1, Undetected: 1, Score: new(0.5)}
 			assert.Equal(t, r.Sample, want, "the sample states the caller's limit")
 			assert.False(t, r.Failed(), "a run that the limit ended does not fail")
@@ -247,7 +247,7 @@ func TestRecord(t *testing.T) {
 		t.Run("sets a sample without a score when no sampled mutant counts", func(t *testing.T) {
 			t.Parallel()
 			r := keyed("1", spec.NotRun, "0", spec.Suppressed, "2", spec.Killed)
-			r.SetScore(protocol, 0)
+			r.SetScore(&protocol, 0)
 			assert.Equal(t, r.Sample, &record.Sample{Before: "1"}, "the sample before the key 1 counts no mutant")
 		})
 
@@ -255,7 +255,7 @@ func TestRecord(t *testing.T) {
 			t.Parallel()
 			r := keyed("1", spec.Killed, "2", spec.NotRun)
 			r.Errors = []record.RunError{{Code: spec.ErrorBuild, Message: "x"}}
-			r.SetScore(protocol, 1)
+			r.SetScore(&protocol, 1)
 			assert.Nil(t, r.Sample, "a run error voids the sample")
 			assert.Nil(t, r.Score, "and the score")
 		})
@@ -264,7 +264,7 @@ func TestRecord(t *testing.T) {
 			t.Parallel()
 			r := keyed("1", spec.Killed, "2", spec.Error)
 			r.Sample = &record.Sample{Before: "2"}
-			r.SetScore(protocol, 0)
+			r.SetScore(&protocol, 0)
 			assert.Nil(t, r.Sample, "a run without a not-run mutant has no sample")
 		})
 	})
@@ -275,7 +275,7 @@ func TestRecord(t *testing.T) {
 		t.Run("counts each verdict as the protocol classifies it", func(t *testing.T) {
 			t.Parallel()
 			for _, v := range protocol.Verdicts {
-				detected, undetected := keyed("0", v.ID).Tally(protocol, "")
+				detected, undetected := keyed("0", v.ID).Tally(&protocol, "")
 				want := map[spec.ScoreClass][2]int{spec.Detected: {1, 0}, spec.Undetected: {0, 1}}[v.Score]
 				assert.Equal(t, [2]int{detected, undetected}, want, "the verdict counts in its score class alone")
 			}
@@ -283,7 +283,7 @@ func TestRecord(t *testing.T) {
 
 		t.Run("counts only the mutants whose keys sort before the bound", func(t *testing.T) {
 			t.Parallel()
-			detected, undetected := keyed("0", spec.Killed, "1", spec.Survived, "2", spec.Killed).Tally(protocol, "2")
+			detected, undetected := keyed("0", spec.Killed, "1", spec.Survived, "2", spec.Killed).Tally(&protocol, "2")
 			assert.Equal(t, [2]int{detected, undetected}, [2]int{1, 1}, "the key 2 is outside the tally")
 		})
 	})
@@ -608,7 +608,7 @@ func conforms(t *testing.T, data []byte) {
 // the keywords that the record schema uses, and reports any other keyword
 // as a violation, so a schema that grows a keyword fails the test until the
 // validator knows it.
-func validate(defs map[string]any, schema map[string]any, v any, path string) []string {
+func validate(defs, schema map[string]any, v any, path string) []string {
 	var out []string
 	fail := func(format string, args ...any) { out = append(out, path+": "+fmt.Sprintf(format, args...)) }
 	for key, rule := range schema {

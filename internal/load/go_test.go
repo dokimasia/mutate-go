@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package load_test
@@ -19,7 +19,7 @@ import (
 
 func TestGo(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("Go", func(t *testing.T) {
 		t.Parallel()

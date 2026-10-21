@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package enumerate
@@ -34,14 +34,15 @@ type fileLine struct {
 // annotation is one annotation comment. The enumerator keys it by the line
 // that it covers.
 type annotation struct {
-	// kinds contains each name that the annotation lists, and unknown the
-	// names that are no kind, class or keyword of the catalogue.
-	kinds   map[string]bool
-	unknown []string
-	reason  string
+	// kinds contains each name that the annotation lists.
+	kinds  map[string]bool
+	reason string
 	// where is the comment's file and line, as a message states them.
 	where string
-	used  bool
+	// unknown lists the names in kinds that are no kind, class or keyword of
+	// the catalogue.
+	unknown []string
+	used    bool
 }
 
 // stale returns the message of an annotation that suppresses no mutant,
@@ -62,10 +63,10 @@ func (a *annotation) stale() string {
 // compound statement that a family suppresses as a whole, or a part of
 // one, call is nil and the range is the statement or the part.
 type suppression struct {
+	call           *ast.CallExpr
+	family         spec.Family
 	start, end     int
 	lparen, rparen int
-	family         spec.Family
-	call           *ast.CallExpr
 }
 
 // resultRule is a result rule of a family: the family, and the type of the
@@ -168,7 +169,7 @@ func (e *enumerator) family(f *load.File, call *ast.CallExpr) {
 // receiver and without parameter names. The overlay states each method rule
 // in one family.
 func (e *enumerator) method(fn *types.Func) (spec.Family, bool) {
-	sig := fn.Type().(*types.Signature)
+	sig := fn.Signature()
 	if sig.Recv() == nil {
 		return "", false
 	}
@@ -202,9 +203,14 @@ func (e *enumerator) resultVariables() map[*types.Var]spec.Family {
 		}
 	}
 	// result returns the family of a rule that the result at index k of
-	// call matches, or "". The package type-checks, so the called function
-	// of a listed API has a signature with a result at index k.
-	result := func(call *ast.CallExpr, k int) spec.Family {
+	// value matches, when value is a call, or "". The package type-checks,
+	// so the called function of a listed API has a signature with a result
+	// at index k.
+	result := func(value ast.Expr, k int) spec.Family {
+		call, ok := ast.Unparen(value).(*ast.CallExpr)
+		if !ok {
+			return ""
+		}
 		var family spec.Family
 		if fn, isFunc := e.callee(call).(*types.Func); isFunc {
 			family = e.families[fn.FullName()]
@@ -212,6 +218,7 @@ func (e *enumerator) resultVariables() map[*types.Var]spec.Family {
 		if family == "" {
 			return ""
 		}
+		//nolint:forcetypeassert // the function of a call that type-checks has a signature
 		results := info.TypeOf(call.Fun).(*types.Signature).Results()
 		if rules[resultRule{family: family, typ: types.TypeString(results.At(k).Type(), nil)}] {
 			return family
@@ -240,15 +247,11 @@ func (e *enumerator) resultVariables() map[*types.Var]spec.Family {
 	// call, or one value per target.
 	values := func(targets, values []ast.Expr) {
 		for k, x := range targets {
-			value, at := values[0], k
 			if len(values) == len(targets) {
-				value, at = values[k], 0
+				assign(x, result(values[k], 0))
+			} else {
+				assign(x, result(values[0], k))
 			}
-			var family spec.Family
-			if call, ok := ast.Unparen(value).(*ast.CallExpr); ok {
-				family = result(call, at)
-			}
-			assign(x, family)
 		}
 	}
 	params := map[types.Object]bool{}
@@ -392,11 +395,11 @@ func (e *enumerator) parseAnnotations(f *load.File) {
 //
 // newRuleIndex allocates the nodes and two maps. rule does not allocate.
 type ruleIndex struct {
-	nodes []ruleNode
 	// whole maps the range of each call that a family suppresses, and calls
 	// the call, to the first of its suppressions.
 	whole map[[2]int]ruleNode
 	calls map[*ast.CallExpr]ruleNode
+	nodes []ruleNode
 }
 
 // ruleNode is one suppression of a ruleIndex: the range of the sites that
@@ -405,8 +408,8 @@ type ruleIndex struct {
 // contains the node, or -1, and first is the index of the node of least
 // order among the node and its ancestors.
 type ruleNode struct {
-	start, end    int
 	family        spec.Family
+	start, end    int
 	order         int
 	parent, first int
 }

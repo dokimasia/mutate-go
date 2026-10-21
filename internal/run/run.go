@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package run
@@ -46,27 +46,6 @@ type Config struct {
 	// Env is the environment of every go command and every run of a test
 	// binary, as os.Environ returns it.
 	Env []string
-	// Lines is the run's selection. A nil selection selects every line, and
-	// an empty one selects none. The record states the ranges in the
-	// package's files.
-	Lines []selection.Lines
-	// Suite lists patterns, as go list resolves them in Dir, of the other
-	// packages whose tests count for the package's mutants. Run builds the
-	// test binary of each such package whose tests link the package, with
-	// the package instrumented, and leaves out the others and the package
-	// itself.
-	Suite []string
-	// Workers is the most mutants that run at once. Below 2, one mutant
-	// runs at a time. Each worker's test binaries get Procs divided by
-	// Workers threads, and at least 1. The run starts as many workers as
-	// Procs allows, and more, up to Workers, on threads that Borrow lends.
-	// It starts no more workers than fit in Memory.
-	Workers int
-	// Procs is the number of threads that the run may use, or 0 for the
-	// engine's GOMAXPROCS. Every go command runs with GOMAXPROCS set to
-	// Procs, and every run of a test binary with Procs divided by Workers,
-	// and at least 1.
-	Procs int
 	// Spare, when it is not nil, returns the threads that the run's go
 	// commands may use beside Procs, such as threads that the caller's other
 	// runs leave free. A go command reads it when it starts, and adds the
@@ -94,6 +73,49 @@ type Config struct {
 	// of one test alone starts only while the time left also covers its test
 	// binary's deadline.
 	Deadline time.Time
+	// Admit, when it is not nil, admits the runs that follow the opening
+	// control run. Run calls it with the memory that those runs may use at
+	// once: the workers that fit in Memory times the largest memory ceiling
+	// of the suite's test binaries, or 0 where the engine does not apply a
+	// ceiling.
+	// Admit waits until the caller admits the runs, and returns the function
+	// that Run calls when its closing control run has ended. It returns false
+	// when ctx ended first, and Run then stops.
+	Admit func(ctx context.Context, bytes int64) (release func(), ok bool)
+	// Verdict receives each mutant when its verdict is final, from one
+	// goroutine at a time: the mutant, the number of the run's mutants, and
+	// the path of the mutant's file relative to the working directory, as
+	// [record.Record.Path] states it. Verdict may be nil.
+	Verdict func(m record.Mutant, mutants int, path string)
+	// Lines is the run's selection. A nil selection selects every line, and
+	// an empty one selects none. The record states the ranges in the
+	// package's files.
+	Lines []selection.Lines
+	// Suite lists patterns, as go list resolves them in Dir, of the other
+	// packages whose tests count for the package's mutants. Run builds the
+	// test binary of each such package whose tests link the package, with
+	// the package instrumented, and leaves out the others and the package
+	// itself.
+	Suite []string
+	// Workers is the most mutants that run at once. Below 2, one mutant
+	// runs at a time. Each worker's test binaries get Procs divided by
+	// Workers threads, and at least 1. The run starts as many workers as
+	// Procs allows, and more, up to Workers, on threads that Borrow lends.
+	// It starts no more workers than fit in Memory.
+	Workers int
+	// Procs is the number of threads that the run may use, or 0 for the
+	// engine's GOMAXPROCS. Every go command runs with GOMAXPROCS set to
+	// Procs, and every run of a test binary with Procs divided by Workers,
+	// and at least 1.
+	Procs int
+	// Memory is the memory that the run's test binaries may use at once, in
+	// bytes, or 0 for no limit. Each memory ceiling is at most Memory, and at
+	// least the binary's peak in the opening control run plus the protocol's
+	// constant, so that a ceiling does not end the run of a mutant that uses
+	// only the memory of the tests. The run starts as many workers as fit in
+	// Memory with the largest ceiling of the suite's test binaries, at least
+	// one, and at most Workers.
+	Memory int64
 	// Sample is the number of mutants whose runs start, in the order of
 	// their keys, or 0 for every mutant. Every later mutant is not-run, so
 	// the record's sample states the score of the same mutants for the same
@@ -119,67 +141,45 @@ type Config struct {
 	// passes. Before the mutant runs, the ordinary control run builds and
 	// runs the suite from the unchanged source.
 	Confirm bool
-	// Memory is the memory that the run's test binaries may use at once, in
-	// bytes, or 0 for no limit. Each memory ceiling is at most Memory, and at
-	// least the binary's peak in the opening control run plus the protocol's
-	// constant, so that a ceiling does not end the run of a mutant that uses
-	// only the memory of the tests. The run starts as many workers as fit in
-	// Memory with the largest ceiling of the suite's test binaries, at least
-	// one, and at most Workers.
-	Memory int64
-	// Admit, when it is not nil, admits the runs that follow the opening
-	// control run. Run calls it with the memory that those runs may use at
-	// once: the workers that fit in Memory times the largest memory ceiling
-	// of the suite's test binaries, or 0 where the engine does not apply a
-	// ceiling.
-	// Admit waits until the caller admits the runs, and returns the function
-	// that Run calls when its closing control run has ended. It returns false
-	// when ctx ended first, and Run then stops.
-	Admit func(ctx context.Context, bytes int64) (release func(), ok bool)
-	// Verdict receives each mutant when its verdict is final, from one
-	// goroutine at a time: the mutant, the number of the run's mutants, and
-	// the path of the mutant's file relative to the working directory, as
-	// [record.Record.Path] states it. Verdict may be nil.
-	Verdict func(m record.Mutant, mutants int, path string)
 }
 
 // runner is the state of one run.
 type runner struct {
-	cfg Config
-	// procs is the number of threads that the run may use.
-	procs int
-	// most is the most workers that run at once: cfg.Workers, at least 1,
-	// and after the opening control run at most as many as fit in
-	// cfg.Memory with the largest memory ceiling of the suite.
-	most int
-	def  spec.Definition
 	rec  *record.Record
+	pkg  *load.Package
+	prog *render.Program
 	work string
 	// wd is the process's working directory as record.Resolved returns it,
 	// against which report states each mutant's path.
-	wd   string
-	pkg  *load.Package
-	prog *render.Program
+	wd  string
+	def spec.Definition
 	// programs lists the test binaries of the suite: the package's own
 	// first, when it has a test file, and then the others by import path.
 	programs []*program
 	// snapshots lists the files of the package, and then of each other
 	// package of the suite, before any test binary runs.
 	snapshots []snapshot
-	// ran reports whether a test binary has started.
-	ran bool
 	// order lists the mutant of each entry of the record.
 	order []*enumerate.Mutant
+	cfg   Config
+	// procs is the number of threads that the run may use.
+	procs int
+	// most is the most workers that run at once: cfg.Workers, at least 1,
+	// and after the opening control run at most as many as fit in
+	// cfg.Memory with the largest memory ceiling of the suite.
+	most int
 	// total is the sum of the programs' deadlines: the longest that one
 	// mutant's run of every program, or the closing control run, can take.
 	total time.Duration
 	// ordinaryBuild is how long the builds of the ordinary control run
 	// took, the time that a confirmation's builds take again.
 	ordinaryBuild time.Duration
+	mu            sync.Mutex
+	// ran reports whether a test binary has started.
+	ran bool
 	// limited reports whether cfg.Sample alone ended the mutant runs: the
 	// limit stopped the starts, and every mutant that started ran.
 	limited bool
-	mu      sync.Mutex
 }
 
 // outcome is a mutant's verdict and what its runs state: the tests that
@@ -187,9 +187,9 @@ type runner struct {
 // the reason, and whether a confirmation run decided the verdict.
 type outcome struct {
 	verdict   spec.Verdict
-	tests     []string
 	seconds   *float64
 	reason    string
+	tests     []string
 	confirmed bool
 }
 
@@ -231,7 +231,7 @@ type outcome struct {
 //
 // Run returns an error when the package directory or one of its data files
 // does not read, and when it cannot make its work directory.
-func Run(ctx context.Context, cfg Config) (*record.Record, error) {
+func Run(ctx context.Context, cfg *Config) (*record.Record, error) {
 	def := spec.Load()
 	dir, _ := filepath.Abs(cfg.Dir)
 	resolved, err := filepath.EvalSymlinks(dir)
@@ -249,7 +249,12 @@ func Run(ctx context.Context, cfg Config) (*record.Record, error) {
 	defer os.RemoveAll(work)
 	info, _ := debug.ReadBuildInfo()
 	r := &runner{
-		cfg: cfg, procs: threads(cfg), most: max(1, cfg.Workers), def: def, work: work, wd: record.Resolved(workingDir),
+		cfg:       *cfg,
+		procs:     threads(cfg),
+		most:      max(1, cfg.Workers),
+		def:       def,
+		work:      work,
+		wd:        record.Resolved(workingDir),
 		snapshots: []snapshot{{dir: resolved, files: files}},
 		rec: &record.Record{
 			Record:    def.Protocol.Record.Name,
@@ -275,14 +280,14 @@ func Run(ctx context.Context, cfg Config) (*record.Record, error) {
 	if r.limited {
 		limit = cfg.Sample
 	}
-	r.rec.SetScore(def.Protocol, limit)
+	r.rec.SetScore(&def.Protocol, limit)
 	r.rec.Inputs = r.inputs(ctx, resolved)
 	return r.rec, nil
 }
 
 // threads returns the number of threads that a run of cfg may use:
 // cfg.Procs, or the engine's GOMAXPROCS where cfg.Procs is below 1.
-func threads(cfg Config) int {
+func threads(cfg *Config) int {
 	if cfg.Procs < 1 {
 		return runtime.GOMAXPROCS(0)
 	}
@@ -308,7 +313,8 @@ func (r *runner) goEnv(divisor int) []string {
 func (r *runner) inputs(ctx context.Context, dir string) string {
 	exe, _ := os.Executable()
 	engine, _ := buildID(context.WithoutCancel(ctx), dir, r.goEnv(1), exe)
-	var ids, digests []string
+	ids := make([]string, 0, len(r.programs))
+	digests := make([]string, 0, len(r.snapshots))
 	for _, p := range r.programs {
 		ids = append(ids, p.target+" "+p.buildID)
 	}
@@ -401,7 +407,7 @@ func (r *runner) run(ctx context.Context) {
 // load when the package does not load.
 func (r *runner) loadMutants(ctx context.Context) (*enumerate.Result, error) {
 	include := r.def.Overlay.Comment + r.def.Catalogue.Include
-	p, err := load.Load(ctx, load.Config{Dir: r.cfg.Dir, Env: r.goEnv(1), Imports: render.Imports(), Include: include})
+	p, err := load.Load(ctx, &load.Config{Dir: r.cfg.Dir, Env: r.goEnv(1), Imports: render.Imports(), Include: include})
 	if p != nil {
 		r.rec.Target.Name, r.rec.Root, r.rec.Toolchain = p.ImportPath, p.Root, p.Toolchain
 	}
@@ -409,7 +415,7 @@ func (r *runner) loadMutants(ctx context.Context) (*enumerate.Result, error) {
 		return nil, err
 	}
 	r.pkg = p
-	return enumerate.Enumerate(p, r.def, enumerate.Options{
+	return enumerate.Enumerate(p, &r.def, enumerate.Options{
 		Lines:            r.selection(),
 		IncludeGenerated: r.cfg.IncludeGenerated,
 	}), nil
@@ -476,7 +482,7 @@ func (r *runner) suite(ctx context.Context) error {
 	if len(r.cfg.Suite) == 0 {
 		return nil
 	}
-	linked, err := load.Linking(ctx, load.Config{Dir: r.pkg.Dir, Env: r.goEnv(1)}, r.pkg.ImportPath, r.cfg.Suite)
+	linked, err := load.Linking(ctx, &load.Config{Dir: r.pkg.Dir, Env: r.goEnv(1)}, r.pkg.ImportPath, r.cfg.Suite)
 	if err != nil {
 		return err
 	}

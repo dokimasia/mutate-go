@@ -1,10 +1,9 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package load_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +23,7 @@ var listError = prop.String(prop.Alphabet("ab \t\n"), prop.MaxSize(8)).Map(func(
 
 func TestList(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("List", func(t *testing.T) {
 		t.Parallel()
@@ -35,7 +34,7 @@ func TestList(t *testing.T) {
 				t,
 				moduleDir(t, map[string]string{"a.go": "package fixture\n", "sub/b.go": "package sub\n"}),
 			)
-			got, err := load.List(ctx, load.Config{Dir: dir, Env: os.Environ()}, []string{"./..."})
+			got, err := load.List(ctx, &load.Config{Dir: dir, Env: os.Environ()}, []string{"./..."})
 			assert.NoError(t, err, "go list lists the module's packages")
 			assert.Equal(t, got, []load.Listed{
 				{ImportPath: "fixture", Dir: dir},
@@ -46,7 +45,7 @@ func TestList(t *testing.T) {
 		t.Run("states the error of a pattern that names no directory in its entry", func(t *testing.T) {
 			t.Parallel()
 			dir := moduleDir(t, map[string]string{"a.go": "package fixture\n"})
-			got, err := load.List(ctx, load.Config{Dir: dir, Env: os.Environ()}, []string{"./missing"})
+			got, err := load.List(ctx, &load.Config{Dir: dir, Env: os.Environ()}, []string{"./missing"})
 			assert.NoError(t, err, "go list lists a pattern that names no directory")
 			assert.Length(t, got, 1, "the pattern has one entry")
 			assert.Equal(t, got[0].ImportPath, "./missing", "the entry names the pattern")
@@ -57,7 +56,7 @@ func TestList(t *testing.T) {
 		t.Run("states the errors of a package's dependencies in its entry", func(t *testing.T) {
 			t.Parallel()
 			dir := moduleDir(t, map[string]string{"a.go": "package fixture\n\nimport _ \"fixture/missing\"\n"})
-			got, err := load.List(ctx, load.Config{Dir: dir, Env: os.Environ()}, []string{"."})
+			got, err := load.List(ctx, &load.Config{Dir: dir, Env: os.Environ()}, []string{"."})
 			assert.NoError(t, err, "go list lists a package whose dependency does not resolve")
 			assert.Length(t, got, 1, "the pattern has one entry")
 			assert.Nil(t, got[0].Error, "the package itself lists")
@@ -69,7 +68,7 @@ func TestList(t *testing.T) {
 			t.Parallel()
 			env, fake := fakeGo(t)
 			fakeList(t, fake, map[string]any{"ImportPath": "fixture", "Dir": "/src/fixture"})
-			got, err := load.List(ctx, load.Config{Dir: t.TempDir(), Env: env}, []string{"./a", "./b"})
+			got, err := load.List(ctx, &load.Config{Dir: t.TempDir(), Env: env}, []string{"./a", "./b"})
 			assert.NoError(t, err, "the fake go list lists one package")
 			assert.Equal(t, got, []load.Listed{{ImportPath: "fixture", Dir: "/src/fixture"}}, "the entry decodes")
 			assert.Equal(t, calls(t, fake), "list -e -json=ImportPath,Dir,Error,DepsErrors ./a ./b\n",
@@ -79,7 +78,7 @@ func TestList(t *testing.T) {
 		t.Run("returns an error with the go command's message when go list fails", func(t *testing.T) {
 			t.Parallel()
 			env, _ := fakeGo(t)
-			_, err := load.List(ctx, load.Config{Dir: t.TempDir(), Env: env}, []string{"."})
+			_, err := load.List(ctx, &load.Config{Dir: t.TempDir(), Env: env}, []string{"."})
 			assert.HasError(t, err, "a go command without list.json fails")
 			assert.That(t, err.Error()).
 				HasPrefix("go list -e -json=ImportPath,Dir,Error,DepsErrors .: exit status 1", "the error states the call").
@@ -90,7 +89,7 @@ func TestList(t *testing.T) {
 			t.Parallel()
 			env, fake := fakeGo(t)
 			write(t, fake, listFile, "{")
-			_, err := load.List(ctx, load.Config{Dir: t.TempDir(), Env: env}, []string{"."})
+			_, err := load.List(ctx, &load.Config{Dir: t.TempDir(), Env: env}, []string{"."})
 			assert.HasError(t, err, "an entry that ends early fails")
 			assert.Equal(t, err.Error(), "go list: unexpected EOF", "the error states the decoder's")
 		})

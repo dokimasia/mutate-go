@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package spec_test
@@ -19,8 +19,9 @@ func TestCatalogue(t *testing.T) {
 
 		t.Run("has a constant for every kind of the catalogue and for no other", func(t *testing.T) {
 			t.Parallel()
-			var kinds []string
-			for _, k := range spec.Load().Catalogue.Kinds {
+			catalogue := spec.Load().Catalogue
+			kinds := make([]string, 0, len(catalogue.Kinds))
+			for _, k := range catalogue.Kinds {
 				kinds = append(kinds, string(k.ID))
 			}
 			assert.Permutation(t, declared(t, "Kind"), kinds, "the constants of Kind are the catalogue's kinds")

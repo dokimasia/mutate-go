@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package render
@@ -50,7 +50,7 @@ const (
 // path of each file of the build, and the path of the file that the build
 // reads in its place.
 type overlay struct {
-	Replace map[string]string
+	Replace map[string]string `json:"Replace"`
 }
 
 // Program is the files that a build reads in place of a package's own: the
@@ -64,14 +64,14 @@ type Program struct {
 	// Ordinals maps each mutant of an instrumented site to its ordinal,
 	// from 1. The mutants of a site have consecutive ordinals.
 	Ordinals map[*enumerate.Mutant]int
-	// Sites lists the instrumented sites in the order of the enumeration.
-	Sites []*enumerate.Site
 	// Prefix starts each name that the instrumented package adds: the
 	// declarations and imports of the helper file, and the variables that a
 	// return of zero values returns. No identifier of the package's files or
 	// of its test files starts with it. Plain takes the prefix of the
 	// package's instrumented program.
 	Prefix string
+	// Sites lists the instrumented sites in the order of the enumeration.
+	Sites []*enumerate.Site
 }
 
 // Render instruments every site of r that has a runnable mutant. The
@@ -187,8 +187,8 @@ func build(
 // a file of the program.
 type problem struct {
 	file    string
-	offset  int
 	message string
+	offset  int
 }
 
 // check parses the program's files and type-checks them with the package's

@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -40,7 +40,7 @@ const (
 
 // listed returns packages of the import paths, in a directory of none.
 func listed(paths ...string) []load.Listed {
-	var pkgs []load.Listed
+	pkgs := make([]load.Listed, 0, len(paths))
 	for _, p := range paths {
 		pkgs = append(pkgs, load.Listed{ImportPath: p})
 	}
@@ -352,24 +352,20 @@ func TestPlan(t *testing.T) {
 		})
 
 		stops := []struct {
-			name     string
-			ctx      func() context.Context
-			deadline time.Time
-			want     string
+			name      string
+			cancelled bool
+			deadline  time.Time
+			want      string
 		}{
 			{
 				"starts no package after the deadline",
-				context.Background,
+				false,
 				time.Now().Add(-time.Second),
 				name + ": a: not tested, because -timeout passed before the package started\n",
 			},
 			{
 				"starts no package after the context ends",
-				func() context.Context {
-					ctx, cancel := context.WithCancel(context.Background())
-					cancel()
-					return ctx
-				},
+				true,
 				time.Time{},
 				name + ": a: not tested, because the command was interrupted\n",
 			},
@@ -377,9 +373,14 @@ func TestPlan(t *testing.T) {
 		for _, tt := range stops {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				if tt.cancelled {
+					cancel()
+				}
 				var errs bytes.Buffer
 				called := false
-				got := schedule(tt.ctx(), listed("a"), nil, 4, 1, tt.deadline,
+				got := schedule(ctx, listed("a"), nil, 4, 1, tt.deadline,
 					&output{stdout: io.Discard, stderr: &errs},
 					func(context.Context, load.Listed, share) int {
 						called = true

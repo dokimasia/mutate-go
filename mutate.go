@@ -1,10 +1,9 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package mutate
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -77,8 +76,8 @@ func Check(tb testing.TB, opts ...Option) {
 		deadline, _ = d.Deadline()
 	}
 	rec, err := run.Run(
-		context.Background(),
-		run.Config{
+		tb.Context(),
+		&run.Config{
 			Dir: workingDir, Env: os.Environ(), Lines: lines, Suite: c.suite, Workers: c.workers, Deadline: deadline,
 			Confirm: c.confirm, IncludeGenerated: c.includeGenerated, Memory: memory.Limit(os.DirFS(rootDir)),
 		},
@@ -102,15 +101,16 @@ func Check(tb testing.TB, opts ...Option) {
 func reportTo(tb testing.TB, rec *record.Record) {
 	tb.Helper()
 	protocol, wd := spec.Load().Protocol, record.Resolved(workingDir)
-	for _, m := range rec.Mutants {
-		if report.Listed(protocol, m.Verdict) {
+	for i := range rec.Mutants {
+		m := &rec.Mutants[i]
+		if report.Listed(&protocol, m.Verdict) {
 			fail(tb, report.Line(m, rec.Path(m.File, wd)))
 		}
 	}
 	for _, note := range report.Notes(rec) {
 		tb.Errorf("mutate: %s", note)
 	}
-	tb.Log("mutate: " + report.Summary(rec, protocol))
+	tb.Log("mutate: " + report.Summary(rec, &protocol))
 }
 
 // fail writes line to the test's output without the source position that
@@ -129,8 +129,8 @@ type Option struct {
 
 // config is the configuration of one call of Check.
 type config struct {
-	workers          int
 	suite            []string
+	workers          int
 	confirm          bool
 	includeGenerated bool
 }
@@ -190,12 +190,9 @@ func Suite(patterns ...string) Option {
 // process may use with their memory ceilings. Tests that share a resource
 // outside their temporary directory, such as a fixed port, then fail each
 // other, and the failures count as kills. Every run, the control runs
-// included, gets GOMAXPROCS divided by n, and at least 1. Workers panics
-// for n below 1.
+// included, gets GOMAXPROCS divided by n, and at least 1. Workers counts an
+// n below 1 as 1.
 func Workers(n int) Option {
-	if n < 1 {
-		panic(fmt.Sprintf("mutate: Workers(%d) states fewer than one worker", n))
-	}
 	return Option{set: func(c config) config {
 		c.workers = n
 		return c

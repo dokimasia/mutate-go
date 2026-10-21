@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package report_test
@@ -57,7 +57,7 @@ func TestReport(t *testing.T) {
 			t.Parallel()
 			var listed []spec.Verdict
 			for _, v := range protocol.Verdicts {
-				if report.Listed(protocol, v.ID) {
+				if report.Listed(&protocol, v.ID) {
 					listed = append(listed, v.ID)
 				}
 			}
@@ -110,7 +110,7 @@ func TestReport(t *testing.T) {
 				t.Parallel()
 				m := mutant
 				m.Verdict, m.Replacement, m.Reason = tt.verdict, tt.replacement, tt.reason
-				assert.Equal(t, report.Line(m, path), tt.want, "the line states the mutant at its position")
+				assert.Equal(t, report.Line(&m, path), tt.want, "the line states the mutant at its position")
 			})
 		}
 	})
@@ -149,7 +149,7 @@ func TestReport(t *testing.T) {
 				t.Parallel()
 				m := mutant
 				m.Verdict, m.Rule, m.Replacement = tt.verdict, tt.rule, tt.replacement
-				assert.Equal(t, report.Planned(m, path), tt.want, "the line lists the mutant at its position")
+				assert.Equal(t, report.Planned(&m, path), tt.want, "the line lists the mutant at its position")
 			})
 		}
 	})
@@ -159,13 +159,13 @@ func TestReport(t *testing.T) {
 
 		t.Run("counts the mutants to test and the mutants of each verdict", func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, report.Plan(run("", "", spec.Suppressed, spec.NotViable), protocol),
+			assert.Equal(t, report.Plan(run("", "", spec.Suppressed, spec.NotViable), &protocol),
 				target+": 2 mutants to test, 1 not viable, 1 suppressed", "the line counts every mutant")
 		})
 
 		t.Run("states one mutant to test in the singular", func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, report.Plan(run(""), protocol), target+": 1 mutant to test", "the line counts the mutant")
+			assert.Equal(t, report.Plan(run(""), &protocol), target+": 1 mutant to test", "the line counts the mutant")
 		})
 	})
 
@@ -322,7 +322,7 @@ func TestReport(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 				tt.give.Errors, tt.give.Sample = tt.errors, tt.sample
-				assert.Equal(t, report.Summary(tt.give, protocol), target+": "+tt.want,
+				assert.Equal(t, report.Summary(tt.give, &protocol), target+": "+tt.want,
 					"the summary states the run's outcome and its verdicts")
 			})
 		}
@@ -356,7 +356,7 @@ func TestReport(t *testing.T) {
 				t.Parallel()
 				rec := run(spec.Killed)
 				rec.Generated = tt.give
-				assert.Equal(t, report.Summary(rec, protocol),
+				assert.Equal(t, report.Summary(rec, &protocol),
 					target+": 1 of 1 mutant detected (100%): 1 killed, "+tt.want,
 					"the summary ends with the generated files")
 			})
@@ -369,14 +369,14 @@ func TestReport(t *testing.T) {
 					detected := c.Draw(prop.Integer(0, 300), "detected")
 					undetected := c.Draw(prop.Integer(0, 300), "undetected")
 					c.Assume(detected+undetected > 0)
-					var verdicts []spec.Verdict
+					verdicts := make([]spec.Verdict, 0, detected+undetected)
 					for range detected {
 						verdicts = append(verdicts, spec.Killed)
 					}
 					for range undetected {
 						verdicts = append(verdicts, spec.Survived)
 					}
-					head := detection.FindStringSubmatch(report.Summary(run(verdicts...), protocol))
+					head := detection.FindStringSubmatch(report.Summary(run(verdicts...), &protocol))
 					assert.Length(c, head, 4, "the summary states the detected mutants")
 					d, _ := strconv.Atoi(head[1])
 					n, _ := strconv.Atoi(head[2])

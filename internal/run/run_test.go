@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package run_test
@@ -132,7 +132,8 @@ func TestRun(t *testing.T) {
 				wd, err = filepath.EvalSymlinks(wd)
 			}
 			assert.NoError(t, err, "the working directory resolves")
-			var got, want []string
+			got := make([]string, 0, len(mutants))
+			want := make([]string, 0, len(mutants))
 			for i, m := range mutants {
 				got = append(got, filepath.Join(wd, paths[i]))
 				want = append(want, filepath.Join(rec.Root, filepath.FromSlash(m.File)))
@@ -377,7 +378,7 @@ Unused aor 0: no-coverage
 
 		t.Run("returns an error when the package directory does not read", func(t *testing.T) {
 			t.Parallel()
-			_, err := run.Run(t.Context(), run.Config{Dir: filepath.Join(t.TempDir(), missing), Env: os.Environ()})
+			_, err := run.Run(t.Context(), &run.Config{Dir: filepath.Join(t.TempDir(), missing), Env: os.Environ()})
 			assert.ErrorIs(t, err, fs.ErrNotExist, "the directory does not exist")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
 		})
@@ -390,7 +391,7 @@ func TestRunEnv(t *testing.T) {
 	t.Run("Run", func(t *testing.T) {
 		t.Run("returns an error when the work directory cannot be made", func(t *testing.T) {
 			t.Setenv(tmpVar, filepath.Join(t.TempDir(), missing))
-			_, err := run.Run(t.Context(), run.Config{Dir: ".", Env: os.Environ()})
+			_, err := run.Run(t.Context(), &run.Config{Dir: ".", Env: os.Environ()})
 			assert.ErrorIs(t, err, fs.ErrNotExist, "the temporary directory does not exist")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
 		})

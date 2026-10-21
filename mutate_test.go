@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package mutate_test
@@ -270,16 +270,6 @@ func TestMutate(t *testing.T) {
 			assert.NoError(t, err, "Check writes the record into the directory of "+recordDirVar)
 		})
 	})
-
-	t.Run("Workers", func(t *testing.T) {
-		t.Parallel()
-
-		t.Run("panics for fewer than one worker", func(t *testing.T) {
-			t.Parallel()
-			r := assert.Panics(t, func() { mutate.Workers(0) }, "Workers(0) panics")
-			assert.Equal(t, r, any("mutate: Workers(0) states fewer than one worker"), "the panic states the count")
-		})
-	})
 }
 
 // TestMutateEnv changes the working directory and the environment of the
@@ -443,6 +433,17 @@ func TestMutateEnv(t *testing.T) {
 			lines := failures(t, s)
 			assert.NotEmpty(t, lines, "Check fails the test")
 			assert.HasPrefix(t, lines[len(lines)-1], "mutate: record: ", "the last failure states the record's error")
+		})
+	})
+
+	t.Run("Workers", func(t *testing.T) {
+		t.Run("counts an n below 1 as one worker", func(t *testing.T) {
+			enter(t)
+			t.Setenv(expectedProcsVar, strconv.Itoa(runtime.GOMAXPROCS(0)))
+			s := &seat{TB: t}
+			mutate.Check(s, mutate.Workers(0))
+			assert.Equal(t, failures(t, s), slices.Concat(survivors, uncovered),
+				"each binary runs with every thread of the process, and TestAdd passes")
 		})
 	})
 }

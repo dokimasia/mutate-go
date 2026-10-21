@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package spec_test
@@ -20,8 +20,9 @@ func TestProtocol(t *testing.T) {
 
 		t.Run("has a constant for every verdict of the protocol and for no other", func(t *testing.T) {
 			t.Parallel()
-			var verdicts []string
-			for _, v := range spec.Load().Protocol.Verdicts {
+			protocol := spec.Load().Protocol
+			verdicts := make([]string, 0, len(protocol.Verdicts))
+			for _, v := range protocol.Verdicts {
 				verdicts = append(verdicts, string(v.ID))
 			}
 			assert.Permutation(
@@ -66,7 +67,8 @@ func TestProtocol(t *testing.T) {
 
 		t.Run("returns the empty class for a verdict that the protocol does not define", func(t *testing.T) {
 			t.Parallel()
-			assert.Empty(t, spec.Load().Protocol.Class(""), "a mutant without a verdict has no class")
+			p := spec.Load().Protocol
+			assert.Empty(t, p.Class(""), "a mutant without a verdict has no class")
 		})
 	})
 
@@ -75,8 +77,9 @@ func TestProtocol(t *testing.T) {
 
 		t.Run("has a constant for every run error of the protocol and for no other", func(t *testing.T) {
 			t.Parallel()
-			var codes []string
-			for _, e := range spec.Load().Protocol.Errors {
+			protocol := spec.Load().Protocol
+			codes := make([]string, 0, len(protocol.Errors))
+			for _, e := range protocol.Errors {
 				codes = append(codes, string(e))
 			}
 			assert.Permutation(

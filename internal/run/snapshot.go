@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package run
@@ -42,10 +42,10 @@ const (
 // snapshot is the digest of each data file of one package of the suite,
 // as Run reads them before any test binary runs.
 type snapshot struct {
+	files map[string]string
 	// importPath is empty for the run's own package.
 	importPath string
 	dir        string
-	files      map[string]string
 }
 
 // readSnapshot returns what it reads of each file of the package's data in
@@ -104,7 +104,7 @@ func fileDigest(path string, typ fs.FileMode) (string, error) {
 	case typ.IsRegular():
 		f, err := os.Open(path)
 		if err != nil {
-			return "", err
+			return "", err //nolint:wrapcheck // the *fs.PathError contains the path, and Run adds the prefix
 		}
 		defer f.Close()
 		h := sha256.New()
@@ -112,7 +112,7 @@ func fileDigest(path string, typ fs.FileMode) (string, error) {
 		return hex.EncodeToString(h.Sum(nil)), err
 	case typ&fs.ModeSymlink != 0:
 		target, err := os.Readlink(path)
-		return linkPrefix + target, err
+		return linkPrefix + target, err //nolint:wrapcheck // the *fs.PathError contains the path, and Run adds the prefix
 	}
 	return specialPrefix + typ.String(), nil
 }

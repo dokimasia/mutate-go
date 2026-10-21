@@ -1,11 +1,10 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package conformance_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -137,7 +136,7 @@ func TestCorpus(t *testing.T) {
 			decode(t, filepath.Join(corpus, name, language, expectFileName), &e)
 			assert.Equal(t, e.Language, language, "expect.json states the fixture of the engine's language")
 			dir := copyFixture(t, filepath.Join(corpus, name, language))
-			rec, err := run.Run(context.Background(), config(t, dir, c, e))
+			rec, err := run.Run(t.Context(), config(t, dir, c, e))
 			assert.NoError(t, err, "the engine returns the record of the fixture's run")
 			compare(t, language, c, e, rec)
 		})
@@ -167,9 +166,9 @@ func copyFixture(t *testing.T, dir string) string {
 
 // config returns the run's configuration for the copy of a fixture in dir:
 // the options of case.json, and the selection and the suite of expect.json.
-func config(t *testing.T, dir string, c caseFile, e expectFile) run.Config {
+func config(t *testing.T, dir string, c caseFile, e expectFile) *run.Config {
 	t.Helper()
-	cfg := run.Config{
+	cfg := &run.Config{
 		Dir:              dir,
 		Env:              os.Environ(),
 		Confirm:          c.Confirm,

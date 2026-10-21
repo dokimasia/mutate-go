@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package testbin
@@ -94,8 +94,8 @@ type Result struct {
 	Err error
 	// State is the binary's exit state, or nil for a run that did not start.
 	State *os.ProcessState
-	// Ended is why Run ended the run.
-	Ended Ending
+	// Output is what the run's output states about its tests.
+	Output Output
 	// Seconds is the run's wall time.
 	Seconds float64
 	// Peak is the largest resident memory of the run's process group that
@@ -104,8 +104,8 @@ type Result struct {
 	// does not read resident memory, and for a run that ended before the
 	// first read.
 	Peak int64
-	// Output is what the run's output states about its tests.
-	Output Output
+	// Ended is why Run ended the run.
+	Ended Ending
 }
 
 // Run runs the test binary that cfg states, in a process group of its own,
@@ -128,7 +128,8 @@ type Result struct {
 // # Concurrency
 //
 // Run is safe for concurrent use. Each call runs its own process.
-func Run(ctx context.Context, cfg Config) *Result {
+func Run(ctx context.Context, cfg *Config) *Result {
+	//nolint:gosec,noctx // the engine built the binary, and Run ends the binary's process group when ctx ends
 	cmd := exec.Command(cfg.Binary, cfg.Args...)
 	cmd.Dir = cfg.Dir
 	reader, writer := io.Pipe()

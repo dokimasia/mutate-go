@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package enumerate_test
@@ -148,7 +148,8 @@ generated sbr-zero 0: return x -> "return 0"
 			t.Parallel()
 			dir := moduleDir(t, map[string]string{"sub/a.go": "package sub\n\nfunc F(x int) int { return x + 1 }\n"})
 			sub := loadDir(t, filepath.Join(dir, "sub"))
-			r := enumerate.Enumerate(sub, spec.Load(), enumerate.Options{
+			d := spec.Load()
+			r := enumerate.Enumerate(sub, &d, enumerate.Options{
 				Lines: []enumerate.Range{{File: "sub/a.go", First: 3, Last: 3}},
 			})
 			assert.NotEmpty(t, r.Mutants, "the function has mutants")
@@ -291,7 +292,7 @@ x - 1: file imports C
 			p := fixture(t, map[string]string{"clamp.go": clamp, "steps.go": steps})
 			d := spec.Load()
 			assert.Deterministic(t, func(p *load.Package) (string, error) {
-				r := enumerate.Enumerate(p, d, enumerate.Options{})
+				r := enumerate.Enumerate(p, &d, enumerate.Options{})
 				var keys strings.Builder
 				for _, m := range r.Mutants {
 					keys.WriteString(m.Key + "\n")

@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package memory_test
@@ -35,7 +35,7 @@ func TestPeak(t *testing.T) {
 			t.Parallel()
 			self, err := os.Executable()
 			assert.NoError(t, err, "the test binary's path reads")
-			cmd := exec.Command(self)
+			cmd := exec.CommandContext(t.Context(), self)
 			cmd.Env = append(os.Environ(), childVar+"=1")
 			assert.NoError(t, cmd.Run(), "the copy of the test binary exits")
 			peak := memory.Peak(cmd.ProcessState)

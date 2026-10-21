@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package run
@@ -19,8 +19,8 @@ import (
 // the type checker would reject too. A package that does not load, and a
 // package with an annotation that is not valid, count 0, because Run stops
 // before it tests a mutant of them.
-func Count(ctx context.Context, cfg Config) int {
-	r := &runner{cfg: cfg, procs: threads(cfg), def: spec.Load(), rec: &record.Record{}}
+func Count(ctx context.Context, cfg *Config) int {
+	r := &runner{cfg: *cfg, procs: threads(cfg), def: spec.Load(), rec: &record.Record{}}
 	result, err := r.loadMutants(ctx)
 	if err != nil || len(result.Problems) > 0 {
 		return 0

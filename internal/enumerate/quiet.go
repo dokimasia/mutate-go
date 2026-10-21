@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package enumerate
@@ -110,7 +110,7 @@ func (e *enumerator) quiet(st ast.Stmt) bool {
 			return false
 		}
 		for _, c := range s.Body.List {
-			clause := c.(*ast.CaseClause)
+			clause := c.(*ast.CaseClause) //nolint:forcetypeassert // the body of a switch contains case clauses alone
 			for _, x := range clause.List {
 				if !e.effectFree(x) {
 					return false
@@ -126,7 +126,8 @@ func (e *enumerator) quiet(st ast.Stmt) bool {
 			return false
 		}
 		for _, c := range s.Body.List {
-			if !e.allQuiet(c.(*ast.CaseClause).Body) {
+			clause := c.(*ast.CaseClause) //nolint:forcetypeassert // the body of a switch contains case clauses alone
+			if !e.allQuiet(clause.Body) {
 				return false
 			}
 		}
@@ -260,7 +261,7 @@ func (e *enumerator) quietSelectors(f *load.File, st ast.Stmt) {
 			parts = append(parts, s.Tag)
 		}
 		for _, c := range s.Body.List {
-			clause := c.(*ast.CaseClause)
+			clause := c.(*ast.CaseClause) //nolint:forcetypeassert // the body of a switch contains case clauses alone
 			parts, bodies = append(parts, clause.List...), append(bodies, clause.Body...)
 		}
 	}

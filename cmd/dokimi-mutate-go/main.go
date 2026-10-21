@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -70,14 +70,14 @@ func command() int {
 	return c.main(ctx, os.Args[1:])
 }
 
-// cli is one run of the command line: its standard streams, the interval
-// of its progress lines and its clock, the default memory budget of the
-// process, and the memory that the process may use.
+// cli is one run of the command line. It has the standard streams of the
+// run, its clock, the interval of its progress lines, the default memory
+// budget of the process and the memory that the process may use.
 type cli struct {
 	stdin          io.Reader
 	stdout, stderr io.Writer
-	every          time.Duration
 	now            func() time.Time
+	every          time.Duration
 	budget         int64
 	limit          int64
 }
@@ -199,7 +199,7 @@ func (c *cli) readDiff(path string) ([]selection.Lines, error) {
 		data, err = os.ReadFile(path)
 	}
 	if err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // main adds the flag to the error of the read
 	}
 	return selection.ParseDiff(string(data))
 }

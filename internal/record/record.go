@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package record
@@ -38,7 +38,7 @@ const develVersion = "(devel)"
 // Record is one run of one target. Catalogue and Overlay are the versions
 // of the catalogue and of the Go overlay that the run applied, and two
 // records' scores are comparable only where both are equal.
-type Record struct {
+type Record struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
 	Record     string `json:"record"`
 	Version    int    `json:"version"`
 	Catalogue  string `json:"catalogue"`
@@ -100,7 +100,7 @@ type Range struct {
 // Limits are the deadline and the memory ceiling of each run of one test
 // binary, which runs the tests of the package Target. MemoryCeilingBytes is
 // nil where the engine does not apply a ceiling.
-type Limits struct {
+type Limits struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
 	Target             string  `json:"target"`
 	DeadlineSeconds    float64 `json:"deadlineSeconds"`
 	MemoryCeilingBytes *int64  `json:"memoryCeilingBytes"`
@@ -109,7 +109,7 @@ type Limits struct {
 // Control states the control runs. Ordinary is nil unless the run
 // confirms its survivors, and Closing is nil when the closing control run
 // did not complete: the run ended before or during it, or it failed.
-type Control struct {
+type Control struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
 	Opening  Opening   `json:"opening"`
 	Ordinary *Ordinary `json:"ordinary,omitempty"`
 	Closing  *Closing  `json:"closing,omitempty"`
@@ -118,7 +118,7 @@ type Control struct {
 // Opening states the opening control run: its wall time, its peak resident
 // memory where the platform measures it, the instrumented sites, and the
 // sites that executed.
-type Opening struct {
+type Opening struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
 	Seconds       float64 `json:"seconds"`
 	PeakBytes     *int64  `json:"peakBytes"`
 	Sites         int     `json:"sites"`
@@ -143,7 +143,7 @@ type Closing struct {
 // the caller allowed, when that limit alone ended the runs, and nil when
 // the caller's deadline or the caller ended them. Score is nil for an empty
 // sample.
-type Sample struct {
+type Sample struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
 	Before     string   `json:"before"`
 	Limit      *int     `json:"limit"`
 	Detected   int      `json:"detected"`
@@ -170,7 +170,7 @@ type Position struct {
 // executed the site did not run each of its tests alone. Confirmed is true
 // for a mutant whose Verdict, Tests and Seconds come from the run of its
 // ordinary build: a survivor of its run, or a mutant without coverage.
-type Mutant struct {
+type Mutant struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
 	Key         string       `json:"key"`
 	Kind        spec.Kind    `json:"kind"`
 	File        string       `json:"file"`
@@ -189,7 +189,7 @@ type Mutant struct {
 }
 
 // Skip is one site of a catalogue class without a mutant, and the reason.
-type Skip struct {
+type Skip struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
 	File   string          `json:"file"`
 	Start  Position        `json:"start"`
 	End    Position        `json:"end"`
@@ -217,8 +217,8 @@ func (r *Record) Failed() bool {
 		return true
 	}
 	limited := r.Sample != nil && r.Sample.Limit != nil
-	for _, m := range r.Mutants {
-		if m.Verdict == spec.Error || m.Verdict == spec.NotRun && !limited {
+	for i := range r.Mutants {
+		if v := r.Mutants[i].Verdict; v == spec.Error || v == spec.NotRun && !limited {
 			return true
 		}
 	}
@@ -236,13 +236,13 @@ func (r *Record) Failed() bool {
 // other run. limit is the number of mutant runs that the caller allowed,
 // when that limit alone ended the runs, or 0. The sample then states it,
 // and the run's score is the sample's.
-func (r *Record) SetScore(protocol spec.Protocol, limit int) {
+func (r *Record) SetScore(protocol *spec.Protocol, limit int) {
 	detected, undetected := r.Tally(protocol, "")
 	r.Score = ratio(detected, undetected)
 	r.Sample = nil
 	before := ""
-	for _, m := range r.Mutants {
-		if m.Verdict == spec.NotRun && (before == "" || m.Key < before) {
+	for i := range r.Mutants {
+		if m := &r.Mutants[i]; m.Verdict == spec.NotRun && (before == "" || m.Key < before) {
 			before = m.Key
 		}
 	}
@@ -276,8 +276,9 @@ func ratio(detected, undetected int) *float64 {
 // Tally returns the number of the detected and of the undetected mutants,
 // as protocol classifies each verdict, among the mutants whose keys sort
 // before bound, or among every mutant when bound is empty.
-func (r *Record) Tally(protocol spec.Protocol, bound string) (detected, undetected int) {
-	for _, m := range r.Mutants {
+func (r *Record) Tally(protocol *spec.Protocol, bound string) (detected, undetected int) {
+	for i := range r.Mutants {
+		m := &r.Mutants[i]
 		if bound != "" && m.Key >= bound {
 			continue
 		}

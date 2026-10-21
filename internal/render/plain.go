@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package render
@@ -56,7 +56,7 @@ func Plain(p *load.Package, m *enumerate.Mutant, prefix string) *Program {
 	// The change is head, the line breaks that it removes, and body. edits
 	// are the edits before it.
 	var head, body string
-	var edits []edit
+	var edits []edit //nolint:prealloc // the case of sbr-zero assigns the edits that zeroBindings returns
 	switch m.Kind {
 	case spec.AOR, spec.RORBoundary, spec.UOIIncDec:
 		var at token.Pos
@@ -77,7 +77,7 @@ func Plain(p *load.Package, m *enumerate.Mutant, prefix string) *Program {
 	case spec.RORFalse:
 		head = "(" + source(s.Node) + " && " + falseExpr + ")"
 	case spec.LCRLeft, spec.LCRRight, spec.LCRTrue, spec.LCRFalse:
-		n := s.Node.(*ast.BinaryExpr)
+		n := s.Node.(*ast.BinaryExpr) //nolint:forcetypeassert // the site of an lcr mutant is a binary expression
 		x, y := "("+source(n.X)+")", "("+source(n.Y)+")"
 		switch m.Kind {
 		case spec.LCRLeft:
@@ -95,6 +95,7 @@ func Plain(p *load.Package, m *enumerate.Mutant, prefix string) *Program {
 			head, body = "(", source(n.X)+")"
 		}
 	case spec.UOIMinus:
+		//nolint:forcetypeassert // the site of a uoi-minus mutant is a unary expression
 		head, body = "(", source(s.Node.(*ast.UnaryExpr).X)+")"
 	case spec.SBRDelete:
 		head = "if " + falseExpr + " { " + source(s.Node) + " }"

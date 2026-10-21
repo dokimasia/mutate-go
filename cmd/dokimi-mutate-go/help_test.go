@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -34,7 +34,7 @@ const (
 // docHeader starts doc.go before its package comment. The linters read
 // doc.go, so the header states its source without the marker of a
 // generated file, which they skip.
-const docHeader = "// Copyright ThesmOS B.V. 2026\n// SPDX-License-Identifier: MIT\n\n" +
+const docHeader = "// Copyright Dokimasia B.V. 2026\n// SPDX-License-Identifier: MIT\n\n" +
 	"// TestHelp writes this file from the help with -update. Edit the help in help.go.\n\n"
 
 // docSubject starts the package comment, before the help's first word.
@@ -70,7 +70,7 @@ func TestHelp(t *testing.T) {
 
 		t.Run("lists each flag of the table in the table's order", func(t *testing.T) {
 			t.Parallel()
-			var flags []string
+			flags := make([]string, 0, len(commandFlags))
 			for _, opt := range commandFlags {
 				flags = append(flags, "\n"+flagIndent+"-"+opt.name)
 			}
@@ -139,7 +139,8 @@ func TestHelp(t *testing.T) {
 					width := c.Draw(prop.Integer(1, 40), "width")
 					var b strings.Builder
 					wrap(&b, strings.Join(words, " "), usageIndent, width)
-					var units, got []string
+					units := make([]string, 0, len(words))
+					var got []string
 					for _, w := range words {
 						units = append(units, strings.ReplaceAll(w, tie, " "))
 					}

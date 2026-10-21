@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package render_test
@@ -565,9 +565,10 @@ func fixture(t *testing.T, files map[string]string) (*load.Package, *enumerate.R
 	for name, text := range files {
 		assert.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(text), fileMode), name+" is written")
 	}
-	p, err := load.Load(context.Background(), load.Config{Dir: dir, Env: os.Environ(), Imports: render.Imports()})
+	p, err := load.Load(t.Context(), &load.Config{Dir: dir, Env: os.Environ(), Imports: render.Imports()})
 	assert.NoError(t, err, "the fixture loads")
-	return p, enumerate.Enumerate(p, spec.Load(), enumerate.Options{})
+	d := spec.Load()
+	return p, enumerate.Enumerate(p, &d, enumerate.Options{})
 }
 
 // instrument renders the package with the protocol's variable, and stops
@@ -597,16 +598,17 @@ func buildProgram(t *testing.T, p *load.Package, prog *render.Program) string {
 	assert.NoError(t, err, "the program writes")
 	bin := filepath.Join(work, "pkg.test")
 	out, err := load.Go(
-		context.Background(), p.Dir, os.Environ(), "test", "-c", "-vet=off", "-o", bin, "-overlay", overlay, ".",
+		t.Context(), p.Dir, os.Environ(), "test", "-c", "-vet=off", "-o", bin, "-overlay", overlay, ".",
 	)
 	assert.NoError(t, err, "the test binary builds: "+string(out))
 	return bin
 }
 
 // commandIn returns the command that runs bin in dir, with the environment
-// of the test process and the variables env.
-func commandIn(bin, dir string, env ...string) *exec.Cmd {
-	cmd := exec.Command(bin)
+// of the test process and the variables env. The command's process ends
+// when ctx ends.
+func commandIn(ctx context.Context, bin, dir string, env ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, bin)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), env...)
 	return cmd
@@ -616,7 +618,7 @@ func commandIn(bin, dir string, env ...string) *exec.Cmd {
 // returns its standard output.
 func run(t *testing.T, bin, dir string, env ...string) string {
 	t.Helper()
-	out, err := commandIn(bin, dir, env...).Output()
+	out, err := commandIn(t.Context(), bin, dir, env...).Output()
 	assert.NoError(t, err, "the test binary passes: "+string(out))
 	return string(out)
 }

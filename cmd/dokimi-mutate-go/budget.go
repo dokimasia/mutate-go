@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -19,14 +19,15 @@ import (
 // A budget is safe for concurrent use. Its zero value is not usable:
 // newBudget returns one.
 type budget struct {
-	total int64
-	mu    sync.Mutex
-	// used is the memory of the admitted runs, and admitted their number.
-	used     int64
-	admitted int
 	// changed is closed and replaced at each release, which wakes every
 	// package that waits.
 	changed chan struct{}
+	total   int64
+	// mu guards changed, used and admitted.
+	mu sync.Mutex
+	// used is the memory of the admitted runs, and admitted their number.
+	used     int64
+	admitted int
 }
 
 // newBudget returns a budget of total bytes.

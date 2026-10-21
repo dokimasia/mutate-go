@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package memory
@@ -50,10 +50,10 @@ const (
 // name in it, and the contents of each stat and statm that it reads.
 type Group struct {
 	root fs.FS
-	id   int
 	// members maps the name of each entry that the previous call of Resident
 	// listed to true when the entry is a process of the group.
 	members map[string]bool
+	id      int
 }
 
 // NewGroup returns the Group of the processes of the process group id,

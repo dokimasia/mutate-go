@@ -1,10 +1,9 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package enumerate_test
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,7 +64,7 @@ func loadDir(t *testing.T, dir string) *load.Package {
 	t.Helper()
 	d := spec.Load()
 	include := d.Overlay.Comment + d.Catalogue.Include
-	p, err := load.Load(context.Background(), load.Config{Dir: dir, Env: os.Environ(), Include: include})
+	p, err := load.Load(t.Context(), &load.Config{Dir: dir, Env: os.Environ(), Include: include})
 	assert.NoError(t, err, "the fixture's package loads")
 	return p
 }
@@ -74,7 +73,8 @@ func loadDir(t *testing.T, dir string) *load.Package {
 // enumerates it under opts.
 func enumerateFixture(t *testing.T, files map[string]string, opts enumerate.Options) *enumerate.Result {
 	t.Helper()
-	return enumerate.Enumerate(fixture(t, files), spec.Load(), opts)
+	d := spec.Load()
+	return enumerate.Enumerate(fixture(t, files), &d, opts)
 }
 
 // all enumerates every line of the fixture files, without its generated

@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -56,7 +56,7 @@ func TestOutput(t *testing.T) {
 				o := &output{stdout: &out, stderr: io.Discard, json: tt.json}
 				m := mutantLine
 				m.Verdict = tt.verdict
-				o.line(m, m.File)
+				o.line(&m, m.File)
 				assert.Equal(t, out.String(), tt.want, "the output lists the mutants that a reader acts on")
 			})
 		}

@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -37,8 +37,8 @@ type output struct {
 
 // line writes the line of m, whose file is at path, when a report lists m
 // and the output is text.
-func (o *output) line(m record.Mutant, path string) {
-	if !o.json && report.Listed(definition.Protocol, m.Verdict) {
+func (o *output) line(m *record.Mutant, path string) {
+	if !o.json && report.Listed(&definition.Protocol, m.Verdict) {
 		_, _ = io.WriteString(o.stdout, report.Line(m, path)+"\n")
 	}
 }
@@ -54,7 +54,7 @@ func (o *output) result(rec *record.Record) {
 		_, _ = o.stdout.Write(append(data, '\n'))
 		return
 	}
-	_, _ = io.WriteString(o.stdout, report.Summary(rec, definition.Protocol)+"\n")
+	_, _ = io.WriteString(o.stdout, report.Summary(rec, &definition.Protocol)+"\n")
 }
 
 // listing writes the listing of one package: the notes on the listing, and
@@ -63,10 +63,11 @@ func (o *output) listing(rec *record.Record) {
 	o.notes(rec)
 	var b strings.Builder
 	wd := record.Resolved(workingDir)
-	for _, m := range rec.Mutants {
+	for i := range rec.Mutants {
+		m := &rec.Mutants[i]
 		b.WriteString(report.Planned(m, rec.Path(m.File, wd)) + "\n")
 	}
-	b.WriteString(report.Plan(rec, definition.Protocol) + "\n")
+	b.WriteString(report.Plan(rec, &definition.Protocol) + "\n")
 	_, _ = io.WriteString(o.stdout, b.String())
 }
 
@@ -92,9 +93,10 @@ func (o *output) errorf(format string, args ...any) {
 //
 // A lockedWriter is safe for concurrent use.
 type lockedWriter struct {
-	mu  sync.Mutex
 	w   io.Writer
 	err error
+	// mu guards err and the writes to w.
+	mu sync.Mutex
 }
 
 // Write writes data to w under the lock, and keeps the first error of a
@@ -106,7 +108,7 @@ func (l *lockedWriter) Write(data []byte) (int, error) {
 	if l.err == nil {
 		l.err = err
 	}
-	return n, err
+	return n, err //nolint:wrapcheck // Write returns the count and the error of w, as its docblock states
 }
 
 // Err returns the first error of a write, or nil when every write

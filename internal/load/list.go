@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package load
@@ -65,7 +65,7 @@ type ListError struct {
 // List returns an error when the go command fails or writes an entry that
 // does not decode. go list states the error of a package that does not
 // list in the package's entry, which List returns in Listed.Error.
-func List(ctx context.Context, cfg Config, patterns []string) ([]Listed, error) {
+func List(ctx context.Context, cfg *Config, patterns []string) ([]Listed, error) {
 	return list[Listed](ctx, cfg.Dir, cfg.Env, patterns...)
 }
 

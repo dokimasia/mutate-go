@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package load
@@ -57,28 +57,27 @@ type Package struct {
 	// Root is the directory of the package's module, or Dir for a package
 	// outside a module. Every file's Name is relative to it.
 	Root string
+	// Toolchain is the go command's version, as go env GOVERSION reports
+	// it.
+	Toolchain string
+	Fset      *token.FileSet
+	Types     *types.Package
+	// Info states the types, the definitions, the uses, the scopes and the
+	// selections of every file in Files.
+	Info     *types.Info
+	importer types.Importer
+	sizes    types.Sizes
+	// Files lists every file that the compiler compiles for the package,
+	// in the order that go list reports them.
+	Files []*File
 	// Language is N in the language version go1.N that the go command
 	// compiles the package's files with, from the module's go line. It is 0
 	// for a package outside a module, whose files the go command compiles
 	// with the toolchain's own language version.
 	Language int
-	// Toolchain is the go command's version, as go env GOVERSION reports
-	// it.
-	Toolchain string
 	// Tests reports whether the package has a test file, without which go
 	// test -c does not write a test binary.
 	Tests bool
-	// Files lists every file that the compiler compiles for the package,
-	// in the order that go list reports them.
-	Files []*File
-	Fset  *token.FileSet
-	Types *types.Package
-	// Info states the types, the definitions, the uses, the scopes and the
-	// selections of every file in Files.
-	Info *types.Info
-
-	importer types.Importer
-	sizes    types.Sizes
 }
 
 // Role is what a compiled file is to the engine.
@@ -99,21 +98,21 @@ const (
 
 // File is one compiled file.
 type File struct {
-	Role Role
-	// Generated reports whether [go/ast.IsGenerated] reports the file's
-	// source, and no comment before its package clause is the line
-	// [Config.Include]. The engine mutates a generated Source file, and
-	// lists the sites of a generated Cgo file, only in a run that includes
-	// generated files. A Support file is never Generated.
-	Generated bool
 	// Path is the absolute path of the file that the type checker read.
 	Path string
 	// Name is the path of the file's source, relative to the package's
 	// Root, with / as the separator. For a Cgo file the source is the file
 	// that imports C, and a Support file has no Name.
 	Name   string
-	Text   []byte
 	Syntax *ast.File
+	Text   []byte
+	Role   Role
+	// Generated reports whether [go/ast.IsGenerated] reports the file's
+	// source, and no comment before its package clause is the line
+	// [Config.Include]. The engine mutates a generated Source file, and
+	// lists the sites of a generated Cgo file, only in a run that includes
+	// generated files. A Support file is never Generated.
+	Generated bool
 }
 
 // Config states the package to load and the environment of the go
@@ -121,6 +120,10 @@ type File struct {
 type Config struct {
 	// Dir is the package directory.
 	Dir string
+	// Include is the line comment, such as //dokimi:mutate-include, that
+	// makes a generated file a Source file when it is a comment before the
+	// file's package clause. Empty makes every generated file Generated.
+	Include string
 	// Env is the environment of every go command, as os.Environ returns
 	// it. The go command is the first one that Env's PATH names.
 	Env []string
@@ -128,36 +131,32 @@ type Config struct {
 	// Check reads besides the package's dependencies: the imports of a file
 	// that the caller adds to the package.
 	Imports []string
-	// Include is the line comment, such as //dokimi:mutate-include, that
-	// makes a generated file a Source file when it is a comment before the
-	// file's package clause. Empty makes every generated file Generated.
-	Include string
 }
 
 // goEnv is the part of go env's output that Load reads. Its field names are
 // the names of the variables that Load asks go env for.
 type goEnv struct {
-	GOVERSION  string
-	GOMODCACHE string
-	GOARCH     string
+	GOVERSION  string `json:"GOVERSION"`
+	GOMODCACHE string `json:"GOMODCACHE"`
+	GOARCH     string `json:"GOARCH"`
 }
 
 // listedPackage is the part of a go list entry that Load reads.
 type listedPackage struct {
+	ImportMap map[string]string
+	Module    *struct {
+		Dir       string
+		GoVersion string
+	}
+	Name   string
+	Export string
 	Listed
-	Name            string
-	Export          string
 	GoFiles         []string
 	CgoFiles        []string
 	CompiledGoFiles []string
 	TestGoFiles     []string
 	XTestGoFiles    []string
-	ImportMap       map[string]string
 	DepOnly         bool
-	Module          *struct {
-		Dir       string
-		GoVersion string
-	}
 }
 
 // Load lists the package in cfg.Dir with go list, and type-checks the
@@ -179,13 +178,13 @@ type listedPackage struct {
 // package with the error, as go/types returns a package that does not
 // type-check: its ImportPath, Name, Dir, Root, Language, Toolchain and
 // Tests are set.
-func Load(ctx context.Context, cfg Config) (*Package, error) {
+func Load(ctx context.Context, cfg *Config) (*Package, error) {
 	dir, err := filepath.Abs(cfg.Dir)
 	if err == nil {
 		dir, err = filepath.EvalSymlinks(dir)
 	}
 	if err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // the error contains the path of the directory, and Load adds no prefix
 	}
 	out, err := Go(ctx, dir, cfg.Env, append([]string{envCommand, envJSON}, fieldNames[goEnv]()...)...)
 	if err != nil {
@@ -274,6 +273,22 @@ func language(goLine string) int {
 	return n
 }
 
+// Check type-checks files, which the caller parses into Fset, as the
+// package at the language version go1.N, where N is language, or the
+// toolchain's own for 0. It reads the dependencies from the export data
+// that Load read, and returns every error that the type checker reports.
+func (p *Package) Check(files []*ast.File, language int) []types.Error {
+	var errs []types.Error
+	conf := p.config(language, func(err error) {
+		// The type checker reports every error as a types.Error.
+		if e, ok := errors.AsType[types.Error](err); ok {
+			errs = append(errs, e)
+		}
+	})
+	_, _ = conf.Check(p.ImportPath, p.Fset, files, nil)
+	return errs
+}
+
 // parse reads and parses every compiled file, gives each its role, and
 // marks each generated file whose header does not contain the line include.
 func (p *Package) parse(target *listedPackage, include string) error {
@@ -286,17 +301,19 @@ func (p *Package) parse(target *listedPackage, include string) error {
 		cgo[filepath.Join(p.Dir, name)] = true
 	}
 	for _, name := range target.CompiledGoFiles {
-		path := name
-		if !filepath.IsAbs(path) {
+		var path string
+		if filepath.IsAbs(name) {
+			path = name
+		} else {
 			path = filepath.Join(p.Dir, name)
 		}
 		text, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return err //nolint:wrapcheck // the *fs.PathError contains the path, and Load adds no prefix
 		}
 		syntax, err := parser.ParseFile(p.Fset, path, text, parser.ParseComments|parser.SkipObjectResolution)
 		if err != nil {
-			return err
+			return err //nolint:wrapcheck // the scanner.ErrorList contains the file and the position
 		}
 		f := &File{Role: Support, Path: path, Text: text, Syntax: syntax}
 		source := path
@@ -316,14 +333,14 @@ func (p *Package) parse(target *listedPackage, include string) error {
 				parser.PackageClauseOnly|parser.ParseComments,
 			)
 			if err != nil {
-				return err
+				return err //nolint:wrapcheck // the scanner.ErrorList contains the file and the position
 			}
 			f.Generated = generated(header, include)
 		}
 		if f.Role != Support {
 			rel, err := filepath.Rel(p.Root, source)
 			if err != nil {
-				return err
+				return err //nolint:wrapcheck // the error of filepath.Rel contains both paths
 			}
 			f.Name = filepath.ToSlash(rel)
 		}
@@ -395,22 +412,6 @@ func (p *Package) config(language int, report func(error)) *types.Config {
 		conf.GoVersion = languagePrefix + strconv.Itoa(language)
 	}
 	return conf
-}
-
-// Check type-checks files, which the caller parses into Fset, as the
-// package at the language version go1.N, where N is language, or the
-// toolchain's own for 0. It reads the dependencies from the export data
-// that Load read, and returns every error that the type checker reports.
-func (p *Package) Check(files []*ast.File, language int) []types.Error {
-	var errs []types.Error
-	conf := p.config(language, func(err error) {
-		// The type checker reports every error as a types.Error.
-		if e, ok := errors.AsType[types.Error](err); ok {
-			errs = append(errs, e)
-		}
-	})
-	_, _ = conf.Check(p.ImportPath, p.Fset, files, nil)
-	return errs
 }
 
 // resolves reports whether path, with its symbolic links resolved, is dir.

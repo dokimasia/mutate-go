@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -52,31 +52,34 @@ const stdinPath = "-"
 
 // options are the settings that a command line states.
 type options struct {
-	dir              string
-	lines            linesFlag
-	diff             string
+	dir     string
+	diff    string
+	records string
+	lines   linesFlag
+	skip    patternsFlag
+	suite   patternsFlag
+	// patterns are the patterns of the packages to test, currentPackage
+	// when the command line names none.
+	patterns         []string
 	sample           int
-	includeGenerated bool
-	skip             patternsFlag
-	suite            patternsFlag
-	confirm          bool
 	parallel         int
 	workers          int
 	timeout          time.Duration
 	budget           sizeFlag
+	includeGenerated bool
+	confirm          bool
 	json             bool
-	records          string
 	list             bool
 	version          bool
-	// patterns are the patterns of the packages to test, currentPackage
-	// when the command line names none.
-	patterns []string
 }
 
 // option is one flag of the command line. The table of the flags is the
 // one description of each flag: it defines the flags, and the help lists
 // them.
 type option struct {
+	// define defines the flag on fs, with its destination in o and its
+	// default from o.
+	define func(fs *flag.FlagSet, name string, o *options)
 	// name is the flag's name, and value the placeholder of its value in
 	// the help, empty for a flag that takes no value.
 	name, value string
@@ -85,9 +88,6 @@ type option struct {
 	section string
 	// usage is the flag's description, one paragraph that the help wraps.
 	usage string
-	// define defines the flag on fs, with its destination in o and its
-	// default from o.
-	define func(fs *flag.FlagSet, name string, o *options)
 }
 
 // commandFlags is the table of the command's flags, in the help's order.
@@ -224,7 +224,7 @@ func parse(args []string, budget int64) (*options, error) {
 		opt.define(fs, opt.name, o)
 	}
 	if err := fs.Parse(args); err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // main prints the error of the flag package and matches flag.ErrHelp
 	}
 	o.patterns = fs.Args()
 	if len(o.patterns) == 0 {

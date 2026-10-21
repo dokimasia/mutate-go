@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package spec
@@ -70,7 +70,7 @@ type Protocol struct {
 // such as the empty verdict of a mutant that a listing would test. Every
 // count of detected or undetected mutants reads the class here. Class
 // compares v with each verdict of the protocol.
-func (p Protocol) Class(v Verdict) ScoreClass {
+func (p *Protocol) Class(v Verdict) ScoreClass {
 	for _, pv := range p.Verdicts {
 		if pv.ID == v {
 			return pv.Score

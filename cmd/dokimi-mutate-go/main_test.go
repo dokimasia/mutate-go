@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -210,7 +210,7 @@ func TestCLIProcess(t *testing.T) {
 		t.Run("exits with the status of the command line of the process", func(t *testing.T) {
 			binary, err := os.Executable()
 			assert.NoError(t, err, "the test binary's path reads")
-			cmd := exec.Command(binary, "-"+flagParallel, "0")
+			cmd := exec.CommandContext(t.Context(), binary, "-"+flagParallel, "0")
 			cmd.Env = append(os.Environ(), mainVar+"=1")
 			var stderr bytes.Buffer
 			cmd.Stderr = &stderr
@@ -223,7 +223,7 @@ func TestCLIProcess(t *testing.T) {
 		t.Run("states three quarters of the memory that the process may use as the default budget", func(t *testing.T) {
 			binary, err := os.Executable()
 			assert.NoError(t, err, "the test binary's path reads")
-			cmd := exec.Command(binary, "-"+flagHelp)
+			cmd := exec.CommandContext(t.Context(), binary, "-"+flagHelp)
 			cmd.Env = append(os.Environ(), mainVar+"=1")
 			out, err := cmd.Output()
 			assert.NoError(t, err, "the process writes the help and exits with the status 0")

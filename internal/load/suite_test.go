@@ -1,10 +1,9 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package load_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,7 +21,7 @@ func testFile(pkg, spec string) string {
 
 func TestLinking(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("Linking", func(t *testing.T) {
 		t.Parallel()
@@ -42,7 +41,7 @@ func TestLinking(t *testing.T) {
 				"d/d.go":      "package d\n",
 				"d/d_test.go": testFile("d", "_ \"strings\""),
 			}))
-			linked, err := load.Linking(ctx, load.Config{Dir: dir, Env: os.Environ()}, "fixture", []string{"./..."})
+			linked, err := load.Linking(ctx, &load.Config{Dir: dir, Env: os.Environ()}, "fixture", []string{"./..."})
 			assert.NoError(t, err, "the module's packages list")
 			assert.Equal(t, linked, []load.Linked{
 				{ImportPath: "fixture/a", Dir: filepath.Join(dir, "a")},
@@ -53,7 +52,7 @@ func TestLinking(t *testing.T) {
 		t.Run("lists no package when no test binary links the package", func(t *testing.T) {
 			t.Parallel()
 			dir := moduleDir(t, map[string]string{"a.go": "package fixture\n", "x/x.go": "package x\n"})
-			linked, err := load.Linking(ctx, load.Config{Dir: dir, Env: os.Environ()}, "fixture", []string{"./x"})
+			linked, err := load.Linking(ctx, &load.Config{Dir: dir, Env: os.Environ()}, "fixture", []string{"./x"})
 			assert.NoError(t, err, "the package lists")
 			assert.Empty(t, linked, "x has no test binary")
 		})
@@ -109,7 +108,8 @@ func TestLinking(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				_, err := load.Linking(ctx, tt.give(t), "fixture", []string{"./..."})
+				cfg := tt.give(t)
+				_, err := load.Linking(ctx, &cfg, "fixture", []string{"./..."})
 				assert.HasError(t, err, "Linking fails")
 				assert.That(t, err.Error()).
 					HasPrefix(tt.prefix, "the error starts with the package or the call").

@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package testbin_test
@@ -67,11 +67,11 @@ func TestMain(m *testing.M) {
 func fake(mode string) int {
 	switch mode {
 	case passes:
-		fmt.Print(passing)
+		fmt.Fprint(os.Stdout, passing)
 	case exits3:
 		return 3
 	case failsAndHangs:
-		fmt.Print(failing)
+		fmt.Fprint(os.Stdout, failing)
 		time.Sleep(time.Minute)
 	case hangs:
 		time.Sleep(time.Minute)
@@ -85,6 +85,7 @@ func fake(mode string) int {
 		self, _ := os.Executable()
 		var children []*exec.Cmd
 		for range 2 {
+			//nolint:noctx // the fake test binary runs outside any test, so no context ends its children
 			child := exec.Command(self)
 			child.Env = append(os.Environ(), fakeVar+"="+grows)
 			if child.Start() != nil {
@@ -97,9 +98,10 @@ func fake(mode string) int {
 		}
 	case environment:
 		wd, _ := os.Getwd()
-		fmt.Printf("%s\n%s\n%s\n%s\n", wd, os.Getenv("TMPDIR"), os.Getenv("TMP"), os.Getenv("TEMP"))
+		fmt.Fprintf(os.Stdout, "%s\n%s\n%s\n%s\n", wd, os.Getenv("TMPDIR"), os.Getenv("TMP"), os.Getenv("TEMP"))
 	case orphan:
 		self, _ := os.Executable()
+		//nolint:noctx // the fake test binary runs outside any test, so no context ends its child
 		child := exec.Command(self)
 		child.Env, child.Stdout = append(os.Environ(), fakeVar+"="+hangs), os.Stdout
 		if child.Start() != nil {

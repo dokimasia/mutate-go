@@ -1,4 +1,4 @@
-# Managed by ergon init. Add repository settings to .ergon/local/.golangci.yml and run ergon init sync.
+# Managed by ergon init, with .ergon/local/.golangci.yml merged in. Change the repository's settings there and run ergon init sync.
 #
 # The configuration of golangci-lint for every module of the repository. It enables each linter
 # that a Go repository of the baseline enables, with the strictest setting that one of them uses.
@@ -6,21 +6,18 @@
 # key, lists appended. The depguard rules of the repository's module boundaries go there.
 
 version: "2"
-
 run:
   timeout: 5m
   modules-download-mode: readonly
   allow-parallel-runners: true
   tests: true
   relative-path-mode: gomod
-
 output:
   show-stats: true
   sort-order:
     - linter
     - severity
     - file
-
 linters:
   default: none
   enable:
@@ -88,14 +85,11 @@ linters:
     # run builds into golangci-lint
     - errorprefix
     - skipexpiry
-
   settings:
     asasalint:
       use-builtin-exclusions: true
-
     copyloopvar:
       check-alias: true
-
     # golangci-lint loads each analyzer and module plugin from its program. A repository sets the
     # settings of a plugin in its local file, under the name of the plugin.
     custom:
@@ -103,11 +97,9 @@ linters:
         type: module
       skipexpiry:
         type: module
-
     decorder:
       disable-dec-order-check: true
       disable-init-func-first-check: false
-
     # depguard allows only the standard library in a module without rules, so this rule denies
     # the packages that the standard library or a successor replaces, and allows everything else.
     # A repository adds the rules of its module boundaries in its local file.
@@ -130,12 +122,10 @@ linters:
               desc: use context of the standard library
             - pkg: github.com/golang/protobuf
               desc: github.com/golang/protobuf is deprecated, so use google.golang.org/protobuf
-
     exhaustive:
       default-signifies-exhaustive: true
       check:
         - switch
-
     forbidigo:
       analyze-types: true
       forbid:
@@ -143,29 +133,23 @@ linters:
           msg: return an error instead of a panic
         - pattern: ^(fmt\.(Print|Printf|Println)|print|println)$
           msg: write to an io.Writer that the caller passes, or log through log/slog
-
     funcorder:
       constructor: true
       struct-method: true
-
     gocritic:
       enabled-tags:
         - diagnostic
         - performance
       disabled-checks:
         - ifElseChain
-
     govet:
       enable-all: true
-
     interfacebloat:
       max: 10
-
     nolintlint:
       require-explanation: true
       require-specific: true
       allow-unused: false
-
     revive:
       severity: error
       confidence: 0.1
@@ -194,30 +178,25 @@ linters:
         - name: unnecessary-stmt
         - name: unused-receiver
         - name: var-naming
-
     # revive checks the package comments and the names, so staticcheck runs every other check.
     staticcheck:
       checks:
         - all
         - -ST1000
         - -ST1003
-
     # Every test file declares the package x_test, so a test calls only what its package exports.
     # The pattern matches no file name, and an empty pattern would match every one.
     testpackage:
       skip-regexp: "^$"
-
     usetesting:
       context-background: true
       context-todo: true
       os-setenv: true
       os-mkdir-temp: true
       os-temp-dir: true
-
     whitespace:
       multi-if: true
       multi-func: false
-
     # An error that the constructor of an error, a wrap, a join or a context returns already
     # carries its cause, and a walk of a file tree returns the error of the caller's own function,
     # so neither needs a second wrap.
@@ -230,7 +209,10 @@ linters:
         - context\.Cause\(
         - (fs|filepath)\.WalkDir\(
         - filepath\.Walk\(
-
+      # An error that one package of the module returns from another carries the context of the
+      # package that made it, so the caller does not wrap it a second time.
+      ignore-package-globs:
+        - go.dokimi.dev/mutate/*
   exclusions:
     generated: lax
     presets:
@@ -275,7 +257,6 @@ linters:
       - path: _test\.go$
         linters: [paralleltest, tparallel]
         text: 'Test\w*(Allocs|Env|Process)\b'
-
 formatters:
   enable:
     - gci
@@ -283,7 +264,6 @@ formatters:
     - gofumpt
     - goimports
     - golines
-
   # gci groups the standard library apart from every other import. A repository puts its own
   # modules in a group of their own by adding gci's sections in its local file, such as standard,
   # default and the prefix of its module paths.
@@ -296,12 +276,22 @@ formatters:
     golines:
       max-len: 120
       reformat-tags: false
-
+    # The packages of the module form an import group of their own.
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(go.dokimi.dev/mutate)
+  # The formatters leave the vendored definition alone, because its manifest pins the digest of
+  # each file. gofmt would also remove the parentheses around the receivers of the fixture of the
+  # corpus case identity.
+  exclusions:
+    paths:
+      - conformance/spec
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   uniq-by-line: false
   fix: false
-
 severity:
   default: error

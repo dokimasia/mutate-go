@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package report
@@ -38,7 +38,7 @@ const closingIncomplete = "the closing control run did not complete, so no run c
 // Listed reports whether a report lists a mutant with the verdict v on a
 // line of its own: a mutant that protocol counts as undetected, a survivor
 // or a mutant without coverage, or a mutant whose run ended in an error.
-func Listed(protocol spec.Protocol, v spec.Verdict) bool {
+func Listed(protocol *spec.Protocol, v spec.Verdict) bool {
 	return protocol.Class(v) == spec.Undetected || v == spec.Error
 }
 
@@ -48,7 +48,7 @@ func Listed(protocol spec.Protocol, v spec.Verdict) bool {
 //
 // A mutant with an empty replacement reads "original removed", and the line
 // of a mutant whose run ended in an error ends with the reason.
-func Line(m record.Mutant, path string) string {
+func Line(m *record.Mutant, path string) string {
 	text := line(m, path, phrase(m.Verdict), became)
 	if m.Verdict == spec.Error && m.Reason != "" {
 		text += ": " + m.Reason
@@ -65,7 +65,7 @@ func Line(m record.Mutant, path string) string {
 // test". The status of any other mutant is its verdict, followed by the
 // rule family of a suppressed mutant in parentheses. A mutant with an empty
 // replacement reads "original removed".
-func Planned(m record.Mutant, path string) string {
+func Planned(m *record.Mutant, path string) string {
 	status := phrase(m.Verdict)
 	switch {
 	case m.Verdict == "":
@@ -91,7 +91,8 @@ func Notes(rec *record.Record) []string {
 	}
 	var reasons []string
 	notRun := map[string]int{}
-	for _, m := range rec.Mutants {
+	for i := range rec.Mutants {
+		m := &rec.Mutants[i]
 		if m.Verdict != spec.NotRun {
 			continue
 		}
@@ -120,7 +121,7 @@ func Notes(rec *record.Record) []string {
 //   - the number of the generated files without the include directive and
 //     of their mutants, and whether the run included them, when the package
 //     has such a file
-func Summary(rec *record.Record, protocol spec.Protocol) string {
+func Summary(rec *record.Record, protocol *spec.Protocol) string {
 	detected, undetected := rec.Tally(protocol, "")
 	sampled := rec.Sample != nil && rec.Sample.Score != nil
 	head := "no mutant to detect"
@@ -146,10 +147,10 @@ func Summary(rec *record.Record, protocol spec.Protocol) string {
 // the generated files as Summary states them.
 //
 //	example.com/arith: 6 mutants to test, 2 suppressed, 1 not viable
-func Plan(rec *record.Record, protocol spec.Protocol) string {
+func Plan(rec *record.Record, protocol *spec.Protocol) string {
 	tests := 0
-	for _, m := range rec.Mutants {
-		if m.Verdict == "" {
+	for i := range rec.Mutants {
+		if rec.Mutants[i].Verdict == "" {
 			tests++
 		}
 	}
@@ -160,7 +161,7 @@ func Plan(rec *record.Record, protocol spec.Protocol) string {
 // line returns the line of m at its position in the file at path, with the
 // status, and the change of the original code, which verb joins to the
 // replacement.
-func line(m record.Mutant, path, status, verb string) string {
+func line(m *record.Mutant, path, status, verb string) string {
 	change := m.Original + " " + verb + " " + m.Replacement
 	if m.Replacement == "" {
 		change = m.Original + " removed"
@@ -171,10 +172,10 @@ func line(m record.Mutant, path, status, verb string) string {
 // parts returns the parts of a line that counts rec's mutants: the count of
 // each verdict, in protocol's order, and the generated files without the
 // include directive, with their mutants and whether the run included them.
-func parts(rec *record.Record, protocol spec.Protocol) []string {
+func parts(rec *record.Record, protocol *spec.Protocol) []string {
 	counts := map[spec.Verdict]int{}
-	for _, m := range rec.Mutants {
-		counts[m.Verdict]++
+	for i := range rec.Mutants {
+		counts[rec.Mutants[i].Verdict]++
 	}
 	var list []string
 	for _, v := range protocol.Verdicts {

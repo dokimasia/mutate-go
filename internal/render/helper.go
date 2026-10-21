@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package render
@@ -138,7 +138,7 @@ func helper(
 		constraint = fmt.Sprintf(buildConstraint, generics) + "\n"
 	}
 	fmt.Fprintf(&b, named(prefix, helperHead), constraint, name, variable, TraceVar, traceStart+"\n", ordinals+1)
-	var spans []span
+	spans := make([]span, 0, len(sites))
 	// site contains the functions of one site. They contain no code of the
 	// package, so named renames the names of the instrumentation in the
 	// whole text.

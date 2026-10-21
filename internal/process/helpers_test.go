@@ -1,19 +1,16 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package process_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
-
-	"go.dokimi.dev/assert"
 )
 
 // fakeVar is the variable of the environment that names the behaviour that
@@ -65,7 +62,7 @@ func TestMain(m *testing.M) {
 func fake(mode string) int {
 	switch mode {
 	case writes:
-		fmt.Print(outLine)
+		fmt.Fprint(os.Stdout, outLine)
 		fmt.Fprint(os.Stderr, errLine)
 	case exits3:
 		return 3
@@ -91,29 +88,21 @@ func fake(mode string) int {
 // process attributes attr and the fake command's standard output, writes
 // the copy's process ID, and returns 0, or 1 when the copy does not start.
 func startChild(attr *syscall.SysProcAttr) int {
+	//nolint:noctx // the fake command runs outside any test, so no context ends its child
 	child := exec.Command(os.Args[0])
 	child.Env, child.Stdout, child.SysProcAttr = append(os.Environ(), fakeVar+"="+sleeps), os.Stdout, attr
 	if child.Start() != nil {
 		return 1
 	}
-	fmt.Println(child.Process.Pid)
+	fmt.Fprintln(os.Stdout, child.Process.Pid)
 	return 0
 }
 
 // command returns the command that runs the test binary as the fake
-// command with the behaviour mode.
-func command(mode string) *exec.Cmd {
-	cmd := exec.Command(os.Args[0])
+// command with the behaviour mode. The command's process ends when ctx
+// ends.
+func command(ctx context.Context, mode string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, os.Args[0])
 	cmd.Env = append(os.Environ(), fakeVar+"="+mode)
 	return cmd
-}
-
-// childPID returns the process ID that a fake command wrote on the first
-// line of out.
-func childPID(t *testing.T, out string) int {
-	t.Helper()
-	line, _, _ := strings.Cut(out, "\n")
-	pid, err := strconv.Atoi(line)
-	assert.NoError(t, err, "the fake command writes its child's process ID: "+out)
-	return pid
 }

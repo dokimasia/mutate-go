@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package load
@@ -53,7 +53,7 @@ func Go(ctx context.Context, dir string, env []string, args ...string) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(path, args...)
+	cmd := exec.Command(path, args...) //nolint:noctx // Go ends the command's process group when ctx ends
 	cmd.Dir = dir
 	cmd.Env = append(append([]string{}, env...), pwdVar+"="+dir)
 	var stdout, stderr bytes.Buffer

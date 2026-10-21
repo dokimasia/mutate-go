@@ -1,4 +1,4 @@
-// Copyright ThesmOS B.V. 2026
+// Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
 package main
@@ -18,14 +18,14 @@ import (
 // share is a package's part of the command's threads, which schedule
 // passes to the package's run.
 type share struct {
-	// procs is the number of threads of the package's runs.
-	procs int
 	// spare returns the threads that the running packages leave free,
 	// divided among them, for the package's go commands.
 	spare func() int
 	// borrow lends the package the threads of another worker once no
 	// package is left to start, as run.Config.Borrow states.
 	borrow func(threads int) (release func(), freed <-chan struct{})
+	// procs is the number of threads of the package's runs.
+	procs int
 }
 
 // packages returns the packages that the patterns name, as go list resolves
@@ -33,7 +33,7 @@ type share struct {
 // go list states, and reports false when go list fails or a package has an
 // error, so the command line is invalid.
 func packages(ctx context.Context, patterns []string, out *output) ([]load.Listed, bool) {
-	listed, err := load.List(ctx, load.Config{Dir: workingDir, Env: os.Environ()}, patterns)
+	listed, err := load.List(ctx, &load.Config{Dir: workingDir, Env: os.Environ()}, patterns)
 	if err != nil {
 		out.errorf("%v", err)
 		return nil, false
@@ -62,7 +62,7 @@ func importPaths(ctx context.Context, flagName string, patterns []string, out *o
 	if len(patterns) == 0 {
 		return nil, true
 	}
-	listed, err := load.List(ctx, load.Config{Dir: workingDir, Env: os.Environ()}, patterns)
+	listed, err := load.List(ctx, &load.Config{Dir: workingDir, Env: os.Environ()}, patterns)
 	if err != nil {
 		out.errorf("-%s: %v", flagName, err)
 		return nil, false
@@ -224,7 +224,7 @@ func (s *session) weigh(ctx context.Context, pkgs []load.Listed, threads, parall
 		slots <- struct{}{}
 		c := s.config(pkg, share{procs: max(1, threads/parallel)})
 		wg.Go(func() {
-			weights[i] = run.Count(ctx, c)
+			weights[i] = run.Count(ctx, &c)
 			<-slots
 		})
 	}
