@@ -1,3 +1,6 @@
+# Copyright Dokimasia B.V. 2026
+# SPDX-License-Identifier: MIT
+
 # go-license header template. The `header` block is prepended to
 # every Go source file by `ergon license` (apply) and verified by
 # `ergon lint license`. `{{YEAR}}` is substituted by go-license

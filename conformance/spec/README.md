@@ -1,3 +1,8 @@
+<!--
+  ~ Copyright Dokimasia B.V. 2026
+  ~ SPDX-License-Identifier: MIT
+-->
+
 # Vendored definition
 
 A copy of the mutate-spec definition: the operator catalogue, the run

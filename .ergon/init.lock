@@ -99,7 +99,8 @@
     {
       "path": ".golangci.yml",
       "producer": "go",
-      "sha256": "b2d824915cacbed6fa4e4eb7f8a06a9d5b81f6951d95fc565beafd8021127bb7"
+      "local": "8ed8ca8a401e0ae9aae5ff0b24be658979a25d3b97f556228271cf5dff35c230",
+      "sha256": "f463e9a2c55898032ac8bbf543e7c5a839751efb59f3744fb4fb6d94182e9192"
     },
     {
       "path": ".markdownlint.yml",
@@ -124,7 +125,7 @@
     {
       "path": "LICENSE",
       "producer": "license",
-      "sha256": "eaf71013517aa48c3c1f9fdc01327b0879e6ae63c712fc5ab911c262d89ed8bf"
+      "sha256": "540b73560bd7b122c9ed368fed23e0e79a91b9327207c4516caf8dce46d70b15"
     },
     {
       "path": "Makefile",
@@ -300,7 +301,7 @@
   },
   "answers": {
     "name": "mutate-go",
-    "owner": "ThesmOS B.V.",
+    "owner": "Dokimasia B.V.",
     "license": "MIT",
     "repository": "dokimasia/mutate-go",
     "security-contact": "security@dokimi.dev",

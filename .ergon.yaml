@@ -1,4 +1,4 @@
-# Copyright ThesmOS B.V. 2026
+# Copyright Dokimasia B.V. 2026
 # SPDX-License-Identifier: MIT
 
 common:
@@ -137,7 +137,7 @@ github:
 license:
   # The copyright holder of the headers and of the license files. ergon init writes it from --owner,
   # and ergon init sync --owner changes it.
-  owner: ThesmOS B.V.
+  owner: Dokimasia B.V.
   # The SPDX identifier of the license of the headers and of the license files. ergon init writes it
   # from --license, and ergon init sync --license changes it.
   spdx: MIT
@@ -162,7 +162,7 @@ license:
   # no header. A key here replaces the style that ergon resolves.
   styles: {}
   # The doublestar globs of the paths whose files have no header, such as testdata/**.
-  exclude: []
+  exclude: [conformance/spec/**, tools/spec-check.sh, tools/spec-sync.sh]
   # The limit in minutes of the job license of ci.yml, which runs ergon license check.
   ci:
     actions: {}
