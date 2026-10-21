@@ -6,6 +6,10 @@
 # passed on the content of the commit, such as the run of the version pull request. The jobs pack
 # and publish then release each package of the publish plan. The job pack sets up the toolchains of
 # the repository before ergon, which build the artifacts.
+#
+# The job pack also builds, signs and attests the assets of the releases, such as the binaries of
+# the commands of a Go module, and the job publish attaches them to each release before its publish.
+# The job homebrew then commits the casks of the releases to the tap.
 
 name: Release
 
@@ -78,6 +82,10 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      # cosign signs the checksums of the assets, and actions/attest attests the assets, each with the
+      # OIDC identity of the workflow.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -96,6 +104,11 @@ jobs:
       - name: Pack the packages
         run: |
           ergon release pack --from-publish-plan publish-plan.json --out-dir dist
+      - name: Attest the assets
+        if: hashFiles('dist/assets/**') != ''
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/assets/**/*
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release
@@ -129,3 +142,36 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           ergon release publish --from-publish-plan publish-plan.json --from-pack-dir dist
+
+  homebrew:
+    name: Homebrew
+    needs: publish
+    if: needs.publish.outputs.published == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The GitHub App of ERGON_APP_CLIENT_ID and ERGON_APP_PRIVATE_KEY, installed on the tap, commits
+      # to it, because GITHUB_TOKEN writes to no other repository.
+      - name: Create a token for the tap
+        id: tap
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ERGON_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ERGON_APP_PRIVATE_KEY }}
+          owner: dokimasia
+          repositories: homebrew-tap
+          permission-contents: write
+      - uses: ./.github/actions/setup-ergon
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+      - name: Commit the casks to the tap
+        env:
+          GITHUB_TOKEN: ${{ steps.tap.outputs.token }}
+        run: |
+          ergon release ci homebrew --tap dokimasia/homebrew-tap --from-publish-plan publish-plan.json --from-pack-dir dist

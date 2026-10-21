@@ -290,13 +290,25 @@ go:
   # completions, true for a command whose command completion writes the scripts of bash, zsh and
   # fish, as in a program of cobra or of go.stealthscale.io/cli; packages, from deb, rpm and apk;
   # homebrew, true for a cask in homebrew.tap; license, the license of the repository when empty.
-  binaries: []
+  binaries:
+    - name: dokimi-mutate-go
+      module: .
+      main: ./cmd/dokimi-mutate-go
+      description: Measures how well the tests of Go packages detect faults
+      license: ""
+      platforms: []
+      packages:
+        - deb
+        - rpm
+        - apk
+      completions: false
+      homebrew: true
   # The options of the casks of the commands under binaries whose homebrew is true.
   homebrew:
     # The repository of the Homebrew tap on GitHub, as owner/name, to which the job homebrew of
     # release.yml commits each cask, with a token of the GitHub App of ERGON_APP_CLIENT_ID and
     # ERGON_APP_PRIVATE_KEY.
-    tap: ""
+    tap: dokimasia/homebrew-tap
   # The pin of setup-go, the runners and the versions of Go of the job check-go, and its limit in
   # minutes. Empty runners select every runner of the section github, and empty versions the version
   # of go.work.
