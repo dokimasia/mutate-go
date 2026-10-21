@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -345,6 +346,45 @@ func TestSchedule(t *testing.T) {
 			t.Parallel()
 			got := overlap(t, run.Config{Procs: 1, Workers: 2})
 			assert.Equal(t, got, 1, "one thread runs one mutant at a time")
+		})
+
+		t.Run("runs as many mutants at once as fit in Memory with their ceilings", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS != "linux" {
+				t.Skip("the engine applies a memory ceiling on Linux alone")
+			}
+			got := overlap(t, run.Config{Procs: 2, Workers: 2, Memory: tightMemory})
+			assert.Equal(t, got, 1, "the budget fits one memory ceiling")
+		})
+
+		t.Run("borrows no threads for a worker that does not fit in Memory", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS != "linux" {
+				t.Skip("the engine applies a memory ceiling on Linux alone")
+			}
+			got := overlap(t, run.Config{
+				Procs:   1,
+				Workers: 2,
+				Memory:  tightMemory,
+				Borrow:  func(int) (func(), <-chan struct{}) { return func() {}, nil },
+			})
+			assert.Equal(t, got, 1, "the run starts no second worker on the threads that Borrow would lend")
+		})
+
+		t.Run("asks Borrow for no threads while a worker waits for a job", func(t *testing.T) {
+			t.Parallel()
+			var asked atomic.Int64
+			rec := runIn(t, module(t, map[string]string{addFile: add, addTestFile: ballast}), run.Config{
+				Procs:   1,
+				Workers: 2,
+				Sample:  1,
+				Borrow: func(int) (func(), <-chan struct{}) {
+					asked.Add(1)
+					return func() {}, nil
+				},
+			})
+			assert.Empty(t, rec.Errors, "the run states no run error")
+			assert.Equal(t, asked.Load(), int64(0), "the one mutant of the sample runs on the free worker")
 		})
 
 		t.Run("runs another worker on the threads that Borrow lends", func(t *testing.T) {

@@ -142,6 +142,42 @@ func TestGrow(t *testing.T) {
 `, protocol.Variable),
 }
 
+// childGrow is grow whose test calls Grow in a copy of its binary, so the
+// mutants that grow without end grow in a process that the test starts.
+var childGrow = map[string]string{
+	"grow.go": grow["grow.go"],
+	"grow_test.go": fmt.Sprintf(`package fixture
+
+import (
+	"os"
+	"os/exec"
+	"testing"
+	"time"
+)
+
+func TestGrow(t *testing.T) {
+	if os.Getenv(%[1]q) != "" {
+		if Grow(3) != 3<<20 {
+			t.Error("Grow(3) != 3 MiB")
+		}
+		return
+	}
+	if os.Getenv(%[2]q) == "0" {
+		time.Sleep(500 * time.Millisecond)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := exec.Command(self, "-test.run=^TestGrow$")
+	c.Env = append(os.Environ(), %[1]q+"=1")
+	if out, err := c.CombinedOutput(); err != nil {
+		t.Errorf("the copy of the test binary fails: %%v\n%%s", err, out)
+	}
+}
+`, childVar, protocol.Variable),
+}
+
 func TestClassify(t *testing.T) {
 	t.Parallel()
 
@@ -256,5 +292,22 @@ Grow sbr-delete 1: killed [TestGrow]
 Grow sbr-zero 0: killed [TestGrow]
 `, "the mutants that grow without end cross the ceiling")
 		})
+
+		t.Run("gives exhausted to a mutant whose run crosses the memory ceiling in a process that a test starts",
+			func(t *testing.T) {
+				t.Parallel()
+				if runtime.GOOS != "linux" {
+					t.Skip("the engine applies a memory ceiling on Linux alone")
+				}
+				rec := runIn(t, module(t, childGrow), run.Config{Workers: 2})
+				assert.Equal(t, verdicts(rec), `Grow sbr-delete 0: killed [TestGrow]
+Grow ror-true 0: exhausted [TestGrow]
+Grow ror-false 0: killed [TestGrow]
+Grow uoi-incdec 0: exhausted [TestGrow]
+Grow sbr-delete 1: killed [TestGrow]
+Grow sbr-zero 0: killed [TestGrow]
+`, "the mutants that grow without end in the copy of the binary cross the ceiling")
+			},
+		)
 	})
 }

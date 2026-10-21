@@ -37,10 +37,10 @@ func (r *runner) fits(d time.Duration) bool {
 //
 // Each worker's test binaries get cfg.Procs divided by cfg.Workers threads,
 // and at least 1, and dispatch starts as many workers as the run's threads
-// allow, at most cfg.Workers. While every worker runs a job and fewer than
-// cfg.Workers run, dispatch asks cfg.Borrow for the threads of another
-// worker. It asks again before the next job, and when the channel of a
-// refusal closes.
+// allow, at most the workers that fit in cfg.Memory. While every worker runs
+// a job and fewer than those run, dispatch asks cfg.Borrow for the threads
+// of another worker. It asks again before the next job, and when the
+// channel of a refusal closes.
 //
 // dispatch returns when the starts end, while the jobs that started still
 // run: the number of jobs that started, whether the caller's deadline ended
@@ -53,9 +53,8 @@ func (r *runner) dispatch(
 	need func(k int) time.Duration,
 	do func(k int),
 ) (started int, late bool, wait func()) {
-	most := max(1, r.cfg.Workers)
-	each := max(1, r.procs/most)
-	workers := min(most, max(1, r.procs/each))
+	each := max(1, r.procs/max(1, r.cfg.Workers))
+	workers := min(r.most, r.procs)
 	jobs := make(chan int)
 	// busy counts the jobs that started and have not ended.
 	var busy atomic.Int64
@@ -74,7 +73,7 @@ func (r *runner) dispatch(
 		// free. It is nil, and receives nothing, while dispatch asks for no
 		// threads.
 		var freed <-chan struct{}
-		if workers < most && r.cfg.Borrow != nil && busy.Load() == int64(workers) {
+		if workers < r.most && r.cfg.Borrow != nil && busy.Load() == int64(workers) {
 			release, refused := r.cfg.Borrow(each)
 			if release != nil {
 				workers++

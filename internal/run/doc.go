@@ -11,9 +11,11 @@
 // mutant's site with that mutant alone active, and runs each binary once
 // more with no mutant active. Each run is a fresh process with a temporary
 // directory of its own, bounded by its binary's deadline and, on Linux, its
-// binary's memory ceiling. Run compares the data files of the suite's
-// packages before and after the runs. A package without a mutant to run
-// builds and runs nothing.
+// binary's memory ceiling. The ceiling bounds the memory of the binary and
+// of the processes that it starts, together. The caller's memory budget
+// bounds each ceiling and the number of mutants that run at once. Run
+// compares the data files of the suite's packages before and after the
+// runs. A package without a mutant to run builds and runs nothing.
 //
 // Where a binary has fewer top-level tests than mutants to run, Run runs
 // each of its tests alone with a trace on, and a mutant's run of the binary

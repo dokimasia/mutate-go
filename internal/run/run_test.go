@@ -26,11 +26,8 @@ import (
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
-// The name of scale's own test file and of its other package's source.
-const (
-	scaleTestFile = "scale_test.go"
-	otherFile     = "other/other.go"
-)
+// otherFile is the name of the source of scale's package other.
+const otherFile = "other/other.go"
 
 // genFile is the generated file of generated.
 const genFile = "gen.go"
@@ -50,6 +47,10 @@ func TestDouble(t *testing.T) {
 }
 `,
 }
+
+// fitMemory is a memory budget above each memory ceiling of ballast's
+// binary, which fits two of those ceilings and not three.
+const fitMemory = 2000 << 20
 
 // arithNotSelected are the verdicts of arith's mutants under a selection
 // that contains none of them.
@@ -295,6 +296,25 @@ Scale aor 0: killed [fixture/conformance: TestScale]
 			}
 			assert.Equal(t, asked, 2*ceiling, "Admit receives the memory of the two workers' runs")
 			assert.True(t, released, "the run releases what Admit admitted")
+		})
+
+		t.Run("asks Admit for the workers that fit in Memory times the largest memory ceiling", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS != "linux" {
+				t.Skip("the engine applies a memory ceiling on Linux alone")
+			}
+			var asked int64
+			admit := func(_ context.Context, bytes int64) (func(), bool) {
+				asked = bytes
+				return func() {}, true
+			}
+			rec := runIn(t, module(t, map[string]string{addFile: add, addTestFile: ballast}),
+				run.Config{Workers: 4, Memory: fitMemory, Admit: admit})
+			assert.Equal(t, verdicts(rec), addKilled, "the admitted run gives each mutant its verdict")
+			assert.Length(t, rec.Limits, 1, "the package's own test binary has limits")
+			assert.NotNil(t, rec.Limits[0].MemoryCeilingBytes, "the engine applies a memory ceiling on Linux")
+			assert.Equal(t, asked, 2**rec.Limits[0].MemoryCeilingBytes,
+				"Admit receives the memory of the two of the four workers that fit")
 		})
 
 		t.Run("stops the runs when the caller's context ends before Admit admits them", func(t *testing.T) {

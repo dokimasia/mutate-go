@@ -5,6 +5,7 @@ package testbin_test
 
 import (
 	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,11 +32,20 @@ const (
 )
 
 // ceiling is the memory ceiling of a run of the fake test binary that
-// grows to 256 MiB.
-const ceiling = 128 << 20
+// grows to 256 MiB. groupCeiling is the memory ceiling of a run whose two
+// children grow to 256 MiB each: above the memory of one child, and below
+// the memory of both.
+const (
+	ceiling      = 128 << 20
+	groupCeiling = 384 << 20
+)
 
-// windowsOS is the GOOS of Windows, where Run ends the binary alone.
-const windowsOS = "windows"
+// The GOOS of Linux, where Run reads the resident memory of a run, and of
+// Windows, where Run ends the binary alone.
+const (
+	linuxOS   = "linux"
+	windowsOS = "windows"
+)
 
 // orphanDeadline is the deadline of a run whose binary leaves a process
 // that keeps the output open. It is shorter than the 5 s for which Run reads
@@ -68,7 +78,7 @@ func TestRun(t *testing.T) {
 
 		t.Run("returns the state, the time and the output of a run that exits", func(t *testing.T) {
 			t.Parallel()
-			res := runFake(t, context.Background(), passes, testbin.Config{Timeout: longDeadline})
+			res := runFake(t, t.Context(), passes, testbin.Config{Timeout: longDeadline})
 			assert.NoError(t, res.Err, "the run starts")
 			expect.Equal(t, res.Ended, testbin.Exited, "the run ends on its own")
 			expect.Equal(t, res.State.ExitCode(), 0, "with the status 0")
@@ -79,14 +89,14 @@ func TestRun(t *testing.T) {
 
 		t.Run("returns the exit status of a binary that fails", func(t *testing.T) {
 			t.Parallel()
-			res := runFake(t, context.Background(), exits3, testbin.Config{Timeout: longDeadline})
+			res := runFake(t, t.Context(), exits3, testbin.Config{Timeout: longDeadline})
 			expect.Equal(t, res.Ended, testbin.Exited, "the run ends on its own")
 			expect.Equal(t, res.State.ExitCode(), 3, "with the binary's status")
 		})
 
 		t.Run("ends the run at the first failed test under StopAtFailure", func(t *testing.T) {
 			t.Parallel()
-			res := runFake(t, context.Background(), failsAndHangs,
+			res := runFake(t, t.Context(), failsAndHangs,
 				testbin.Config{Timeout: longDeadline, StopAtFailure: true})
 			expect.Equal(t, res.Ended, testbin.Failed, "the run ends at the failure")
 			expect.Equal(t, res.Output.Failed, []string{"TestA"}, "and names the failed test")
@@ -94,14 +104,14 @@ func TestRun(t *testing.T) {
 
 		t.Run("lets a run with a failed test go on without StopAtFailure", func(t *testing.T) {
 			t.Parallel()
-			res := runFake(t, context.Background(), failsAndHangs,
+			res := runFake(t, t.Context(), failsAndHangs,
 				testbin.Config{Timeout: 200 * time.Millisecond, Backup: shortBackup})
 			expect.Equal(t, res.Ended, testbin.Deadline, "the run lasts until its deadline")
 		})
 
 		t.Run("ends the run at the deadline and the backup delay", func(t *testing.T) {
 			t.Parallel()
-			res := runFake(t, context.Background(), hangs,
+			res := runFake(t, t.Context(), hangs,
 				testbin.Config{Timeout: 100 * time.Millisecond, Backup: shortBackup})
 			expect.Equal(t, res.Ended, testbin.Deadline, "the run ends at the backup deadline")
 			expect.InRange(t, res.Seconds, 0.2, ended.Seconds(), "after the deadline and the backup delay")
@@ -109,7 +119,7 @@ func TestRun(t *testing.T) {
 
 		t.Run("ends the run when the caller's context ends", func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 			defer cancel()
 			res := runFake(t, ctx, hangs, testbin.Config{Timeout: longDeadline})
 			expect.Equal(t, res.Ended, testbin.Cancelled, "the run ends with the caller's context")
@@ -126,7 +136,7 @@ func TestRun(t *testing.T) {
 				Timeout: orphanDeadline,
 				Backup:  shortBackup,
 			}
-			res := runFake(t, context.Background(), orphan, cfg)
+			res := runFake(t, t.Context(), orphan, cfg)
 			expect.Equal(t, res.Ended, testbin.Exited, "the run ends with the binary, before its deadline")
 			expect.Equal(t, res.State.ExitCode(), 0, "with the binary's status")
 			expect.InRange(t, res.Seconds, 0, orphanDeadline.Seconds(), "within the deadline")
@@ -142,17 +152,36 @@ func TestRun(t *testing.T) {
 
 		t.Run("ends the run when its resident memory crosses the ceiling", func(t *testing.T) {
 			t.Parallel()
-			if runtime.GOOS != "linux" {
+			if runtime.GOOS != linuxOS {
 				t.Skip("the package reads a process's resident memory on Linux alone")
 			}
-			res := runFake(t, context.Background(), grows, testbin.Config{Timeout: longDeadline, Ceiling: ceiling})
+			res := runFake(t, t.Context(), grows, testbin.Config{Timeout: longDeadline, Ceiling: ceiling})
 			expect.Equal(t, res.Ended, testbin.Memory, "the run ends at its memory ceiling")
+		})
+
+		t.Run("ends the run when the processes of its group together cross the ceiling", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS != linuxOS {
+				t.Skip("the package reads a process's resident memory on Linux alone")
+			}
+			res := runFake(t, t.Context(), growsInChildren,
+				testbin.Config{Timeout: longDeadline, Ceiling: groupCeiling})
+			assert.Equal(t, res.Ended, testbin.Memory, "the memory of both children together crosses the ceiling")
+		})
+
+		t.Run("returns the largest resident memory of the run that Run read as the peak", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS != linuxOS {
+				t.Skip("the package reads a process's resident memory on Linux alone")
+			}
+			res := runFake(t, t.Context(), grows, testbin.Config{Timeout: longDeadline, Ceiling: ceiling})
+			assert.InRange(t, res.Peak, ceiling+1, math.MaxInt64, "the peak is above the ceiling that the run crossed")
 		})
 
 		t.Run("runs the binary in its directory with a temporary directory of its own", func(t *testing.T) {
 			t.Parallel()
 			dir, work := t.TempDir(), t.TempDir()
-			res := testbin.Run(context.Background(), testbin.Config{
+			res := testbin.Run(t.Context(), testbin.Config{
 				Binary: binary(t), Dir: dir, Work: work, Env: fakeEnv(environment), Timeout: longDeadline,
 			})
 			assert.NoError(t, res.Err, "the run starts")
@@ -169,7 +198,7 @@ func TestRun(t *testing.T) {
 
 		t.Run("returns the error of a binary that does not start", func(t *testing.T) {
 			t.Parallel()
-			res := testbin.Run(context.Background(), testbin.Config{
+			res := testbin.Run(t.Context(), testbin.Config{
 				Binary: filepath.Join(t.TempDir(), "missing"), Work: t.TempDir(), Timeout: longDeadline,
 			})
 			assert.HasError(t, res.Err, "a missing binary does not start")
@@ -178,7 +207,7 @@ func TestRun(t *testing.T) {
 
 		t.Run("returns the error of a work directory that does not exist", func(t *testing.T) {
 			t.Parallel()
-			res := testbin.Run(context.Background(), testbin.Config{
+			res := testbin.Run(t.Context(), testbin.Config{
 				Binary: binary(t), Work: filepath.Join(t.TempDir(), "missing"), Timeout: longDeadline,
 			})
 			assert.HasError(t, res.Err, "a run without its temporary directory does not start")

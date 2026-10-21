@@ -60,6 +60,7 @@ type Config struct {
 	// runs at a time. Each worker's test binaries get Procs divided by
 	// Workers threads, and at least 1. The run starts as many workers as
 	// Procs allows, and more, up to Workers, on threads that Borrow lends.
+	// It starts no more workers than fit in Memory.
 	Workers int
 	// Procs is the number of threads that the run may use, or 0 for the
 	// engine's GOMAXPROCS. Every go command runs with GOMAXPROCS set to
@@ -118,13 +119,22 @@ type Config struct {
 	// passes. Before the mutant runs, the ordinary control run builds and
 	// runs the suite from the unchanged source.
 	Confirm bool
+	// Memory is the memory that the run's test binaries may use at once, in
+	// bytes, or 0 for no limit. Each memory ceiling is at most Memory, and at
+	// least the binary's peak in the opening control run plus the protocol's
+	// constant, so that a ceiling does not end the run of a mutant that uses
+	// only the memory of the tests. The run starts as many workers as fit in
+	// Memory with the largest ceiling of the suite's test binaries, at least
+	// one, and at most Workers.
+	Memory int64
 	// Admit, when it is not nil, admits the runs that follow the opening
 	// control run. Run calls it with the memory that those runs may use at
-	// once: the workers times the largest memory ceiling of the suite's test
-	// binaries, 0 where the engine applies no ceiling. Admit waits until the
-	// caller admits the runs, and returns the function that Run calls when
-	// its closing control run has ended. It returns false when ctx ended
-	// first, and Run then stops.
+	// once: the workers that fit in Memory times the largest memory ceiling
+	// of the suite's test binaries, or 0 where the engine does not apply a
+	// ceiling.
+	// Admit waits until the caller admits the runs, and returns the function
+	// that Run calls when its closing control run has ended. It returns false
+	// when ctx ended first, and Run then stops.
 	Admit func(ctx context.Context, bytes int64) (release func(), ok bool)
 	// Verdict receives each mutant when its verdict is final, from one
 	// goroutine at a time: the mutant, the number of the run's mutants, and
@@ -138,9 +148,13 @@ type runner struct {
 	cfg Config
 	// procs is the number of threads that the run may use.
 	procs int
-	def   spec.Definition
-	rec   *record.Record
-	work  string
+	// most is the most workers that run at once: cfg.Workers, at least 1,
+	// and after the opening control run at most as many as fit in
+	// cfg.Memory with the largest memory ceiling of the suite.
+	most int
+	def  spec.Definition
+	rec  *record.Record
+	work string
 	// wd is the process's working directory as record.Resolved returns it,
 	// against which report states each mutant's path.
 	wd   string
@@ -235,7 +249,7 @@ func Run(ctx context.Context, cfg Config) (*record.Record, error) {
 	defer os.RemoveAll(work)
 	info, _ := debug.ReadBuildInfo()
 	r := &runner{
-		cfg: cfg, procs: threads(cfg), def: def, work: work, wd: record.Resolved(workingDir),
+		cfg: cfg, procs: threads(cfg), most: max(1, cfg.Workers), def: def, work: work, wd: record.Resolved(workingDir),
 		snapshots: []snapshot{{dir: resolved, files: files}},
 		rec: &record.Record{
 			Record:    def.Protocol.Record.Name,
@@ -412,7 +426,7 @@ func (r *runner) admit(ctx context.Context) (release func(), reason string) {
 	for _, p := range r.programs {
 		ceiling = max(ceiling, p.ceiling)
 	}
-	release, ok := r.cfg.Admit(ctx, int64(max(1, r.cfg.Workers))*ceiling)
+	release, ok := r.cfg.Admit(ctx, int64(r.most)*ceiling)
 	if !ok {
 		return func() {}, cancelled
 	}

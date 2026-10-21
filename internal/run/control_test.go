@@ -160,6 +160,80 @@ func TestAdd(t *testing.T) {
 }
 `, render.TraceVar, brokenFile, broken)
 
+// cappedMemory is a memory budget below 4 times the peak of ballast's
+// binary plus the protocol's constant, and above that peak plus the
+// constant.
+const cappedMemory = 700 << 20
+
+// spawner is a test of add that runs two copies of its binary at once. Each
+// copy touches ballastMiB and keeps it for half a second, so the copies use
+// twice ballastMiB together.
+var spawner = fmt.Sprintf(`package fixture
+
+import (
+	"os"
+	"os/exec"
+	"runtime"
+	"testing"
+	"time"
+)
+
+func TestAdd(t *testing.T) {
+	if os.Getenv(%[1]q) != "" {
+		buf := make([]byte, %[2]d<<20)
+		for i := range buf {
+			buf[i] = 1
+		}
+		time.Sleep(500 * time.Millisecond)
+		runtime.KeepAlive(buf)
+		return
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var copies []*exec.Cmd
+	for i := 0; i < 2; i++ {
+		c := exec.Command(self, "-test.run=^TestAdd$")
+		c.Env = append(os.Environ(), %[1]q+"=1")
+		if err := c.Start(); err != nil {
+			t.Fatal(err)
+		}
+		copies = append(copies, c)
+	}
+	for _, c := range copies {
+		if err := c.Wait(); err != nil {
+			t.Error(err)
+		}
+	}
+	if Add(2, 3) != 5 {
+		t.Error("Add(2, 3) != 5")
+	}
+}
+`, childVar, ballastMiB)
+
+// ballastScale is a test of scale that touches ballastMiB in every run, so
+// the peak of its binary is above the peak of the binary of scale's package
+// conformance.
+var ballastScale = fmt.Sprintf(`package fixture
+
+import (
+	"runtime"
+	"testing"
+)
+
+func TestScaleByOne(t *testing.T) {
+	buf := make([]byte, %d<<20)
+	for i := range buf {
+		buf[i] = 1
+	}
+	runtime.KeepAlive(buf)
+	if Scale(2, 1) != 2 {
+		t.Error("Scale(2, 1) != 2")
+	}
+}
+`, ballastMiB)
+
 // hangingTest is a test of add that waits a minute in every run.
 const hangingTest = `package fixture
 
@@ -204,6 +278,56 @@ func TestControl(t *testing.T) {
 			ceiling := int64(memory.Factor*float64(*opening.PeakBytes)) + memory.Bytes
 			assert.Equal(t, limits.MemoryCeilingBytes, &ceiling,
 				"the ceiling is the protocol's factor times the control run's peak, plus its constant")
+		})
+
+		t.Run("caps each memory ceiling at Memory", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS != "linux" {
+				t.Skip("the engine applies a memory ceiling on Linux alone")
+			}
+			rec := runIn(t, module(t, map[string]string{addFile: add, addTestFile: ballast}),
+				run.Config{Memory: cappedMemory})
+			assert.Length(t, rec.Limits, 1, "the package's own test binary has limits")
+			assert.Equal(t, rec.Limits[0].MemoryCeilingBytes, new(int64(cappedMemory)),
+				"the ceiling is the budget, which is below the protocol's factor times the peak")
+		})
+
+		t.Run("keeps each memory ceiling above the binary's peak by the protocol's constant", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS != "linux" {
+				t.Skip("the engine applies a memory ceiling on Linux alone")
+			}
+			rec := runIn(t, module(t, arithFiles), run.Config{Memory: tightMemory})
+			assert.Length(t, rec.Limits, 1, "the package's own test binary has limits")
+			assert.NotNil(t, rec.Control.Opening.PeakBytes, "the engine measures the control run's peak on Linux")
+			ceiling := *rec.Control.Opening.PeakBytes + protocol.Limits.Memory.Bytes
+			assert.Equal(t, rec.Limits[0].MemoryCeilingBytes, &ceiling,
+				"a budget below the peak plus the constant does not lower the ceiling below that sum")
+		})
+
+		t.Run("states the largest peak of the suite's test binaries", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS != "linux" {
+				t.Skip("the engine measures the peak on Linux alone")
+			}
+			dir := module(t, with(scale, map[string]string{scaleTestFile: ballastScale}))
+			rec := runIn(t, dir, run.Config{Suite: []string{conformancePattern}})
+			assert.Length(t, rec.Limits, 2, "the package's own binary and the binary of conformance have limits")
+			assert.NotNil(t, rec.Control.Opening.PeakBytes, "the engine measures the control run's peak on Linux")
+			assert.InRange(t, *rec.Control.Opening.PeakBytes, ballastMiB<<20, math.MaxInt64,
+				"the peak is the one of the package's own binary, which runs first")
+		})
+
+		t.Run("counts the processes that a test starts in the peak of its binary", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS != "linux" {
+				t.Skip("the engine measures the peak on Linux alone")
+			}
+			rec := runIn(t, module(t, map[string]string{addFile: add, addTestFile: spawner}), run.Config{})
+			assert.Equal(t, verdicts(rec), addKilled, "the test kills both mutants")
+			assert.NotNil(t, rec.Control.Opening.PeakBytes, "the engine measures the control run's peak on Linux")
+			assert.InRange(t, *rec.Control.Opening.PeakBytes, 2*ballastMiB<<20, math.MaxInt64,
+				"the memory of the two copies of the binary counts together")
 		})
 
 		t.Run("ends a mutant's run of a test binary at that binary's deadline", func(t *testing.T) {

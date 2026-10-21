@@ -5,14 +5,13 @@ package memory
 
 import (
 	"io/fs"
-	"os"
 	"path"
 	"strconv"
 	"strings"
 )
 
-// The files of procfs and sysfs that the package reads, as paths under the
-// root of the file system.
+// The files of procfs and sysfs that Limit reads, as paths under the root
+// of the file system.
 const (
 	// meminfo states the machine's memory.
 	meminfo = "proc/meminfo"
@@ -22,10 +21,6 @@ const (
 	cgroups = "sys/fs/cgroup"
 	// memoryMax states the memory limit of one cgroup, or max for none.
 	memoryMax = "memory.max"
-	// procs is the directory of the processes' files, and statm the file
-	// that states one process's memory in pages.
-	procs = "proc"
-	statm = "statm"
 )
 
 // The text of the lines of procfs that the package reads.
@@ -83,20 +78,4 @@ func Limit(root fs.FS) int64 {
 		}
 	}
 	return limit
-}
-
-// Resident returns the resident memory of the process pid, in bytes: the
-// resident pages that proc/<pid>/statm under root states, times the size of
-// a page. It returns 0 for a process that has exited, whose file no longer
-// reads, and on a platform without procfs.
-func Resident(root fs.FS, pid int) int64 {
-	data, _ := fs.ReadFile(root, path.Join(procs, strconv.Itoa(pid), statm))
-	// The fields are the sizes of the whole program and of its resident
-	// set, and then of five other sets.
-	fields := strings.Fields(string(data))
-	if len(fields) < 2 {
-		return 0
-	}
-	pages, _ := strconv.ParseInt(fields[1], 10, 64)
-	return pages * int64(os.Getpagesize())
 }

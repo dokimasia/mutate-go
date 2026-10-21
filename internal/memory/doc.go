@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 // Package memory reads the memory that the process may use, the resident
-// memory of a running process, and the peak resident memory of a process
-// that exited.
+// memory of the processes of a process group, and the peak resident memory
+// of a process that exited.
 //
-// [Limit] and [Resident] read Linux's procfs and sysfs under the file
+// [Limit] and [Group.Resident] read Linux's procfs and sysfs under the file
 // system root that the caller passes, os.DirFS("/") for the machine's own,
 // so a test can pass files of its own. On a platform without procfs, each
 // returns 0. [Peak] reads the resource usage that wait4 reports on Linux,
@@ -13,8 +13,9 @@
 //
 // # Concurrency
 //
-// Every function is safe for concurrent use. Each reads the files of the
-// root at the time of the call.
+// [Limit] and [Peak] are safe for concurrent use. Each reads the files of
+// the root at the time of the call. A [Group] is not safe for concurrent
+// use.
 //
 // # Dependency position
 //

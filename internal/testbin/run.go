@@ -20,7 +20,8 @@ import (
 // package's initialization, before the alarm starts.
 const BackupDelay = 5 * time.Second
 
-// pollInterval is how often Run reads a run's resident memory.
+// pollInterval is how often Run reads the resident memory of a run's
+// process group.
 const pollInterval = 25 * time.Millisecond
 
 // readDelay is how long Run waits for a run's output to end after the test
@@ -39,8 +40,8 @@ const (
 // tmpPattern is the pattern of the name of a run's temporary directory.
 const tmpPattern = "tmp-"
 
-// system is the machine's file system, whose procfs Run reads a run's
-// resident memory from.
+// system is the machine's file system, whose procfs Run reads the resident
+// memory of a run's process group from.
 var system = os.DirFS("/")
 
 // Ending is why Run ended a run.
@@ -49,7 +50,8 @@ type Ending uint8
 const (
 	// Exited is a run that ended on its own.
 	Exited Ending = iota
-	// Memory is a run whose resident memory crossed its ceiling.
+	// Memory is a run whose process group's resident memory crossed its
+	// ceiling.
 	Memory
 	// Deadline is a run that lasted its deadline and the backup delay.
 	Deadline
@@ -75,7 +77,9 @@ type Config struct {
 	// Timeout is the run's deadline, which the binary's -test.timeout
 	// states. Backup after it, Run ends the run's process group.
 	Timeout, Backup time.Duration
-	// Ceiling is the run's memory ceiling in bytes, or 0 for none.
+	// Ceiling is the run's memory ceiling in bytes, or 0 for none: the most
+	// resident memory of the binary and of the processes that it starts and
+	// that remain in its group, together.
 	Ceiling int64
 	// StopAtFailure makes Run end the run at the first line of its output
 	// that states a failed test. -test.failfast starts no test after a
@@ -94,6 +98,12 @@ type Result struct {
 	Ended Ending
 	// Seconds is the run's wall time.
 	Seconds float64
+	// Peak is the largest resident memory of the run's process group that
+	// Run read, in bytes: the memory of the binary and of the processes that
+	// it started and that remain in its group, together. It is 0 where Run
+	// does not read resident memory, and for a run that ended before the
+	// first read.
+	Peak int64
 	// Output is what the run's output states about its tests.
 	Output Output
 }
@@ -101,9 +111,11 @@ type Result struct {
 // Run runs the test binary that cfg states, in a process group of its own,
 // with a temporary directory of its own under cfg.Work that TMPDIR, TMP and
 // TEMP name and that Run removes afterwards. It ends the process group
-// cfg.Backup after cfg.Timeout, when the run's resident memory crosses
-// cfg.Ceiling where that is positive, when ctx is done, and under
-// cfg.StopAtFailure at the first failed test.
+// cfg.Backup after cfg.Timeout, when the resident memory of the group's
+// processes together crosses cfg.Ceiling where that is positive, when ctx
+// is done, and under cfg.StopAtFailure at the first failed test. Run reads
+// that memory every pollInterval, and the result states the largest that
+// it read.
 //
 // The run ends when the binary exits, whatever its output does. Run then
 // ends the processes that the binary started and left in its group, and
@@ -151,6 +163,9 @@ func Run(ctx context.Context, cfg Config) *Result {
 	kill := time.AfterFunc(cfg.Timeout+cfg.Backup, func() { end(Deadline) })
 	stop := make(chan struct{})
 	watched := make(chan struct{})
+	// The binary's process ID is the ID of its process group, as
+	// process.Start starts it.
+	group := memory.NewGroup(system, cmd.Process.Pid)
 	go func() {
 		defer close(watched)
 		ticker := time.NewTicker(pollInterval)
@@ -163,9 +178,14 @@ func Run(ctx context.Context, cfg Config) *Result {
 				end(Cancelled)
 				return
 			case <-ticker.C:
-				if cfg.Ceiling > 0 && memory.Resident(system, cmd.Process.Pid) > cfg.Ceiling {
-					end(Memory)
-					return
+				resident := group.Resident()
+				res.Peak = max(res.Peak, resident)
+				if cfg.Ceiling > 0 {
+					//dokimi:mutate-skip ror-boundary: no test can make the memory of real processes equal the ceiling at a read
+					if resident > cfg.Ceiling {
+						end(Memory)
+						return
+					}
 				}
 			}
 		}

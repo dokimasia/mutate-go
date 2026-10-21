@@ -35,6 +35,9 @@ const (
 	hangs = "hangs"
 	// grows touches 256 MiB of memory, and then waits a minute.
 	grows = "grows"
+	// growsInChildren starts two copies of itself in the mode grows, and
+	// waits for them.
+	growsInChildren = "grows-in-children"
 	// environment writes its working directory and the variables of its
 	// temporary directory.
 	environment = "environment"
@@ -78,6 +81,20 @@ func fake(mode string) int {
 			grown[i] = 1
 		}
 		time.Sleep(time.Minute)
+	case growsInChildren:
+		self, _ := os.Executable()
+		var children []*exec.Cmd
+		for range 2 {
+			child := exec.Command(self)
+			child.Env = append(os.Environ(), fakeVar+"="+grows)
+			if child.Start() != nil {
+				return 1
+			}
+			children = append(children, child)
+		}
+		for _, child := range children {
+			_ = child.Wait()
+		}
 	case environment:
 		wd, _ := os.Getwd()
 		fmt.Printf("%s\n%s\n%s\n%s\n", wd, os.Getenv("TMPDIR"), os.Getenv("TMP"), os.Getenv("TEMP"))

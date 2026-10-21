@@ -53,6 +53,9 @@ const (
 	// slowBuildVar is the shell pattern of the argument that makes the
 	// wrapper in goSlow wait slowBuild before it runs the go command.
 	slowBuildVar = "FIXTURE_SLOW_BUILD"
+	// childVar makes a fixture's test run as the copy of its binary that the
+	// test starts.
+	childVar = "FIXTURE_CHILD"
 )
 
 // slowBuild is how long the wrapper in goSlow waits before a go command
@@ -280,6 +283,35 @@ func TestAdd(t *testing.T) {
 }
 `, procsVar, expectedProcsVar)
 
+// ballastMiB is the memory that ballast touches in every run, in MiB.
+const ballastMiB = 64
+
+// ballast is a test of add that touches ballastMiB in every run, so the
+// peak of its binary is above ballastMiB.
+var ballast = fmt.Sprintf(`package fixture
+
+import (
+	"runtime"
+	"testing"
+)
+
+func TestAdd(t *testing.T) {
+	buf := make([]byte, %d<<20)
+	for i := range buf {
+		buf[i] = 1
+	}
+	runtime.KeepAlive(buf)
+	if Add(2, 3) != 5 {
+		t.Error("Add(2, 3) != 5")
+	}
+}
+`, ballastMiB)
+
+// tightMemory is a memory budget below the peak of each fixture's binary
+// plus the protocol's constant, so each memory ceiling is that sum, and one
+// worker fits.
+const tightMemory = 100 << 20
+
 // killer is a test of add that ends its own binary with SIGKILL when Add is
 // wrong, or always when alwaysVar is set.
 var killer = fmt.Sprintf(`package fixture
@@ -364,6 +396,9 @@ func TestScale(t *testing.T) {
 	"other/other.go":      "package other\n",
 	"other/other_test.go": "package other\n\nimport \"testing\"\n\nfunc TestOther(t *testing.T) {}\n",
 }
+
+// scaleTestFile is the name of scale's own test file.
+const scaleTestFile = "scale_test.go"
 
 // The import path of scale's package conformance, its pattern in the
 // package's directory, and the names of its files.

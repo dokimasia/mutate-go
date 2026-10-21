@@ -89,11 +89,20 @@ func (r *runner) opening(ctx context.Context) string {
 			(limits.Deadline.Factor*res.Seconds + limits.Deadline.Seconds) * float64(time.Second),
 		)
 		seconds += res.Seconds
+		//dokimi:mutate-skip ror-true: memory.Peak returns nil only outside Linux, where no test of this package measures a peak
 		if b := memory.Peak(res.State); b != nil {
-			p.ceiling = int64(limits.Memory.Factor*float64(*b)) + limits.Memory.Bytes
-			if peak == nil || *b > *peak {
-				peak = b
+			// wait4 reports the largest of the binary and the children that it
+			// waited for, and the watch the processes of its group together.
+			bytes := max(*b, res.Peak)
+			p.ceiling = int64(limits.Memory.Factor*float64(bytes)) + limits.Memory.Bytes
+			if r.cfg.Memory > 0 {
+				p.ceiling = min(p.ceiling, max(r.cfg.Memory, bytes+limits.Memory.Bytes))
+				r.most = min(r.most, max(1, int(r.cfg.Memory/p.ceiling)))
 			}
+			if peak == nil {
+				peak = new(int64)
+			}
+			*peak = max(*peak, bytes)
 		}
 	}
 	r.rec.Control = &record.Control{

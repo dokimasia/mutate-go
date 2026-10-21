@@ -24,6 +24,7 @@ import (
 	"go.dokimi.dev/mutate/internal/render"
 	"go.dokimi.dev/mutate/internal/selection"
 	"go.dokimi.dev/mutate/internal/spec"
+	"go.dokimi.dev/mutate/internal/testbin"
 )
 
 // recordDirVar is the variable of the environment that names the directory
@@ -253,7 +254,9 @@ func TestMutate(t *testing.T) {
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "go", goTestArgs...)
 			cmd.Dir = dir
-			cmd.Env = append(os.Environ(), recordDirVar+"="+records)
+			// The engine's variable is set when the engine runs these tests, and
+			// Check skips while it is set.
+			cmd.Env = testbin.Setenv(os.Environ(), spec.Load().Protocol.Variable, recordDirVar+"="+records)
 			out, err := cmd.CombinedOutput()
 			exit := assert.ErrorAs[*exec.ExitError](t, err, "go test fails: "+string(out))
 			assert.Equal(t, exit.ExitCode(), 1, "the test that calls Check fails")
@@ -282,6 +285,12 @@ func TestMutate(t *testing.T) {
 // TestMutateEnv changes the working directory and the environment of the
 // test process, so neither it nor its subtests run in parallel.
 func TestMutateEnv(t *testing.T) {
+	// The engine's variable is set when the engine runs these tests, and
+	// Check skips while it is set. Setenv restores it when the test ends.
+	variable := spec.Load().Protocol.Variable
+	t.Setenv(variable, "")
+	assert.NoError(t, os.Unsetenv(variable), "the engine's variable unsets")
+
 	t.Run("Check", func(t *testing.T) {
 		t.Run("fails the test with one line for each undetected mutant at its position", func(t *testing.T) {
 			enter(t)

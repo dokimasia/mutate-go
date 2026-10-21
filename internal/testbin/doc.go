@@ -16,8 +16,10 @@
 //
 // # Platforms
 //
-// On Linux, Run reads a run's resident memory from procfs, and a run with a
-// ceiling ends when it crosses it. Elsewhere the ceiling never ends a run.
+// On Linux, Run reads the resident memory of a run's process group from
+// procfs: the memory of the binary and of the processes that it starts,
+// together. A run with a ceiling ends when that memory crosses it.
+// Elsewhere the ceiling never ends a run, and a run's peak is 0.
 // On Windows, Run ends the binary alone, because the standard library has
 // no call that ends a process tree there.
 //

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"go.dokimi.dev/mutate/internal/memory"
 	"go.dokimi.dev/mutate/internal/record"
 	"go.dokimi.dev/mutate/internal/report"
 	"go.dokimi.dev/mutate/internal/run"
@@ -24,6 +25,10 @@ const recordDirVar = "DOKIMI_MUTATE_RECORD_DIR"
 // workingDir is the test's working directory, the package directory under
 // go test, which Check tests and against which it states each path.
 const workingDir = "."
+
+// rootDir is the root of the file system, under which Check reads the
+// memory that the process may use.
+const rootDir = "/"
 
 // Check runs mutation testing on the package in the test's working
 // directory, and fails tb with one line for each undetected mutant: a
@@ -75,7 +80,7 @@ func Check(tb testing.TB, opts ...Option) {
 		context.Background(),
 		run.Config{
 			Dir: workingDir, Env: os.Environ(), Lines: lines, Suite: c.suite, Workers: c.workers, Deadline: deadline,
-			Confirm: c.confirm, IncludeGenerated: c.includeGenerated,
+			Confirm: c.confirm, IncludeGenerated: c.includeGenerated, Memory: memory.Limit(os.DirFS(rootDir)),
 		},
 	)
 	if err != nil {
@@ -180,11 +185,13 @@ func Suite(patterns ...string) Option {
 // Workers sets the most mutants that run concurrently, 1 by default.
 //
 // Each mutant runs in a process of its own, so n above 1 runs up to n
-// copies of the package's tests concurrently, and at most GOMAXPROCS. Tests
-// that share a resource outside their temporary directory, such as a fixed
-// port, then fail each other, and the failures count as kills. Every run,
-// the control runs included, gets GOMAXPROCS divided by n, and at least 1.
-// Workers panics for n below 1.
+// copies of the package's tests concurrently, and at most GOMAXPROCS. On
+// Linux, Check also runs no more copies than fit in the memory that the
+// process may use with their memory ceilings. Tests that share a resource
+// outside their temporary directory, such as a fixed port, then fail each
+// other, and the failures count as kills. Every run, the control runs
+// included, gets GOMAXPROCS divided by n, and at least 1. Workers panics
+// for n below 1.
 func Workers(n int) Option {
 	if n < 1 {
 		panic(fmt.Sprintf("mutate: Workers(%d) states fewer than one worker", n))
