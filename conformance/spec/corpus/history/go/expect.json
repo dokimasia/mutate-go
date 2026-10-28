@@ -1,0 +1,236 @@
+{
+  "language": "go",
+  "history": {
+    "changed": [
+      {
+        "file": "inc.go",
+        "since": 1
+      },
+      {
+        "file": "dec_test.go",
+        "since": 1
+      }
+    ]
+  },
+  "mutants": [
+    {
+      "scope": "inc",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "5bf78a96042743fa",
+      "file": "inc.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return n + 1",
+      "replacement": "return 0",
+      "tests": [
+        "TestInc"
+      ],
+      "earlierTests": [
+        "TestInc"
+      ]
+    },
+    {
+      "scope": "inc",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d73e65ec42c4d87c",
+      "file": "inc.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "n + 1",
+      "replacement": "n - 1",
+      "tests": [
+        "TestInc"
+      ],
+      "earlierTests": [
+        "TestInc"
+      ]
+    },
+    {
+      "scope": "dec",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "8f71a5d6d4bad3aa",
+      "file": "math.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return n - 1",
+      "replacement": "return 0",
+      "tests": [
+        "TestDec"
+      ],
+      "earlierTests": [
+        "TestDec"
+      ]
+    },
+    {
+      "scope": "dec",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "15c70117f95ff560",
+      "file": "math.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "n - 1",
+      "replacement": "n + 1",
+      "tests": [
+        "TestDec"
+      ],
+      "earlierTests": [
+        "TestDec"
+      ]
+    },
+    {
+      "scope": "twice",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7c85cc86153de024",
+      "file": "math.go",
+      "start": {
+        "line": 10,
+        "column": 2
+      },
+      "end": {
+        "line": 10,
+        "column": 14
+      },
+      "original": "return n * 2",
+      "replacement": "return 0",
+      "tests": [
+        "TestTwice"
+      ],
+      "earlierTests": [
+        "TestTwice"
+      ]
+    },
+    {
+      "scope": "twice",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0bb9bf3eab252ebf",
+      "file": "math.go",
+      "start": {
+        "line": 10,
+        "column": 9
+      },
+      "end": {
+        "line": 10,
+        "column": 14
+      },
+      "original": "n * 2",
+      "replacement": "n / 2",
+      "tests": [
+        "TestTwice"
+      ],
+      "earlierTests": [
+        "TestTwice"
+      ]
+    },
+    {
+      "scope": "half",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "cdde0670ef76f61a",
+      "file": "math.go",
+      "start": {
+        "line": 15,
+        "column": 2
+      },
+      "end": {
+        "line": 15,
+        "column": 14
+      },
+      "original": "return n / 2",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "half",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "aa4820a154901777",
+      "file": "math.go",
+      "start": {
+        "line": 15,
+        "column": 9
+      },
+      "end": {
+        "line": 15,
+        "column": 14
+      },
+      "original": "n / 2",
+      "replacement": "n * 2"
+    },
+    {
+      "scope": "unused",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4b356c3f10ccfc24",
+      "file": "math.go",
+      "start": {
+        "line": 20,
+        "column": 2
+      },
+      "end": {
+        "line": 20,
+        "column": 14
+      },
+      "original": "return n + 3",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "unused",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "0eef75e054f14cf1",
+      "file": "math.go",
+      "start": {
+        "line": 20,
+        "column": 9
+      },
+      "end": {
+        "line": 20,
+        "column": 14
+      },
+      "original": "n + 3",
+      "replacement": "n - 3"
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

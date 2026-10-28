@@ -1,0 +1,20 @@
+{
+  "case": "history-order",
+  "sample": 4,
+  "history": { "engine": "same" },
+  "proves": "A run with a history starts the mutants without a reusable verdict first, then the reusable verdicts whose wider inputs changed, oldest observation first, and then the other reusable verdicts. A mutant that the limit leaves unrun keeps its reused verdict, and the run passes.",
+  "fixture": "fresh, oldest, older, recent and latest each add a number in a file of their own, and a test in a file of its own checks each. The history lacks fresh, observed oldest three runs ago, older two runs ago, and recent and latest in the newest run. doc.go changed since the run of two runs ago, so the kills of oldest and older have changed wider inputs. The four mutant runs of the limit are those of fresh and of oldest.",
+  "mutants": [
+    { "scope": "fresh", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "fresh", "kind": "aor", "nth": 0, "verdict": "killed" },
+    { "scope": "oldest", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 3 },
+    { "scope": "oldest", "kind": "aor", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 3 },
+    { "scope": "older", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 2, "reused": true },
+    { "scope": "older", "kind": "aor", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 2, "reused": true },
+    { "scope": "recent", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1, "reused": true },
+    { "scope": "recent", "kind": "aor", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1, "reused": true },
+    { "scope": "latest", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1, "reused": true },
+    { "scope": "latest", "kind": "aor", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1, "reused": true }
+  ],
+  "errors": []
+}

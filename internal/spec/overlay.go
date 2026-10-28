@@ -34,6 +34,8 @@ const (
 // Families states the rules of each rule family, Variables which calls of
 // a variable a result rule puts into its family, and Compound which
 // compound statements a family that lists calls suppresses as a whole.
+// Tests states the file that declares a test, which the rule of a reused
+// kill compares.
 type Overlay struct {
 	Language  string            `json:"language"`
 	Version   string            `json:"version"`
@@ -43,6 +45,7 @@ type Overlay struct {
 	Scopes    []string          `json:"scopes"`
 	Tokens    string            `json:"tokens"`
 	Zero      string            `json:"zero"`
+	Tests     string            `json:"tests"`
 	Kinds     map[Kind][]string `json:"kinds"`
 	Skips     []OverlaySkip     `json:"skips"`
 	Families  map[Family]Rules  `json:"families"`

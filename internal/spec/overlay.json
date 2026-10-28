@@ -1,6 +1,6 @@
 {
   "language": "go",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "comment": "//",
   "generated": "^// Code generated .* DO NOT EDIT\\.$",
   "files": [
@@ -17,6 +17,7 @@
   ],
   "tokens": "The tokens that go/scanner returns for the site's source, without comments and without the semicolons the scanner inserts at line ends. An operator is written as Go spells it, and any other token as its text.",
   "zero": "The zero value of each result type T, as Go code writes it: 0 when T's underlying type is a number, \"\" when it is a string, false when it is a boolean, nil when it is a pointer, a slice, a map, a channel, a function, an interface or unsafe.Pointer, T{} when it is a struct or an array, with T written as the result's type is written, and *new(T) when T is a type parameter. A record writes the zero values this way. A mutant's source writes none of them, because a declaration at the site can hide a name that they contain, and returns variables that contain them, as sbr-zero states.",
+  "tests": "The file that declares a test is the file of the test's package that declares its top-level test function, so a test and each of its subtests share a file. A test of another target of the suite is declared in a file of that target.",
   "kinds": {
     "aor": [
       "A binary expression with +, -, *, / or % whose operands and result are of the same integer or floating-point type, or untyped constants of it.",

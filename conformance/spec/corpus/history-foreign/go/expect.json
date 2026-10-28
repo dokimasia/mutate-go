@@ -1,0 +1,56 @@
+{
+  "language": "go",
+  "history": {
+    "changed": []
+  },
+  "mutants": [
+    {
+      "scope": "inc",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "5bf78a96042743fa",
+      "file": "inc.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return n + 1",
+      "replacement": "return 0",
+      "tests": [
+        "TestInc"
+      ],
+      "earlierTests": [
+        "TestInc"
+      ]
+    },
+    {
+      "scope": "inc",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d73e65ec42c4d87c",
+      "file": "inc.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "n + 1",
+      "replacement": "n - 1",
+      "earlierTests": [
+        "TestInc"
+      ]
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

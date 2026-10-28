@@ -1,0 +1,20 @@
+{
+  "case": "history",
+  "sample": 6,
+  "history": { "engine": "same" },
+  "proves": "A run with a history reuses a kill while the mutant's file and the files that declare its killing tests are unchanged, and a survivor while no test file or data file changed. It decides no-coverage again, and its limit counts the mutant runs of the mutants without a reusable verdict first.",
+  "fixture": "inc in inc.go and dec, twice, half and unused in math.go. TestInc, TestDec and TestTwice check one function each, TestHalf calls half without checking it, and no test calls unused. Since the history's run, inc.go and dec_test.go changed, so the kills of inc and dec and the survivors of half run again, the kills of twice are reused, and the six mutant runs of the limit are those of inc, dec and half.",
+  "mutants": [
+    { "scope": "inc", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1 },
+    { "scope": "inc", "kind": "aor", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1 },
+    { "scope": "dec", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1 },
+    { "scope": "dec", "kind": "aor", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1 },
+    { "scope": "twice", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1, "reused": true },
+    { "scope": "twice", "kind": "aor", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1, "reused": true },
+    { "scope": "half", "kind": "sbr-zero", "nth": 0, "verdict": "survived", "earlier": "survived", "observed": 1 },
+    { "scope": "half", "kind": "aor", "nth": 0, "verdict": "survived", "earlier": "survived", "observed": 1 },
+    { "scope": "unused", "kind": "sbr-zero", "nth": 0, "verdict": "no-coverage", "earlier": "no-coverage", "observed": 1 },
+    { "scope": "unused", "kind": "aor", "nth": 0, "verdict": "no-coverage", "earlier": "no-coverage", "observed": 1 }
+  ],
+  "errors": []
+}

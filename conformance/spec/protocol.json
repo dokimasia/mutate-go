@@ -1,7 +1,7 @@
 {
   "record": {
     "name": "dokimi-mutate",
-    "version": 1
+    "version": 2
   },
   "variable": "DOKIMI_MUTATE_MUTANT",
   "instrumented": "DOKIMI_MUTATE_INSTRUMENTED",

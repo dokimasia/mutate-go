@@ -5,10 +5,10 @@
   "description": "One run of one target. The kinds, verdicts, rule families and error codes are the ones spec/catalogue.json and spec/protocol.json define.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["record", "version", "catalogue", "overlay", "engine", "toolchain", "target", "root", "startedAt", "finishedAt", "inputs", "selection", "limits", "errors", "score", "mutants", "skipped", "generated"],
+  "required": ["record", "version", "catalogue", "overlay", "engine", "toolchain", "target", "root", "startedAt", "finishedAt", "inputs", "observations", "selection", "limits", "errors", "score", "mutants", "skipped", "generated"],
   "properties": {
     "record": { "const": "dokimi-mutate" },
-    "version": { "const": 1 },
+    "version": { "const": 2 },
     "catalogue": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
     "overlay": {
       "description": "The version of the overlay of the target's language.",
@@ -38,6 +38,26 @@
     "startedAt": { "type": "string", "format": "date-time" },
     "finishedAt": { "type": "string", "format": "date-time" },
     "inputs": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "observations": {
+      "description": "The runs that observed the record's verdicts, this run first. A run that no verdict of the record names is left out.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["startedAt", "files", "requirements"],
+        "properties": {
+          "startedAt": { "type": "string", "format": "date-time" },
+          "files": {
+            "description": "The digest of each file of the suite and of each target of the project that the target imports, by the file's path relative to the record's root.",
+            "type": "object",
+            "propertyNames": { "$ref": "#/$defs/file" },
+            "additionalProperties": { "$ref": "#/$defs/digest" }
+          },
+          "requirements": { "$ref": "#/$defs/digest" }
+        }
+      }
+    },
     "suite": {
       "description": "The other targets whose tests the run added to the target's own, or null when the target's own tests are the suite.",
       "oneOf": [
@@ -133,7 +153,7 @@
       ]
     },
     "sample": {
-      "description": "The mutants that the score counts and whose keys sort before the first key of a mutant that did not run, when the caller's limit on the number of mutant runs, the caller's deadline or the caller ended the mutant runs, or null.",
+      "description": "The mutants that the score counts and whose keys sort before the first key of a mutant that did not run, when the caller's limit on the number of mutant runs, the caller's deadline or the caller ended the mutant runs, or null. In a run with a history, the mutants that the score counts and that have a verdict.",
       "oneOf": [
         { "type": "null" },
         {
@@ -141,7 +161,13 @@
           "additionalProperties": false,
           "required": ["before", "limit", "detected", "undetected", "score"],
           "properties": {
-            "before": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+            "before": {
+              "description": "The first key of a mutant that did not run, or null in a run with a history, whose mutants with a verdict are not the first keys.",
+              "oneOf": [
+                { "type": "null" },
+                { "type": "string", "pattern": "^[0-9a-f]{16}$" }
+              ]
+            },
             "limit": {
               "description": "The number of mutant runs that the caller allowed, when that limit alone ended the mutant runs, or null when the caller's deadline or the caller ended them.",
               "oneOf": [
@@ -182,6 +208,7 @@
     }
   },
   "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "file": {
       "description": "A path relative to the record's root, with / as the separator.",
       "type": "string",
@@ -271,7 +298,12 @@
           "const": true
         },
         "rule": { "$ref": "#/$defs/family" },
-        "reason": { "type": "string", "minLength": 1 }
+        "reason": { "type": "string", "minLength": 1 },
+        "observedAt": {
+          "description": "The startedAt of the run that observed the verdict, one of the record's observations. The record's own startedAt for a verdict of this run. Absent for a verdict that the run decided without a mutant run.",
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "skip": {

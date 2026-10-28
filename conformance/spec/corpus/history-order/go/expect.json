@@ -1,0 +1,250 @@
+{
+  "language": "go",
+  "history": {
+    "changed": [
+      {
+        "file": "doc.go",
+        "since": 2
+      }
+    ]
+  },
+  "mutants": [
+    {
+      "scope": "fresh",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3e273b40511e0163",
+      "file": "fresh.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return n + 1",
+      "replacement": "return 0",
+      "tests": [
+        "TestFresh"
+      ]
+    },
+    {
+      "scope": "fresh",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "74ff64047e2e80c9",
+      "file": "fresh.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "n + 1",
+      "replacement": "n - 1",
+      "tests": [
+        "TestFresh"
+      ]
+    },
+    {
+      "scope": "latest",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "3d07355012ea0947",
+      "file": "latest.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return n + 5",
+      "replacement": "return 0",
+      "tests": [
+        "TestLatest"
+      ],
+      "earlierTests": [
+        "TestLatest"
+      ]
+    },
+    {
+      "scope": "latest",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "22ded1d809926ee4",
+      "file": "latest.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "n + 5",
+      "replacement": "n - 5",
+      "tests": [
+        "TestLatest"
+      ],
+      "earlierTests": [
+        "TestLatest"
+      ]
+    },
+    {
+      "scope": "older",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "b6e6b9d8be4e25d1",
+      "file": "older.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return n + 3",
+      "replacement": "return 0",
+      "tests": [
+        "TestOlder"
+      ],
+      "earlierTests": [
+        "TestOlder"
+      ]
+    },
+    {
+      "scope": "older",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f2b8835f55c1b77b",
+      "file": "older.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "n + 3",
+      "replacement": "n - 3",
+      "tests": [
+        "TestOlder"
+      ],
+      "earlierTests": [
+        "TestOlder"
+      ]
+    },
+    {
+      "scope": "oldest",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "82c23512a90b8b76",
+      "file": "oldest.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return n + 2",
+      "replacement": "return 0",
+      "tests": [
+        "TestOldest"
+      ],
+      "earlierTests": [
+        "TestOldest"
+      ]
+    },
+    {
+      "scope": "oldest",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "9685ded393f04f95",
+      "file": "oldest.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "n + 2",
+      "replacement": "n - 2",
+      "tests": [
+        "TestOldest"
+      ],
+      "earlierTests": [
+        "TestOldest"
+      ]
+    },
+    {
+      "scope": "recent",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "947aca177c4898b7",
+      "file": "recent.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return n + 4",
+      "replacement": "return 0",
+      "tests": [
+        "TestRecent"
+      ],
+      "earlierTests": [
+        "TestRecent"
+      ]
+    },
+    {
+      "scope": "recent",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "235943e8190c57de",
+      "file": "recent.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "n + 4",
+      "replacement": "n - 4",
+      "tests": [
+        "TestRecent"
+      ],
+      "earlierTests": [
+        "TestRecent"
+      ]
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

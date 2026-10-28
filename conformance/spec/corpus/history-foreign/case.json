@@ -1,0 +1,12 @@
+{
+  "case": "history-foreign",
+  "sample": 1,
+  "history": { "engine": "other" },
+  "proves": "A run reuses no verdict from the record of another engine, so every mutant is without a reusable verdict. The limit leaves a mutant without a verdict not-run, and the run passes.",
+  "fixture": "inc adds one, and TestInc checks it. The history is a record of another engine, which observed both mutants killed. The one mutant run of the limit is that of the least key, the sbr-zero mutant.",
+  "mutants": [
+    { "scope": "inc", "kind": "sbr-zero", "nth": 0, "verdict": "killed", "earlier": "killed", "observed": 1 },
+    { "scope": "inc", "kind": "aor", "nth": 0, "verdict": "not-run", "earlier": "killed", "observed": 1 }
+  ],
+  "errors": []
+}
