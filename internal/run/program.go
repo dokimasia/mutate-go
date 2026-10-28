@@ -24,6 +24,10 @@ const instrumentedValue = "1"
 // command in the package's directory.
 const ownPattern = "."
 
+// targetSeparator separates the import path of another package of the
+// suite from the name of its test in a record.
+const targetSeparator = ": "
+
 // program is one test binary of the run's suite.
 type program struct {
 	// executed contains the first ordinal of each site that the binary's
@@ -46,6 +50,9 @@ type program struct {
 	// tests lists the binary's top-level tests in the order in which its
 	// opening control run started them.
 	tests []string
+	// testFiles lists the names of the test files of the binary's package
+	// in dir, as go list reports them.
+	testFiles []string
 	// deadline and ceiling are the limits of each run of the binary, from
 	// its opening control run. ceiling is 0 where the engine applies none.
 	deadline time.Duration
@@ -88,7 +95,7 @@ func named(tests []string, target string) []string {
 	}
 	out := make([]string, len(tests))
 	for i, t := range tests {
-		out[i] = target + ": " + t
+		out[i] = target + targetSeparator + t
 	}
 	return out
 }

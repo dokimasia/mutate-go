@@ -87,6 +87,10 @@ type Config struct {
 	// the path of the mutant's file relative to the working directory, as
 	// [record.Record.Path] states it. Verdict may be nil.
 	Verdict func(m record.Mutant, mutants int, path string)
+	// Earlier is the record of the history's earlier run of the package, as
+	// [record.Read] returns it, or nil for a history without one. Run reads
+	// it only under History.
+	Earlier *record.Record
 	// Lines is the run's selection. A nil selection selects every line, and
 	// an empty one selects none. The record states the ranges in the
 	// package's files.
@@ -141,6 +145,16 @@ type Config struct {
 	// passes. Before the mutant runs, the ordinary control run builds and
 	// runs the suite from the unchanged source.
 	Confirm bool
+	// History makes the run a run with a history. After the opening control
+	// run, the run decides which verdicts of Earlier it may reuse, and runs
+	// its mutants in three groups: those without a reusable verdict, in the
+	// order of their keys, then those whose reusable verdict's wider inputs
+	// changed, and then the others, the oldest observation first. Sample
+	// counts the starts in that order. A mutant with a reusable verdict that
+	// does not start keeps that verdict, so neither the caller's deadline nor
+	// Sample makes it not-run. The record's sample states no first key. A run
+	// with a history takes no Lines.
+	History bool
 }
 
 // runner is the state of one run.
@@ -159,6 +173,21 @@ type runner struct {
 	// snapshots lists the files of the package, and then of each other
 	// package of the suite, before any test binary runs.
 	snapshots []snapshot
+	// imported lists the files of each package of a main module that the
+	// package imports, before any test binary runs.
+	imported []snapshot
+	// regions lists the root, as a region of the run's own package, and
+	// then the directory of each package of the observation, in the order of
+	// snapshots and then of imported.
+	regions []region
+	// observation is the run's own observation, nil until observe sets it.
+	observation *record.Observation
+	// declared maps the target of each program, and each test's top-level
+	// name, to the file that declares the test, relative to the root. It is
+	// set only in a run with an earlier record.
+	declared map[string]map[string]string
+	// engine is the engine's identity, as record.Identity states it.
+	engine string
 	// order lists the mutant of each entry of the record.
 	order []*enumerate.Mutant
 	cfg   Config
@@ -184,13 +213,15 @@ type runner struct {
 
 // outcome is a mutant's verdict and what its runs state: the tests that
 // failed or were running, the runs' wall time when the engine measured it,
-// the reason, and whether a confirmation run decided the verdict.
+// the reason, whether a confirmation run decided the verdict, and whether a
+// run of the mutant observed it.
 type outcome struct {
 	verdict   spec.Verdict
 	seconds   *float64
 	reason    string
 	tests     []string
 	confirmed bool
+	observed  bool
 }
 
 // Run runs mutation testing on the package in cfg.Dir and returns the run's
@@ -225,7 +256,13 @@ type outcome struct {
 // Run reads the files of the package, and of each other package of the
 // suite, before any test binary runs. The inputs digest states them as they
 // are then, and the run error changed-files names each file that differs
-// after the runs.
+// after the runs. The record's first observation states them too, with the
+// files of each package of a main module that the package imports, and the
+// requirements digest.
+//
+// Under cfg.History, Run reuses the verdicts of cfg.Earlier as Config
+// states, and the record also states each earlier observation that a
+// reused verdict names.
 //
 // # Errors
 //
@@ -273,6 +310,9 @@ func Run(ctx context.Context, cfg *Config) (*record.Record, error) {
 			Generated: []record.Generated{},
 		},
 	}
+	exe, _ := os.Executable()
+	id, _ := buildID(context.WithoutCancel(ctx), resolved, r.goEnv(1), exe)
+	r.engine = record.Identity(r.rec.Engine.Version, id)
 	r.run(ctx)
 	r.compare()
 	r.rec.FinishedAt = time.Now().UTC().Format(time.RFC3339)
@@ -280,8 +320,9 @@ func Run(ctx context.Context, cfg *Config) (*record.Record, error) {
 	if r.limited {
 		limit = cfg.Sample
 	}
-	r.rec.SetScore(&def.Protocol, limit)
-	r.rec.Inputs = r.inputs(ctx, resolved)
+	r.rec.SetScore(&def.Protocol, limit, cfg.History)
+	r.rec.Inputs = r.inputs()
+	r.rec.Observations = r.observations()
 	return r.rec, nil
 }
 
@@ -306,13 +347,8 @@ func (r *runner) goEnv(divisor int) []string {
 	return testbin.Setenv(r.cfg.Env, procsVar+"="+strconv.Itoa(max(1, procs/max(1, divisor))))
 }
 
-// inputs returns the record's inputs digest of the run of the package in
-// dir. The build ID of the engine's executable identifies a development
-// build, and when it does not read, the digest states the engine's version
-// alone.
-func (r *runner) inputs(ctx context.Context, dir string) string {
-	exe, _ := os.Executable()
-	engine, _ := buildID(context.WithoutCancel(ctx), dir, r.goEnv(1), exe)
+// inputs returns the record's inputs digest of the run.
+func (r *runner) inputs() string {
 	ids := make([]string, 0, len(r.programs))
 	digests := make([]string, 0, len(r.snapshots))
 	for _, p := range r.programs {
@@ -322,7 +358,7 @@ func (r *runner) inputs(ctx context.Context, dir string) string {
 		digests = append(digests, s.importPath+" "+record.Files(s.files))
 	}
 	return record.Inputs(
-		record.Identity(r.rec.Engine.Version, engine),
+		r.engine,
 		r.rec.Toolchain,
 		strings.Join(ids, "\n"),
 		strings.Join(digests, "\n"),
@@ -375,6 +411,13 @@ func (r *runner) run(ctx context.Context) {
 			r.stop("the packages of the suite do not load")
 			return
 		}
+		if r.cfg.History && r.cfg.Earlier != nil {
+			if err = r.declare(); err != nil {
+				r.fail(spec.ErrorLoad, err.Error())
+				r.stop("the test files of the suite do not parse")
+				return
+			}
+		}
 		if len(r.programs) == 0 {
 			r.uncovered(nil)
 			return
@@ -401,10 +444,12 @@ func (r *runner) run(ctx context.Context) {
 	r.closing(ctx)
 }
 
-// loadMutants loads the run's package and enumerates its mutants under the
-// run's selection. A package that go list lists has its import path as the
+// loadMutants loads the run's package, reads the files of each package of a
+// main module that it imports, and enumerates its mutants under the run's
+// selection. A package that go list lists has its import path as the
 // target's name, also when it does not load. It returns the error of the
-// load when the package does not load.
+// load when the package does not load, and the error of a file of an
+// imported package that does not read.
 func (r *runner) loadMutants(ctx context.Context) (*enumerate.Result, error) {
 	include := r.def.Overlay.Comment + r.def.Catalogue.Include
 	p, err := load.Load(ctx, &load.Config{Dir: r.cfg.Dir, Env: r.goEnv(1), Imports: render.Imports(), Include: include})
@@ -415,6 +460,13 @@ func (r *runner) loadMutants(ctx context.Context) (*enumerate.Result, error) {
 		return nil, err
 	}
 	r.pkg = p
+	for _, dir := range p.Imported {
+		files, err := readSnapshot(dir)
+		if err != nil {
+			return nil, err
+		}
+		r.imported = append(r.imported, snapshot{dir: dir, files: files})
+	}
 	return enumerate.Enumerate(p, &r.def, enumerate.Options{
 		Lines:            r.selection(),
 		IncludeGenerated: r.cfg.IncludeGenerated,
@@ -477,7 +529,7 @@ func position(p enumerate.Position) record.Position {
 // states the packages in the record.
 func (r *runner) suite(ctx context.Context) error {
 	if r.pkg.Tests {
-		r.programs = append(r.programs, &program{dir: r.pkg.Dir})
+		r.programs = append(r.programs, &program{dir: r.pkg.Dir, testFiles: r.pkg.TestFiles})
 	}
 	if len(r.cfg.Suite) == 0 {
 		return nil
@@ -491,7 +543,7 @@ func (r *runner) suite(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		r.programs = append(r.programs, &program{target: l.ImportPath, dir: l.Dir})
+		r.programs = append(r.programs, &program{target: l.ImportPath, dir: l.Dir, testFiles: l.TestFiles})
 		r.snapshots = append(r.snapshots, snapshot{importPath: l.ImportPath, dir: l.Dir, files: files})
 		r.rec.Suite = append(r.rec.Suite, l.ImportPath)
 	}
@@ -572,7 +624,8 @@ func (r *runner) uncovered(executed map[int]bool) {
 func (r *runner) first(i int) int { return r.prog.Ordinals[r.order[i].Site.Mutants[0]] }
 
 // set gives the mutant at index i the outcome o and the tests that executed
-// its site alone, and reports it.
+// its site alone, and reports it. A verdict that a run of the mutant
+// observed states the run's start as its observation.
 func (r *runner) set(i int, o outcome) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -581,6 +634,9 @@ func (r *runner) set(i int, o outcome) {
 	m.CoveredBy = r.coveredBy(i)
 	if o.reason != "" {
 		m.Reason = o.reason
+	}
+	if o.observed {
+		m.ObservedAt = r.rec.StartedAt
 	}
 	r.report(i)
 }

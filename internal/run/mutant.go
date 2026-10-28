@@ -37,6 +37,7 @@ func (r *runner) mutant(ctx context.Context, i, ordinal int) {
 		if o.verdict == spec.Survived {
 			o.verdict = spec.NoCoverage
 		}
+		o.observed = o.verdict != spec.NotRun
 		r.set(i, o)
 		return
 	}
@@ -53,6 +54,7 @@ func (r *runner) mutant(ctx context.Context, i, ordinal int) {
 			}
 		}
 	}
+	o.observed = o.verdict != spec.NotRun
 	r.set(i, o)
 }
 

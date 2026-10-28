@@ -247,7 +247,7 @@ Unused aor 0: not-run
 `, "no mutant has a verdict after the cancel")
 			assert.Equal(t, rec.Mutants[2].Reason, cancelledReason, "the record states that the caller ended the run")
 			assert.NotNil(t, rec.Sample, "the record states the sample of the mutants that ran")
-			assert.Equal(t, rec.Sample.Before, slices.Min(keys(rec)[2:]),
+			assert.Equal(t, rec.Sample.Before, new(slices.Min(keys(rec)[2:])),
 				"the sample ends at the least key that did not run")
 		})
 

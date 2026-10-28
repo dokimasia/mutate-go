@@ -34,9 +34,20 @@
 // runs each survivor, and each mutant without coverage, alone as ordinary
 // source, without the instrumented variable, for the mutant's verdict.
 //
+// # Observations and history
+//
+// The record states the run's observation: the digest of each file of the
+// suite's packages and of the packages of the module that the package
+// imports, and the digest of the run's requirements. Each verdict of a
+// mutant run states that the run observed it. A run with a history reuses
+// the earlier verdict of a mutant whose inputs did not change since the run
+// that observed it. It runs the mutants without such a verdict first and
+// the oldest verdicts after them, and a mutant with a reusable verdict that
+// does not start keeps that verdict.
+//
 // # Dependency position
 //
-// Imports context, crypto/sha256, encoding/hex, fmt, io/fs, os,
+// Imports context, crypto/sha256, encoding/hex, fmt, io/fs, os, path,
 // path/filepath, runtime, runtime/debug, slices, strconv, strings, sync,
 // syscall and time from the standard library, and internal/enumerate,
 // internal/load, internal/memory, internal/process, internal/record,

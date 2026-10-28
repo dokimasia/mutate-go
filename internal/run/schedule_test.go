@@ -197,7 +197,8 @@ func TestSchedule(t *testing.T) {
 				func(earlier, later string) bool { return earlier < later },
 				"each mutant that ran has a lesser key than each mutant that did not")
 			assert.NotNil(t, rec.Sample, "the record states the sample")
-			assert.Equal(t, rec.Sample.Before, slices.Min(stopped), "the sample ends at the least key that did not run")
+			assert.Equal(t, rec.Sample.Before, new(slices.Min(stopped)),
+				"the sample ends at the least key that did not run")
 		})
 
 		t.Run("states the limit of a run that Sample alone ends", func(t *testing.T) {
@@ -444,7 +445,7 @@ Unused aor 0: no-coverage
 			// The key of Add's aor, the least key of a mutant that did not run,
 			// sorts after the key of Add's sbr-zero and before the keys of
 			// Unused's mutants.
-			assert.Equal(t, rec.Sample, &record.Sample{Before: rec.Mutants[1].Key, Detected: 1, Score: new(1.0)},
+			assert.Equal(t, rec.Sample, &record.Sample{Before: new(rec.Mutants[1].Key), Detected: 1, Score: new(1.0)},
 				"the sample counts the mutants before Add's aor")
 		})
 	})

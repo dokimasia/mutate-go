@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.dokimi.dev/mutate/internal/record"
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
@@ -130,11 +131,19 @@ func (r *runner) dispatch(
 // the mutants that the workers took still run, so the caller sees that no
 // further mutant starts. The run is limited when cfg.Sample alone ended the
 // starts and no mutant that started is not-run.
+//
+// In a run with a history, the runs start in the order that groups
+// returns, and a mutant with a reusable verdict that no worker took gets
+// that verdict in place of not-run.
 func (r *runner) mutants(ctx context.Context) {
 	pending := r.pending()
 	slices.SortStableFunc(pending, func(a, b int) int {
 		return strings.Compare(r.rec.Mutants[a].Key, r.rec.Mutants[b].Key)
 	})
+	var reused map[int]*record.Mutant
+	if r.cfg.History {
+		pending, reused = r.groups(pending)
+	}
 	n := len(pending)
 	if r.cfg.Sample > 0 {
 		n = min(n, r.cfg.Sample)
@@ -159,6 +168,10 @@ func (r *runner) mutants(ctx context.Context) {
 		reason = "the caller limits the run to " + strconv.Itoa(started) + " mutants"
 	}
 	for _, i := range pending[started:] {
+		if e, ok := reused[i]; ok {
+			r.reuse(i, e)
+			continue
+		}
 		r.set(i, outcome{verdict: spec.NotRun, reason: reason})
 	}
 	wait()
