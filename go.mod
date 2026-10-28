@@ -7,5 +7,5 @@ go 1.27.2
 
 require (
 	go.dokimi.dev/assert v0.10.0
-	go.stealthscale.io/cli v0.6.0
+	go.stealthscale.io/cli v0.7.0
 )
