@@ -26,12 +26,17 @@ type Linked struct {
 	ImportPath string
 	// Dir is the package directory, where its test binary runs.
 	Dir string
+	// TestFiles lists the names of the package's test files in Dir, as
+	// [Package.TestFiles] lists them.
+	TestFiles []string
 }
 
 // listedTest is the part of an entry of go list -test that Linking reads.
 type listedTest struct {
 	Listed
-	Deps []string
+	Deps         []string
+	TestGoFiles  []string
+	XTestGoFiles []string
 }
 
 // Linking lists the packages that patterns name, as go list resolves them
@@ -50,24 +55,27 @@ func Linking(ctx context.Context, cfg *Config, importPath string, patterns []str
 	if err != nil {
 		return nil, err
 	}
-	listed := map[string]bool{}
-	var mains []listedTest
-	for _, e := range entries {
+	// listed contains the test files of each package that patterns name.
+	listed := map[string][]string{}
+	var mains []*listedTest
+	for i := range entries {
+		e := &entries[i]
 		if problem := e.Problem(); problem != "" {
 			return nil, fmt.Errorf("%s: %s", e.ImportPath, problem)
 		}
 		if strings.HasSuffix(e.ImportPath, testBinary) {
 			mains = append(mains, e)
 		} else {
-			listed[e.ImportPath] = true
+			listed[e.ImportPath] = slices.Concat(e.TestGoFiles, e.XTestGoFiles)
 		}
 	}
-	slices.SortFunc(mains, func(a, b listedTest) int { return cmp.Compare(a.ImportPath, b.ImportPath) })
+	slices.SortFunc(mains, func(a, b *listedTest) int { return cmp.Compare(a.ImportPath, b.ImportPath) })
 	var linked []Linked
 	for _, m := range mains {
 		p := strings.TrimSuffix(m.ImportPath, testBinary)
-		if p != importPath && listed[p] && links(m.Deps, importPath) {
-			linked = append(linked, Linked{ImportPath: p, Dir: m.Dir})
+		tests, ok := listed[p]
+		if p != importPath && ok && links(m.Deps, importPath) {
+			linked = append(linked, Linked{ImportPath: p, Dir: m.Dir, TestFiles: tests})
 		}
 	}
 	return linked, nil

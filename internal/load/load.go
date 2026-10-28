@@ -70,6 +70,22 @@ type Package struct {
 	// Files lists every file that the compiler compiles for the package,
 	// in the order that go list reports them.
 	Files []*File
+	// TestFiles lists the names of the package's test files in Dir: the
+	// files of the package itself, and then those of its external test
+	// package, in the order that go list reports them.
+	TestFiles []string
+	// Imported lists the directory of each package of a main module that
+	// the package imports, directly or indirectly, in the order that go list
+	// reports them. A main module is the module of the package directory,
+	// or a module of its workspace.
+	Imported []string
+	// Requirements lists the paths of the files that state the
+	// requirements of the package's build: go.mod and go.sum of the
+	// package's module and of each module of Imported, in that order, and
+	// then go.work and go.work.sum of the workspace. A file that does not
+	// exist is listed too. Requirements is empty for a package outside a
+	// module.
+	Requirements []string
 	// Language is N in the language version go1.N that the go command
 	// compiles the package's files with, from the module's go line. It is 0
 	// for a package outside a module, whose files the go command compiles
@@ -139,7 +155,22 @@ type goEnv struct {
 	GOVERSION  string `json:"GOVERSION"`
 	GOMODCACHE string `json:"GOMODCACHE"`
 	GOARCH     string `json:"GOARCH"`
+	// GOWORK is the path of the workspace file, empty outside a workspace,
+	// and workOff when the variable GOWORK turns the workspace off.
+	GOWORK string `json:"GOWORK"`
 }
+
+// The names of the files that state the requirements of a build: a
+// module's, its checksums', and the suffix of a workspace's checksums.
+const (
+	modFile   = "go.mod"
+	sumFile   = "go.sum"
+	sumSuffix = ".sum"
+)
+
+// workOff is the value of go env GOWORK when the variable GOWORK turns the
+// workspace off.
+const workOff = "off"
 
 // listedPackage is the part of a go list entry that Load reads.
 type listedPackage struct {
@@ -147,7 +178,9 @@ type listedPackage struct {
 	Module    *struct {
 		Dir       string
 		GoVersion string
+		Main      bool
 	}
+	Deps   []string
 	Name   string
 	Export string
 	Listed
@@ -176,8 +209,8 @@ type listedPackage struct {
 //
 // When go list lists the package and Load still fails, Load returns the
 // package with the error, as go/types returns a package that does not
-// type-check: its ImportPath, Name, Dir, Root, Language, Toolchain and
-// Tests are set.
+// type-check: its ImportPath, Name, Dir, Root, Language, Toolchain, Tests,
+// TestFiles, Imported and Requirements are set.
 func Load(ctx context.Context, cfg *Config) (*Package, error) {
 	dir, err := filepath.Abs(cfg.Dir)
 	if err == nil {
@@ -216,11 +249,13 @@ func Load(ctx context.Context, cfg *Config) (*Package, error) {
 	}
 	p := &Package{
 		ImportPath: target.ImportPath, Name: target.Name, Dir: dir, Root: dir, Toolchain: env.GOVERSION,
-		Tests: len(target.TestGoFiles)+len(target.XTestGoFiles) > 0, Fset: token.NewFileSet(),
+		TestFiles: slices.Concat(target.TestGoFiles, target.XTestGoFiles), Fset: token.NewFileSet(),
 	}
+	p.Tests = len(p.TestFiles) > 0
 	if target.Module != nil {
 		p.Root = target.Module.Dir
 		p.Language = language(target.Module.GoVersion)
+		p.requires(target, entries, env.GOWORK)
 	}
 	if err != nil {
 		return p, err
@@ -287,6 +322,33 @@ func (p *Package) Check(files []*ast.File, language int) []types.Error {
 	})
 	_, _ = conf.Check(p.ImportPath, p.Fset, files, nil)
 	return errs
+}
+
+// requires sets the package's Imported and Requirements from the entries of
+// go list, of which target is the package's own, and the workspace file
+// work as go env GOWORK reports it.
+func (p *Package) requires(target *listedPackage, entries []listedPackage, work string) {
+	deps := map[string]bool{}
+	for _, d := range target.Deps {
+		deps[d] = true
+	}
+	modules := []string{target.Module.Dir}
+	for i := range entries {
+		e := &entries[i]
+		if !deps[e.ImportPath] || e.Module == nil || !e.Module.Main {
+			continue
+		}
+		p.Imported = append(p.Imported, e.Dir)
+		if !slices.Contains(modules, e.Module.Dir) {
+			modules = append(modules, e.Module.Dir)
+		}
+	}
+	for _, dir := range modules {
+		p.Requirements = append(p.Requirements, filepath.Join(dir, modFile), filepath.Join(dir, sumFile))
+	}
+	if work != "" && work != workOff {
+		p.Requirements = append(p.Requirements, work, work+sumSuffix)
+	}
 }
 
 // parse reads and parses every compiled file, gives each its role, and

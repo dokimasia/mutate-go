@@ -109,6 +109,62 @@ func TestLoad(t *testing.T) {
 			expect.Equal(t, p.Files[0].Name, "sub/a.go", "and its file's name starts at the root")
 		})
 
+		t.Run("lists the test files of the package before those of its external test package", func(t *testing.T) {
+			t.Parallel()
+			dir := moduleDir(t, map[string]string{
+				"a.go":      "package fixture\n",
+				"a_test.go": "package fixture_test\n",
+				"z_test.go": "package fixture\n",
+			})
+			p, err := load.Load(ctx, &load.Config{Dir: dir, Env: os.Environ()})
+			assert.NoError(t, err, "the package loads")
+			assert.Equal(t, p.TestFiles, []string{"z_test.go", "a_test.go"},
+				"z_test.go is a file of the package itself")
+		})
+
+		t.Run("lists the packages and the requirements of the workspace's modules that the package imports",
+			func(t *testing.T) {
+				t.Parallel()
+				root := resolved(t, files.Workspace(t, files.Tree{
+					"go.work": files.Text("go 1.21\n\nuse (\n\t./a\n\t./b\n)\n"),
+					"a/go.mod": files.Text("module a\n\ngo 1.21\n\nrequire ext v0.0.0\n\n" +
+						"replace ext => ../ext\n"),
+					"a/a.go": files.Text(
+						"package a\n\nimport (\n\t_ \"a/dep\"\n\t_ \"b/y\"\n\t_ \"ext\"\n\t_ \"fmt\"\n)\n",
+					),
+					"a/dep/d.go":       files.Text("package dep\n\nimport _ \"a/dep/inner\"\n"),
+					"a/dep/inner/i.go": files.Text("package inner\n"),
+					"a/other/o.go":     files.Text("package other\n"),
+					"b/go.mod":         files.Text("module b\n\ngo 1.21\n"),
+					"b/y/y.go":         files.Text("package y\n"),
+					"ext/go.mod":       files.Text("module ext\n\ngo 1.21\n"),
+					"ext/e.go":         files.Text("package ext\n"),
+				}))
+				p, err := load.Load(ctx, &load.Config{Dir: filepath.Join(root, "a"), Env: os.Environ()})
+				assert.NoError(t, err, "the package of the workspace loads")
+				expect.Equal(t, p.Imported, []string{
+					filepath.Join(root, "a", "dep", "inner"),
+					filepath.Join(root, "a", "dep"),
+					filepath.Join(root, "b", "y"),
+				}, "the imported packages of the workspace's modules come in the order of go list")
+				expect.Equal(t, p.Requirements, []string{
+					filepath.Join(root, "a", goMod), filepath.Join(root, "a", "go.sum"),
+					filepath.Join(root, "b", goMod), filepath.Join(root, "b", "go.sum"),
+					filepath.Join(root, "go.work"), filepath.Join(root, "go.work.sum"),
+				}, "the requirements are the module files of a and b, and the workspace's files")
+			},
+		)
+
+		t.Run("lists no workspace's files when GOWORK is off", func(t *testing.T) {
+			t.Parallel()
+			dir := resolved(t, moduleDir(t, map[string]string{"a.go": "package fixture\n"}))
+			p, err := load.Load(ctx, &load.Config{Dir: dir, Env: append(os.Environ(), "GOWORK=off")})
+			assert.NoError(t, err, "the package loads")
+			expect.Empty(t, p.Imported, "the package imports no package of its module")
+			expect.Equal(t, p.Requirements, []string{filepath.Join(dir, goMod), filepath.Join(dir, "go.sum")},
+				"the requirements are the module's files alone")
+		})
+
 		languages := []struct {
 			name string
 			give string
@@ -147,6 +203,7 @@ func TestLoad(t *testing.T) {
 			expect.Equal(t, p.Root, dir, "and its own directory as its root")
 			expect.Equal(t, p.Files[0].Name, "a.go", "and its file's name starts there")
 			expect.False(t, p.Tests, "and it has no test file")
+			expect.Empty(t, p.Requirements, "and no module states its requirements")
 		})
 
 		t.Run("gives cgo's rewrite of a file that imports C the role Cgo", func(t *testing.T) {

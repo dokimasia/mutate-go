@@ -36,6 +36,7 @@ func TestLinking(t *testing.T) {
 				"f_test.go":   testFile("fixture", "_ \"fixture/a\""),
 				"a/a.go":      "package a\n",
 				"a/a_test.go": testFile("a_test", "_ \"fixture\""),
+				"a/i_test.go": "package a\n",
 				"b/b.go":      "package b\n\nvar V = 1\n",
 				"b/b_test.go": testFile("b_test", "_ \"fixture\""),
 				"c/c.go":      "package c\n\nimport _ \"fixture\"\n",
@@ -45,8 +46,8 @@ func TestLinking(t *testing.T) {
 			linked, err := load.Linking(ctx, &load.Config{Dir: dir, Env: os.Environ()}, "fixture", []string{"./..."})
 			assert.NoError(t, err, "the module's packages list")
 			assert.Equal(t, linked, []load.Linked{
-				{ImportPath: "fixture/a", Dir: filepath.Join(dir, "a")},
-				{ImportPath: "fixture/b", Dir: filepath.Join(dir, "b")},
+				{ImportPath: "fixture/a", Dir: filepath.Join(dir, "a"), TestFiles: []string{"i_test.go", "a_test.go"}},
+				{ImportPath: "fixture/b", Dir: filepath.Join(dir, "b"), TestFiles: []string{"b_test.go"}},
 			}, "a and b link fixture in their test binaries, c has no test binary, and d does not link fixture")
 		})
 

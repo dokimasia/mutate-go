@@ -10,7 +10,8 @@
 // CompiledGoFiles, and reads every dependency from the export data that go
 // list writes. Linking lists the other packages whose test binaries link a
 // package, List lists the packages that patterns name, and Go runs any
-// other go command the same way.
+// other go command the same way. Declarations returns the file that
+// declares each test of a package's test files.
 //
 // # go list
 //
@@ -25,6 +26,6 @@
 //
 // Imports bytes, cmp, context, encoding/json, errors, fmt, go/ast,
 // go/importer, go/parser, go/token, go/types, go/version, io, os, os/exec,
-// path/filepath, reflect, runtime, slices, strconv, strings and time from
-// the standard library, and internal/process from this module.
+// path/filepath, reflect, runtime, slices, strconv, strings, time, unicode
+// and unicode/utf8 from the standard library, and internal/process from this module.
 package load
