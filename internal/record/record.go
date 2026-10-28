@@ -5,6 +5,7 @@ package record
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -17,8 +18,12 @@ import (
 // Module is the module path of the engine.
 const Module = "go.dokimi.dev/mutate"
 
-// fileSuffix ends the name of a record file.
-const fileSuffix = ".mutate.json"
+// fileSuffix ends the name of a record file, and partialSuffix the name of
+// the file that Write writes before it renames it to the record file.
+const (
+	fileSuffix    = ".mutate.json"
+	partialSuffix = ".partial"
+)
 
 // The modes of the directory of the record files that Write makes, and of
 // a record file.
@@ -50,6 +55,9 @@ type Record struct { //nolint:govet // the order of the fields is the order of t
 	StartedAt  string `json:"startedAt"`
 	FinishedAt string `json:"finishedAt"`
 	Inputs     string `json:"inputs"`
+	// Observations lists the runs that observed the record's verdicts, this
+	// run first. A run that no verdict of the record names is left out.
+	Observations []Observation `json:"observations"`
 	// Suite lists the import paths of the other packages whose tests the
 	// run added to the package's own. It is nil when the package's own
 	// tests are the suite.
@@ -81,6 +89,16 @@ type Record struct { //nolint:govet // the order of the fields is the order of t
 type Engine struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
+}
+
+// Observation is one run that observed verdicts of the record: when the run
+// started, the digest of each file of its suite and of each package of the
+// module that the package imports, by the file's path relative to the root,
+// and the digest of its requirements. Each digest is sha256:<hex>.
+type Observation struct {
+	StartedAt    string            `json:"startedAt"`
+	Files        map[string]string `json:"files"`
+	Requirements string            `json:"requirements"`
 }
 
 // Target names the target's language and the target as the language
@@ -139,12 +157,13 @@ type Closing struct {
 // Sample states the mutants that the score counts and whose keys sort
 // before Before, the first key of a mutant that did not run. A run starts
 // the mutants in the order of their keys, so the sample is a uniform
-// sample of the target's mutants. Limit is the number of mutant runs that
-// the caller allowed, when that limit alone ended the runs, and nil when
-// the caller's deadline or the caller ended them. Score is nil for an empty
-// sample.
+// sample of the target's mutants. In a run with a history, Before is nil,
+// and the sample is every mutant that the score counts and that has a
+// verdict. Limit is the number of mutant runs that the caller allowed, when
+// that limit alone ended the runs, and nil when the caller's deadline or the
+// caller ended them. Score is nil for an empty sample.
 type Sample struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
-	Before     string   `json:"before"`
+	Before     *string  `json:"before"`
 	Limit      *int     `json:"limit"`
 	Detected   int      `json:"detected"`
 	Undetected int      `json:"undetected"`
@@ -170,6 +189,9 @@ type Position struct {
 // executed the site did not run each of its tests alone. Confirmed is true
 // for a mutant whose Verdict, Tests and Seconds come from the run of its
 // ordinary build: a survivor of its run, or a mutant without coverage.
+// ObservedAt is the StartedAt of the run that observed the verdict, one of
+// the record's observations, and empty for a verdict that the run decided
+// without a mutant run.
 type Mutant struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
 	Key         string       `json:"key"`
 	Kind        spec.Kind    `json:"kind"`
@@ -186,6 +208,7 @@ type Mutant struct { //nolint:govet // the order of the fields is the order of t
 	Confirmed   bool         `json:"confirmed,omitempty"`
 	Rule        spec.Family  `json:"rule,omitempty"`
 	Reason      string       `json:"reason,omitempty"`
+	ObservedAt  string       `json:"observedAt,omitempty"`
 }
 
 // Skip is one site of a catalogue class without a mutant, and the reason.
@@ -232,11 +255,13 @@ func (r *Record) Failed() bool {
 //
 // SetScore also sets Sample for a run without a run error in which a
 // mutant is not-run: the mutants whose keys sort before the least key of a
-// not-run mutant, counted as the score counts them. Sample is nil for any
+// not-run mutant, counted as the score counts them. In a run with a
+// history, the sample has no first key and counts every mutant, because
+// the run does not start its mutants in key order. Sample is nil for any
 // other run. limit is the number of mutant runs that the caller allowed,
 // when that limit alone ended the runs, or 0. The sample then states it,
 // and the run's score is the sample's.
-func (r *Record) SetScore(protocol *spec.Protocol, limit int) {
+func (r *Record) SetScore(protocol *spec.Protocol, limit int, history bool) {
 	detected, undetected := r.Tally(protocol, "")
 	r.Score = ratio(detected, undetected)
 	r.Sample = nil
@@ -247,13 +272,13 @@ func (r *Record) SetScore(protocol *spec.Protocol, limit int) {
 		}
 	}
 	if before != "" && len(r.Errors) == 0 {
-		detected, undetected = r.Tally(protocol, before)
-		r.Sample = &Sample{
-			Before:     before,
-			Detected:   detected,
-			Undetected: undetected,
-			Score:      ratio(detected, undetected),
+		r.Sample = &Sample{}
+		bound := ""
+		if !history {
+			bound, r.Sample.Before = before, &before
 		}
+		detected, undetected = r.Tally(protocol, bound)
+		r.Sample.Detected, r.Sample.Undetected, r.Sample.Score = detected, undetected, ratio(detected, undetected)
 		if limit > 0 {
 			r.Sample.Limit, r.Score = &limit, r.Sample.Score
 		}
@@ -329,11 +354,15 @@ func FileName(importPath string) string {
 
 // Write writes r into dir, which Write creates when it does not exist, as
 // the file that FileName names, and returns the file's path. The file is
-// the record's JSON, indented by two spaces a level, and a newline.
+// the record's JSON, indented by two spaces a level, and a newline. Write
+// writes the record into a file of its own beside it and renames that file,
+// so a write that ends early leaves an earlier record whole.
 //
 // Error modes:
 //   - the error of a directory that does not exist and cannot be made
 //   - the error of a file that cannot be written
+//   - the error of a rename onto the record file, after which Write removes
+//     its own file
 //
 // Each starts with the package's name.
 func (r *Record) Write(dir string) (string, error) {
@@ -344,10 +373,41 @@ func (r *Record) Write(dir string) (string, error) {
 		return "", fmt.Errorf("record: %w", err)
 	}
 	path := filepath.Join(dir, FileName(r.Target.Name))
-	if err := os.WriteFile(path, append(data, '\n'), fileMode); err != nil {
+	partial := path + partialSuffix
+	if err := os.WriteFile(partial, append(data, '\n'), fileMode); err != nil {
 		return "", fmt.Errorf("record: %w", err)
 	}
+	if err := os.Rename(partial, path); err != nil {
+		return "", fmt.Errorf("record: %w", errors.Join(err, os.Remove(partial)))
+	}
 	return path, nil
+}
+
+// Read reads the record of the target importPath from dir, the file that
+// FileName names, as Write writes it.
+//
+// Error modes:
+//   - the error of a file that does not read, which wraps fs.ErrNotExist
+//     for a directory without the target's record
+//   - the error of a file that is no record's JSON
+//   - [ErrForeign] for a record of another format or version than protocol
+//     states, or of another engine than engine
+//
+// Each starts with the package's name.
+func Read(dir, importPath string, protocol *spec.Protocol, engine string) (*Record, error) {
+	data, err := os.ReadFile(filepath.Join(dir, FileName(importPath)))
+	if err != nil {
+		return nil, fmt.Errorf("record: %w", err)
+	}
+	var r Record
+	if err := json.Unmarshal(data, &r); err != nil {
+		return nil, fmt.Errorf("record: %s: %w", FileName(importPath), err)
+	}
+	if r.Record != protocol.Record.Name || r.Version != protocol.Record.Version || r.Engine.Name != engine {
+		return nil, fmt.Errorf("%w: %s states %s %d of %s", ErrForeign, FileName(importPath), r.Record, r.Version,
+			r.Engine.Name)
+	}
+	return &r, nil
 }
 
 // EngineVersion returns the version of the engine's module in info: the

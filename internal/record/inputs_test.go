@@ -21,14 +21,23 @@ const (
 	buildIDs  = "a/b"
 )
 
-// The pins of the two digests. Each was computed with printf and sha256sum,
+// The further fields of the requirements digest that the pin states.
+const (
+	catalogue = "1.0.0"
+	overlay   = "1.5.0"
+	settings  = "s"
+)
+
+// The pins of the digests. Each was computed with printf and sha256sum,
 // outside Go, over the stream that the docblock of its function states:
 //
 //	printf '%s' 21:dokimi-mutate-files/2 4:a.go 2:d1 7:b/c.txt 2:d2 | sha256sum
 //	printf '%s' 22:dokimi-mutate-inputs/2 6:v0.1.0 8:go1.27.1 3:a/b 64:<filesPin> | sha256sum
+//	printf '%s' 28:dokimi-mutate-requirements/1 6:v0.1.0 8:go1.27.1 5:1.0.0 5:1.5.0 1:s 64:<filesPin> | sha256sum
 const (
-	filesPin  = "47476b10a7666c5c7da7e573f669cd6cbae4fc2ca51d1a76fa2d9cf444092cc0"
-	inputsPin = "sha256:5dec5b4b8efde4fdb4c7c03cc05df151cb3bc50199b6a3ec94f8f593fd0e6554"
+	filesPin        = "47476b10a7666c5c7da7e573f669cd6cbae4fc2ca51d1a76fa2d9cf444092cc0"
+	inputsPin       = "sha256:5dec5b4b8efde4fdb4c7c03cc05df151cb3bc50199b6a3ec94f8f593fd0e6554"
+	requirementsPin = "sha256:065bd4aa37706be4c0816ff33a928a03b4464b0bab161e1fce14a0565315b063"
 )
 
 // buildID is the build ID of the engine's executable in the cases of
@@ -109,6 +118,36 @@ func TestInputs(t *testing.T) {
 				first, second := c.Draw(cuts, "first"), c.Draw(cuts, "second")
 				c.Assume(first != second)
 				assert.NotEqual(c, inputs(first), inputs(second), "the fields of one text differ in their digests")
+			})
+		})
+	})
+
+	t.Run("Requirements", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns the digest of each field behind its length", func(t *testing.T) {
+			t.Parallel()
+			got := record.Requirements(engine, toolchain, catalogue, overlay, settings, filesPin)
+			assert.Equal(t, got, requirementsPin, "the digest covers the stream that the docblock states")
+		})
+
+		t.Run("returns another digest for fields that differ", func(t *testing.T) {
+			t.Parallel()
+			prop.ForAll(t, "moving a boundary between the fields changes the digest", func(c *prop.Case) {
+				joined := c.Draw(prop.String(prop.Alphabet(alphabet), prop.MaxSize(18)), "joined")
+				// cuts generates the five boundaries that split joined into the
+				// six fields.
+				cuts := prop.List(prop.Integer(0, len(joined)), prop.MinSize(5), prop.MaxSize(5)).Map(
+					func(l []int) [5]int { return [5]int(slices.Sorted(slices.Values(l))) },
+				)
+				requirements := func(at [5]int) string {
+					return record.Requirements(joined[:at[0]], joined[at[0]:at[1]], joined[at[1]:at[2]],
+						joined[at[2]:at[3]], joined[at[3]:at[4]], joined[at[4]:])
+				}
+				first, second := c.Draw(cuts, "first"), c.Draw(cuts, "second")
+				c.Assume(first != second)
+				assert.NotEqual(c, requirements(first), requirements(second),
+					"the fields of one text differ in their digests")
 			})
 		})
 	})

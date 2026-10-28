@@ -284,25 +284,25 @@ func TestReport(t *testing.T) {
 			{
 				"states the detected mutants of the sample of a run that fails",
 				run(spec.Killed, spec.Survived, spec.NotRun), nil,
-				&record.Sample{Before: "2", Detected: 1, Undetected: 1, Score: new(0.5)},
+				&record.Sample{Before: new("2"), Detected: 1, Undetected: 1, Score: new(0.5)},
 				"the run failed, 1 of a sample of 2 mutants detected (50%): 1 killed, 1 survived, 1 not run",
 			},
 			{
 				"states the detected mutants of the sample of a run that the caller's limit ended",
 				run(spec.Killed, spec.Survived, spec.NotRun), nil,
-				&record.Sample{Before: "2", Limit: new(2), Detected: 1, Undetected: 1, Score: new(0.5)},
+				&record.Sample{Before: new("2"), Limit: new(2), Detected: 1, Undetected: 1, Score: new(0.5)},
 				"1 of a sample of 2 mutants detected (50%): 1 killed, 1 survived, 1 not run",
 			},
 			{
 				"states no mutant to detect for a sample of the caller's limit that counts none",
 				run(spec.NotViable, spec.NoCoverage, spec.NotRun), nil,
-				&record.Sample{Before: "1", Limit: new(1)},
+				&record.Sample{Before: new("1"), Limit: new(1)},
 				"no mutant to detect: 1 not covered, 1 not viable, 1 not run",
 			},
 			{
 				"states a run that fails with an empty sample as a failed run",
 				run(spec.Suppressed, spec.NotRun), nil,
-				&record.Sample{Before: "1"},
+				&record.Sample{Before: new("1")},
 				"the run failed: 1 suppressed, 1 not run",
 			},
 			{
@@ -326,6 +326,18 @@ func TestReport(t *testing.T) {
 					"the summary states the run's outcome and its verdicts")
 			})
 		}
+
+		t.Run("states the verdicts that an earlier run observed as reused", func(t *testing.T) {
+			t.Parallel()
+			rec := run(spec.Killed, spec.Killed, spec.Survived, spec.NoCoverage)
+			rec.StartedAt = "2026-01-02T00:00:00Z"
+			rec.Mutants[0].ObservedAt = "2026-01-01T00:00:00Z"
+			rec.Mutants[1].ObservedAt = rec.StartedAt
+			rec.Mutants[2].ObservedAt = "2026-01-01T00:00:00Z"
+			assert.Equal(t, report.Summary(rec, &protocol),
+				target+": 2 of 4 mutants detected (50%): 2 killed, 1 survived, 1 not covered, 2 reused",
+				"the summary counts the verdicts of the run's history")
+		})
 
 		generated := []struct {
 			name string

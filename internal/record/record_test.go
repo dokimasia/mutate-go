@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -31,10 +32,19 @@ import (
 var schemaPath = filepath.Join("..", "..", "conformance", "spec", "record.schema.json")
 
 // The pins of the record file's name and of the start of the package's
-// errors.
+// errors, the engine that full names, and when full's run started.
 const (
 	fileName    = "github.com%2Fgoogle%2Fbtree.mutate.json"
 	errorPrefix = "record: "
+	engineName  = "mutate-go"
+	startedAt   = "2026-10-02T21:12:51Z"
+)
+
+// The modes of a directory that the tests write, and of one that takes no
+// new file.
+const (
+	dirMode      = 0o755
+	readOnlyMode = 0o555
 )
 
 // protocol is the run protocol of the vendored definition.
@@ -45,18 +55,30 @@ func full() *record.Record {
 	ceiling, peak, seconds := int64(805306368), int64(67108864), 0.01
 	return &record.Record{
 		Record:     "dokimi-mutate",
-		Version:    1,
+		Version:    2,
 		Catalogue:  "1.0.0",
 		Overlay:    "1.0.0",
-		Engine:     record.Engine{Name: "mutate-go", Version: "(devel)"},
+		Engine:     record.Engine{Name: engineName, Version: "(devel)"},
 		Toolchain:  "go1.27.1",
 		Target:     record.Target{Language: "go", Name: "github.com/google/btree"},
 		Root:       "/work/btree",
-		StartedAt:  "2026-10-02T21:12:51Z",
+		StartedAt:  startedAt,
 		FinishedAt: "2026-10-02T21:14:07Z",
 		Inputs:     "sha256:" + strings.Repeat("9c", 32),
-		Suite:      []string{"github.com/google/btree/conformance"},
-		Selection:  []record.Range{{File: "btree.go", First: 3, Last: 9}},
+		Observations: []record.Observation{
+			{
+				StartedAt:    startedAt,
+				Files:        map[string]string{"btree.go": "sha256:" + strings.Repeat("1a", 32)},
+				Requirements: "sha256:" + strings.Repeat("2b", 32),
+			},
+			{
+				StartedAt:    "2026-10-01T21:12:51Z",
+				Files:        map[string]string{"btree.go": "sha256:" + strings.Repeat("3c", 32)},
+				Requirements: "sha256:" + strings.Repeat("2b", 32),
+			},
+		},
+		Suite:     []string{"github.com/google/btree/conformance"},
+		Selection: []record.Range{{File: "btree.go", First: 3, Last: 9}},
 		Limits: []record.Limits{
 			{Target: "github.com/google/btree", DeadlineSeconds: 4, MemoryCeilingBytes: &ceiling},
 			{Target: "github.com/google/btree/conformance", DeadlineSeconds: 6, MemoryCeilingBytes: &ceiling},
@@ -72,7 +94,7 @@ func full() *record.Record {
 			Start: record.Position{Line: 218, Column: 5}, End: record.Position{Line: 218, Column: 33},
 			Original: "i > 0 && !less(s[i-1], item)", Replacement: "false", Verdict: spec.Killed,
 			Tests: []string{"TestBTreeG"}, CoveredBy: []string{"TestBTreeG", "TestDescendRangeG"},
-			Seconds: &seconds, Confirmed: true,
+			Seconds: &seconds, Confirmed: true, ObservedAt: "2026-10-01T21:12:51Z",
 		}, {
 			Key: "0123456789abcdef", Kind: spec.SBRDelete, File: "btree.go", Scope: "items.find",
 			Start: record.Position{Line: 3, Column: 2}, End: record.Position{Line: 3, Column: 9},
@@ -129,7 +151,7 @@ func TestRecord(t *testing.T) {
 				"reports false for a mutant that did not run beyond the caller's limit on the mutant runs",
 				func(r *record.Record) {
 					r.Mutants[1].Verdict = spec.NotRun
-					r.Sample = &record.Sample{Before: r.Mutants[1].Key, Limit: new(1)}
+					r.Sample = &record.Sample{Before: new(r.Mutants[1].Key), Limit: new(1)}
 				},
 				false,
 			},
@@ -163,14 +185,14 @@ func TestRecord(t *testing.T) {
 			r := keyed("0", spec.Killed, "1", spec.TimedOut, "2", spec.Exhausted, "3", spec.Survived,
 				"4", spec.NoCoverage, "5", spec.NotViable, "6", spec.Suppressed, "7", spec.NotSelected,
 				"8", spec.Killed, "9", spec.Survived)
-			r.SetScore(&protocol, 0)
+			r.SetScore(&protocol, 0, false)
 			assert.Equal(t, r.Score, new(4.0/7.0), "four of the seven counted mutants are detected")
 		})
 
 		t.Run("sets no score for a run that fails", func(t *testing.T) {
 			t.Parallel()
 			r := keyed("0", spec.Killed, "1", spec.Error)
-			r.SetScore(&protocol, 0)
+			r.SetScore(&protocol, 0, false)
 			assert.Nil(t, r.Score, "a run with a mutant in error has no score")
 		})
 
@@ -178,7 +200,7 @@ func TestRecord(t *testing.T) {
 			t.Parallel()
 			r := keyed("0", spec.Suppressed, "1", spec.NotSelected)
 			r.Score = new(1.0)
-			r.SetScore(&protocol, 0)
+			r.SetScore(&protocol, 0, false)
 			assert.Nil(t, r.Score, "a score of no counted mutant does not exist")
 		})
 
@@ -186,8 +208,8 @@ func TestRecord(t *testing.T) {
 			t.Parallel()
 			r := keyed("5", spec.NotRun, "1", spec.Killed, "4", spec.Killed, "3", spec.NotRun,
 				"2", spec.Survived, "0", spec.Suppressed)
-			r.SetScore(&protocol, 0)
-			assert.Equal(t, r.Sample, &record.Sample{Before: "3", Detected: 1, Undetected: 1, Score: new(0.5)},
+			r.SetScore(&protocol, 0, false)
+			assert.Equal(t, r.Sample, &record.Sample{Before: new("3"), Detected: 1, Undetected: 1, Score: new(0.5)},
 				"the keys 0 to 2 are the sample")
 			assert.Nil(t, r.Score, "a run that a deadline ended has no score")
 		})
@@ -215,13 +237,13 @@ func TestRecord(t *testing.T) {
 						before = key
 					}
 				}
-				r.SetScore(&protocol, 0)
+				r.SetScore(&protocol, 0, false)
 				if before == "" {
 					assert.Nil(c, r.Sample, "a run without a not-run mutant has no sample")
 					return
 				}
 				assert.NotNil(c, r.Sample, "a run with a not-run mutant has a sample")
-				assert.Equal(c, r.Sample.Before, before, "the sample ends at the least key of a not-run mutant")
+				assert.Equal(c, r.Sample.Before, new(before), "the sample ends at the least key of a not-run mutant")
 				detected, undetected := r.Tally(&protocol, before)
 				assert.Equal(c, [2]int{r.Sample.Detected, r.Sample.Undetected}, [2]int{detected, undetected},
 					"the sample counts the mutants before that key")
@@ -232,8 +254,8 @@ func TestRecord(t *testing.T) {
 		t.Run("sets the caller's limit and the sample's score as the run's score", func(t *testing.T) {
 			t.Parallel()
 			r := keyed("1", spec.Killed, "2", spec.Survived, "3", spec.NotRun, "4", spec.NoCoverage)
-			r.SetScore(&protocol, 2)
-			want := &record.Sample{Before: "3", Limit: new(2), Detected: 1, Undetected: 1, Score: new(0.5)}
+			r.SetScore(&protocol, 2, false)
+			want := &record.Sample{Before: new("3"), Limit: new(2), Detected: 1, Undetected: 1, Score: new(0.5)}
 			assert.Equal(t, r.Sample, want, "the sample states the caller's limit")
 			assert.False(t, r.Failed(), "a run that the limit ended does not fail")
 			assert.Equal(t, r.Score, new(0.5), "the run's score is the sample's")
@@ -242,24 +264,51 @@ func TestRecord(t *testing.T) {
 		t.Run("sets a sample without a score when no sampled mutant counts", func(t *testing.T) {
 			t.Parallel()
 			r := keyed("1", spec.NotRun, "0", spec.Suppressed, "2", spec.Killed)
-			r.SetScore(&protocol, 0)
-			assert.Equal(t, r.Sample, &record.Sample{Before: "1"}, "the sample before the key 1 counts no mutant")
+			r.SetScore(&protocol, 0, false)
+			assert.Equal(t, r.Sample, &record.Sample{Before: new("1")}, "the sample before the key 1 counts no mutant")
 		})
 
 		t.Run("sets no sample for a run with a run error", func(t *testing.T) {
 			t.Parallel()
 			r := keyed("1", spec.Killed, "2", spec.NotRun)
 			r.Errors = []record.RunError{{Code: spec.ErrorBuild, Message: "x"}}
-			r.SetScore(&protocol, 1)
+			r.SetScore(&protocol, 1, false)
 			assert.Nil(t, r.Sample, "a run error voids the sample")
 			assert.Nil(t, r.Score, "and the score")
+		})
+
+		t.Run("samples every mutant with a verdict in a run with a history", func(t *testing.T) {
+			t.Parallel()
+			r := keyed("5", spec.NotRun, "1", spec.Killed, "4", spec.Survived, "0", spec.Killed)
+			r.SetScore(&protocol, 0, true)
+			assert.Equal(t, r.Sample, &record.Sample{Detected: 2, Undetected: 1, Score: new(2.0 / 3.0)},
+				"the sample of a run with a history has no first key and counts every mutant with a verdict")
+			assert.Nil(t, r.Score, "a run with a history that a deadline ended has no score")
+		})
+
+		t.Run("states the caller's limit in the sample of a run with a history", func(t *testing.T) {
+			t.Parallel()
+			r := keyed("5", spec.NotRun, "1", spec.Killed, "4", spec.Survived)
+			r.SetScore(&protocol, 2, true)
+			assert.Equal(t, r.Sample, &record.Sample{Limit: new(2), Detected: 1, Undetected: 1, Score: new(0.5)},
+				"the sample states the caller's limit")
+			assert.False(t, r.Failed(), "a run with a history that the limit ended does not fail")
+			assert.Equal(t, r.Score, new(0.5), "the run's score is the sample's")
+		})
+
+		t.Run("sets no sample for a run with a history in which every mutant has a verdict", func(t *testing.T) {
+			t.Parallel()
+			r := keyed("1", spec.Killed, "2", spec.Survived)
+			r.SetScore(&protocol, 2, true)
+			assert.Nil(t, r.Sample, "a limit that left only reused verdicts unrun leaves no sample")
+			assert.Equal(t, r.Score, new(0.5), "and the score counts every mutant")
 		})
 
 		t.Run("sets no sample for a run in which every mutant has a verdict", func(t *testing.T) {
 			t.Parallel()
 			r := keyed("1", spec.Killed, "2", spec.Error)
-			r.Sample = &record.Sample{Before: "2"}
-			r.SetScore(&protocol, 0)
+			r.Sample = &record.Sample{Before: new("2")}
+			r.SetScore(&protocol, 0, false)
 			assert.Nil(t, r.Sample, "a run without a not-run mutant has no sample")
 		})
 	})
@@ -365,7 +414,7 @@ func TestRecord(t *testing.T) {
 			t.Parallel()
 			r := full()
 			r.Mutants[1].Verdict = spec.NotRun
-			r.Sample = &record.Sample{Before: r.Mutants[1].Key, Detected: 1, Score: new(1.0)}
+			r.Sample = &record.Sample{Before: new(r.Mutants[1].Key), Detected: 1, Score: new(1.0)}
 			path, err := r.Write(t.TempDir())
 			assert.NoError(t, err, "the record writes")
 			data := read(t, path)
@@ -420,10 +469,94 @@ func TestRecord(t *testing.T) {
 			// A directory takes the file's name.
 			dir := files.Workspace(t, files.Tree{fileName: files.Dir()})
 			_, err := full().Write(dir)
-			failed := assert.ErrorAs[*fs.PathError](t, err, "the error is the error of the file")
-			assert.Equal(t, filepath.Base(failed.Path), fileName, "the error names the record file")
+			failed := assert.ErrorAs[*os.LinkError](t, err, "the error is the error of the rename")
+			assert.Equal(t, filepath.Base(failed.New), fileName, "the error names the record file")
+			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
+			entries, err := os.ReadDir(dir)
+			assert.NoError(t, err, "the directory reads")
+			assert.Length(t, entries, 1, "the write leaves no file of its own beside the directory")
+		})
+
+		t.Run("returns an error when the directory takes no new file", func(t *testing.T) {
+			t.Parallel()
+			if runtime.GOOS == "windows" {
+				t.Skip("Windows ignores the write permission of a directory")
+			}
+			dir := t.TempDir()
+			assert.NoError(t, os.Chmod(dir, readOnlyMode), "the directory loses its write permission")
+			t.Cleanup(func() { _ = os.Chmod(dir, dirMode) })
+			_, err := full().Write(dir)
+			assert.ErrorIs(t, err, fs.ErrPermission, "the new file is refused")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
 		})
+
+		t.Run("replaces the record of an earlier run", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			_, err := full().Write(dir)
+			assert.NoError(t, err, "the earlier record writes")
+			later := full()
+			later.FinishedAt = "2026-10-03T00:00:00Z"
+			path, err := later.Write(dir)
+			assert.NoError(t, err, "the later record writes")
+			assert.Contains(t, string(read(t, path)), later.FinishedAt, "the file is the later record")
+			entries, err := os.ReadDir(dir)
+			assert.NoError(t, err, "the directory reads")
+			assert.Length(t, entries, 1, "the write leaves the record file alone")
+		})
+	})
+
+	t.Run("Read", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns the record that Write wrote", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			_, err := full().Write(dir)
+			assert.NoError(t, err, "the record writes")
+			got, err := record.Read(dir, full().Target.Name, &protocol, engineName)
+			assert.NoError(t, err, "the record reads")
+			assert.Equal(t, got, full(), "the record reads as it was written")
+		})
+
+		t.Run("returns an error that wraps fs.ErrNotExist for a target without a record", func(t *testing.T) {
+			t.Parallel()
+			_, err := record.Read(t.TempDir(), full().Target.Name, &protocol, engineName)
+			assert.ErrorIs(t, err, fs.ErrNotExist, "the directory has no record of the target")
+			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
+		})
+
+		t.Run("returns an error for a record that does not parse", func(t *testing.T) {
+			t.Parallel()
+			dir := files.Workspace(t, files.Tree{fileName: files.Text("{")})
+			_, err := record.Read(dir, full().Target.Name, &protocol, engineName)
+			assert.HasError(t, err, "a record that is no JSON does not read")
+			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
+		})
+
+		foreign := []struct {
+			name string
+			give func(r *record.Record)
+		}{
+			{"returns ErrForeign for a record of another format", func(r *record.Record) { r.Record = "other" }},
+			{"returns ErrForeign for a record of another version", func(r *record.Record) { r.Version = 1 }},
+			{
+				"returns ErrForeign for a record of another engine",
+				func(r *record.Record) { r.Engine.Name = "mutate-js" },
+			},
+		}
+		for _, tt := range foreign {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				dir := t.TempDir()
+				r := full()
+				tt.give(r)
+				_, err := r.Write(dir)
+				assert.NoError(t, err, "the record writes")
+				_, err = record.Read(dir, r.Target.Name, &protocol, engineName)
+				assert.ErrorIs(t, err, record.ErrForeign, "the record is no history of the engine")
+			})
+		}
 	})
 
 	t.Run("EngineVersion", func(t *testing.T) {
@@ -511,8 +644,29 @@ func TestSchemaCheck(t *testing.T) {
 			},
 			{
 				"rejects a constant of another type",
-				func(v, _ map[string]any) { v["version"] = "1" },
-				"record.version: 1 is not 1",
+				func(v, _ map[string]any) { v["version"] = "2" },
+				"record.version: 2 is not 2",
+			},
+			{
+				"rejects a list with fewer items than its minimum",
+				func(v, _ map[string]any) { v["observations"] = []any{} },
+				"record.observations: has 0 items, fewer than 1",
+			},
+			{
+				"rejects a property name that breaks its schema",
+				func(v, _ map[string]any) {
+					files := v["observations"].([]any)[0].(map[string]any)["files"].(map[string]any)
+					files["/btree.go"] = "sha256:" + strings.Repeat("1a", 32)
+				},
+				"name /btree.go",
+			},
+			{
+				"rejects a property value that breaks its schema",
+				func(v, _ map[string]any) {
+					files := v["observations"].([]any)[0].(map[string]any)["files"].(map[string]any)
+					files["btree.go"] = "md5:x"
+				},
+				`record.observations[0].files.btree.go: "md5:x" does not match`,
 			},
 			{"rejects a fraction where an integer belongs", func(v, _ map[string]any) {
 				v["control"].(map[string]any)["opening"].(map[string]any)["sites"] = 1.5
@@ -685,10 +839,24 @@ func validate(defs, schema map[string]any, v any, path string) []string {
 		case "additionalProperties":
 			obj, _ := v.(map[string]any)
 			props, _ := schema["properties"].(map[string]any)
-			for name := range obj {
-				if _, ok := props[name]; !ok && rule == false {
+			for name, value := range obj {
+				if _, ok := props[name]; ok {
+					continue
+				}
+				if sub, ok := rule.(map[string]any); ok {
+					out = append(out, validate(defs, sub, value, path+"."+name)...)
+				} else if rule == false {
 					fail("has the property %s, which the schema does not declare", name)
 				}
+			}
+		case "propertyNames":
+			obj, _ := v.(map[string]any)
+			for name := range obj {
+				out = append(out, validate(defs, rule.(map[string]any), name, path+" name "+name)...)
+			}
+		case "minItems":
+			if list, ok := v.([]any); ok && len(list) < int(rule.(float64)) {
+				fail("has %d items, fewer than %v", len(list), rule)
 			}
 		case "items":
 			list, _ := v.([]any)

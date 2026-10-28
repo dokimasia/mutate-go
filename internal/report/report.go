@@ -30,6 +30,10 @@ const (
 // which the listing leaves without a verdict.
 const toTest = "to test"
 
+// reused follows the number of the verdicts that a run reused from the
+// runs of its history.
+const reused = "reused"
+
 // closingIncomplete is the note on a run whose closing control run did not
 // complete, which fails the run.
 const closingIncomplete = "the closing control run did not complete, so no run checked that the mutant runs left " +
@@ -118,6 +122,8 @@ func Notes(rec *record.Record) []string {
 //     limit ended, those of its sample; and for a run that fails, that it
 //     failed, with the detected mutants of a sample that is not empty
 //   - the count of each verdict, in protocol's order
+//   - the number of the verdicts that an earlier run observed, which the run
+//     reused, when it reused one
 //   - the number of the generated files without the include directive and
 //     of their mutants, and whether the run included them, when the package
 //     has such a file
@@ -170,18 +176,27 @@ func line(m *record.Mutant, path, status, verb string) string {
 }
 
 // parts returns the parts of a line that counts rec's mutants: the count of
-// each verdict, in protocol's order, and the generated files without the
-// include directive, with their mutants and whether the run included them.
+// each verdict, in protocol's order, the verdicts that an earlier run
+// observed, and the generated files without the include directive, with
+// their mutants and whether the run included them.
 func parts(rec *record.Record, protocol *spec.Protocol) []string {
 	counts := map[spec.Verdict]int{}
+	earlier := 0
 	for i := range rec.Mutants {
-		counts[rec.Mutants[i].Verdict]++
+		m := &rec.Mutants[i]
+		counts[m.Verdict]++
+		if m.ObservedAt != "" && m.ObservedAt != rec.StartedAt {
+			earlier++
+		}
 	}
 	var list []string
 	for _, v := range protocol.Verdicts {
 		if counts[v.ID] > 0 {
 			list = append(list, strconv.Itoa(counts[v.ID])+" "+phrase(v.ID))
 		}
+	}
+	if earlier > 0 {
+		list = append(list, strconv.Itoa(earlier)+" "+reused)
 	}
 	if len(rec.Generated) > 0 {
 		mutants := 0

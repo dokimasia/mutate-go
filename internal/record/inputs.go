@@ -13,16 +13,19 @@ import (
 	"strings"
 )
 
-// The domains of the two digests. Each is the first field of its digest's
-// stream, so a files digest never equals an inputs digest of the same
-// fields. The number after the slash is the version of the stream's layout.
+// The domains of the digests. Each is the first field of its digest's
+// stream, so no two kinds of digest of the same fields are equal. The number
+// after the slash is the version of the stream's layout.
 const (
-	filesDomain  = "dokimi-mutate-files/2"
-	inputsDomain = "dokimi-mutate-inputs/2"
+	filesDomain        = "dokimi-mutate-files/2"
+	inputsDomain       = "dokimi-mutate-inputs/2"
+	requirementsDomain = "dokimi-mutate-requirements/1"
 )
 
-// inputsPrefix starts an inputs digest and names its hash function.
-const inputsPrefix = "sha256:"
+// DigestPrefix starts an inputs digest, a requirements digest and the
+// digest of each file of an observation, and names their hash function. A
+// digest is the prefix and the hexadecimal SHA-256 digest.
+const DigestPrefix = "sha256:"
 
 // lengthEnd ends the decimal length before each field of a digest's stream.
 const lengthEnd = ":"
@@ -59,7 +62,21 @@ func Inputs(engine, toolchain, buildIDs, files string) string {
 	for _, f := range []string{inputsDomain, engine, toolchain, buildIDs, files} {
 		field(h, f)
 	}
-	return inputsPrefix + hex.EncodeToString(h.Sum(nil))
+	return DigestPrefix + hex.EncodeToString(h.Sum(nil))
+}
+
+// Requirements returns the requirements digest of a run, as sha256:<hex>.
+// Two runs have one digest exactly when their engine's identity, their
+// toolchain, the versions of the catalogue and of the overlay, their
+// settings and the files digest of their requirement files are equal. A
+// verdict of one run is reusable in another only when both have one
+// requirements digest.
+func Requirements(engine, toolchain, catalogue, overlay, settings, files string) string {
+	h := sha256.New()
+	for _, f := range []string{requirementsDomain, engine, toolchain, catalogue, overlay, settings, files} {
+		field(h, f)
+	}
+	return DigestPrefix + hex.EncodeToString(h.Sum(nil))
 }
 
 // Identity returns what the inputs digest states of the engine: version,
