@@ -5,13 +5,17 @@ package conformance_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
@@ -36,9 +40,26 @@ const (
 // the package directory.
 const localPattern = "./"
 
+// historyOther is the engine of a case's history whose record another
+// engine wrote. A history of the engine that runs the case states "same".
+const historyOther = "other"
+
+// otherEngine is the name of the engine of a history whose engine is
+// historyOther.
+const otherEngine = "mutate-other"
+
+// newestEarlier is the start of the newest earlier run of a history, of
+// age 1. The run of age n started n-1 days before it.
+var newestEarlier = time.Date(2026, time.January, 9, 0, 0, 0, 0, time.UTC)
+
+// changedPrefix starts the text whose digest a history states for a file
+// that changed since an earlier run.
+const changedPrefix = "changed "
+
 // caseFile is a case's case.json: the mutants and the run errors of the
-// case in every language, and the options of its run.
+// case in every language, the options of its run and its history.
 type caseFile struct {
+	History          *caseHistory     `json:"history"`
 	Case             string           `json:"case"`
 	Confirm          bool             `json:"confirm"`
 	IncludeGenerated bool             `json:"includeGenerated"`
@@ -49,22 +70,34 @@ type caseFile struct {
 	Errors           []spec.ErrorCode `json:"errors"`
 }
 
+// caseHistory is the history of a case: the engine whose record the runner
+// writes, "same" or historyOther.
+type caseHistory struct {
+	Engine string `json:"engine"`
+}
+
 // caseMutant is a mutant of case.json, which nth identifies among the
 // mutants of its scope and kind. Languages restricts the mutant to the
 // fixtures of the languages that it lists, and is empty for a mutant of
-// every fixture.
+// every fixture. In a case with a history, Earlier is the mutant's verdict
+// in the history, empty for a mutant that the history lacks, Observed the
+// age of the run that observed it, and Reused whether the run reuses it.
 type caseMutant struct {
 	Scope     string       `json:"scope"`
 	Kind      spec.Kind    `json:"kind"`
 	Nth       int          `json:"nth"`
 	Verdict   spec.Verdict `json:"verdict"`
+	Earlier   spec.Verdict `json:"earlier"`
+	Observed  int          `json:"observed"`
+	Reused    bool         `json:"reused"`
 	Confirmed bool         `json:"confirmed"`
 	Languages []string     `json:"languages"`
 }
 
 // expectFile is a fixture's expect.json: what the record states beyond the
-// verdicts.
+// verdicts, and the files that changed since the runs of the history.
 type expectFile struct {
+	History   *expectHistory     `json:"history"`
 	Language  string             `json:"language"`
 	Lines     []string           `json:"lines"`
 	Suite     []string           `json:"suite"`
@@ -74,24 +107,34 @@ type expectFile struct {
 	Errors    []spec.ErrorCode   `json:"errors"`
 }
 
-// expectMutant is a mutant of expect.json. Reason, Tests and CoveredBy are
-// empty where expect.json does not state them.
+// expectHistory lists each file of the fixture that differs in the runs of
+// the history from the age since on.
+type expectHistory struct {
+	Changed []struct {
+		File  string `json:"file"`
+		Since int    `json:"since"`
+	} `json:"changed"`
+}
+
+// expectMutant is a mutant of expect.json. Reason, Tests, CoveredBy and
+// EarlierTests are empty where expect.json does not state them.
 type expectMutant struct {
-	Scope       string          `json:"scope"`
-	Kind        spec.Kind       `json:"kind"`
-	Nth         int             `json:"nth"`
-	Occurrence  int             `json:"occurrence"`
-	Key         string          `json:"key"`
-	File        string          `json:"file"`
-	Start       record.Position `json:"start"`
-	End         record.Position `json:"end"`
-	Original    string          `json:"original"`
-	Replacement string          `json:"replacement"`
-	Rule        spec.Family     `json:"rule"`
-	Reason      string          `json:"reason"`
-	NotViable   bool            `json:"notViable"`
-	Tests       []string        `json:"tests"`
-	CoveredBy   []string        `json:"coveredBy"`
+	Scope        string          `json:"scope"`
+	Kind         spec.Kind       `json:"kind"`
+	Nth          int             `json:"nth"`
+	Occurrence   int             `json:"occurrence"`
+	Key          string          `json:"key"`
+	File         string          `json:"file"`
+	Start        record.Position `json:"start"`
+	End          record.Position `json:"end"`
+	Original     string          `json:"original"`
+	Replacement  string          `json:"replacement"`
+	Rule         spec.Family     `json:"rule"`
+	Reason       string          `json:"reason"`
+	NotViable    bool            `json:"notViable"`
+	Tests        []string        `json:"tests"`
+	CoveredBy    []string        `json:"coveredBy"`
+	EarlierTests []string        `json:"earlierTests"`
 }
 
 // mutantID identifies a mutant within its case: its scope, its kind, and
@@ -136,11 +179,83 @@ func TestCorpus(t *testing.T) {
 			decode(t, filepath.Join(corpus, name, language, expectFileName), &e)
 			assert.Equal(t, e.Language, language, "expect.json states the fixture of the engine's language")
 			dir := copyFixture(t, filepath.Join(corpus, name, language))
-			rec, err := run.Run(t.Context(), config(t, dir, c, e))
+			cfg := config(t, dir, c, e)
+			if c.History != nil {
+				cfg.History, cfg.Earlier = true, history(t, cfg, c, e)
+			}
+			rec, err := run.Run(t.Context(), cfg)
 			assert.NoError(t, err, "the engine returns the record of the fixture's run")
 			compare(t, language, c, e, rec)
 		})
 	}
+}
+
+// history writes the history of a case's fixture, as case.json and
+// expect.json state it, into a new directory, and returns the record that
+// the engine reads from it, or nil for a record of another engine. A run of
+// the fixture under cfg with a limit of one mutant gives the digests that
+// the engine computes. Each earlier run of the history states the digest of
+// each file of that run, and another digest for each file that changed
+// since it.
+func history(t *testing.T, cfg *run.Config, c caseFile, e expectFile) *record.Record {
+	t.Helper()
+	probe := *cfg
+	probe.History, probe.Sample = true, 1
+	own, err := run.Run(t.Context(), &probe)
+	assert.NoError(t, err, "the engine returns the record of the probe's run")
+	assert.NotEmpty(t, own.Observations, "the probe's record states its observation")
+	expected := map[mutantID]expectMutant{}
+	for _, m := range e.Mutants {
+		expected[mutantID{Scope: m.Scope, Kind: m.Kind, Nth: m.Nth}] = m
+	}
+	engine := run.Engine
+	if c.History.Engine == historyOther {
+		engine = otherEngine
+	}
+	rec := &record.Record{
+		Record:  own.Record,
+		Version: own.Version,
+		Engine:  record.Engine{Name: engine, Version: own.Engine.Version},
+		Target:  own.Target,
+		Root:    own.Root,
+	}
+	oldest := 0
+	for _, m := range c.Mutants {
+		if m.Earlier == "" {
+			continue
+		}
+		x := expected[mutantID{Scope: m.Scope, Kind: m.Kind, Nth: m.Nth}]
+		rec.Mutants = append(rec.Mutants, record.Mutant{
+			Key: x.Key, Kind: x.Kind, File: x.File, Scope: x.Scope, Start: x.Start, End: x.End,
+			Original: x.Original, Replacement: x.Replacement, Verdict: m.Earlier, Tests: x.EarlierTests,
+			ObservedAt: newestEarlier.AddDate(0, 0, 1-m.Observed).Format(time.RFC3339),
+		})
+		oldest = max(oldest, m.Observed)
+	}
+	for age := 1; age <= oldest; age++ {
+		o := own.Observations[0]
+		o.StartedAt = newestEarlier.AddDate(0, 0, 1-age).Format(time.RFC3339)
+		o.Files = maps.Clone(o.Files)
+		for _, changed := range e.History.Changed {
+			if age >= changed.Since {
+				sum := sha256.Sum256([]byte(changedPrefix + changed.File))
+				o.Files[changed.File] = record.DigestPrefix + hex.EncodeToString(sum[:])
+			}
+		}
+		rec.Observations = append(rec.Observations, o)
+	}
+	rec.StartedAt = newestEarlier.Format(time.RFC3339)
+	dir := t.TempDir()
+	_, err = rec.Write(dir)
+	assert.NoError(t, err, "the history's record writes")
+	protocol := spec.Load().Protocol
+	earlier, err := record.Read(dir, own.Target.Name, &protocol, run.Engine)
+	if c.History.Engine == historyOther {
+		assert.ErrorIs(t, err, record.ErrForeign, "the record of another engine is no history of the engine")
+		return nil
+	}
+	assert.NoError(t, err, "the history's record reads")
+	return earlier
 }
 
 // decode reads the JSON file at path into v, and stops the test when the
@@ -238,10 +353,22 @@ func compare(t *testing.T, language string, c caseFile, e expectFile, rec *recor
 		expect.EquateEmpty())
 	expect.Equal(t, rec.Control != nil && rec.Control.Ordinary != nil, c.Confirm,
 		"the record states an ordinary control run exactly when case.json confirms")
-	if c.Sample > 0 {
+	// A run with a history states a sample only when a mutant is not-run.
+	sampled := c.Sample > 0 && (c.History == nil || slices.ContainsFunc(c.Mutants, func(m caseMutant) bool {
+		return m.Verdict == spec.NotRun
+	}))
+	if sampled {
 		assert.NotNil(t, rec.Sample, "the record of a run that case.json samples states a sample")
 		expect.Equal(t, rec.Sample.Limit, &c.Sample, "the sample states the limit of case.json")
 		expect.Equal(t, rec.Score, rec.Sample.Score, "the run's score is the score of its sample")
+	}
+	if c.History == nil {
+		return
+	}
+	if sampled {
+		expect.Nil(t, rec.Sample.Before, "the sample of a run with a history states no first key")
+	} else {
+		expect.Nil(t, rec.Sample, "every mutant of the run with a history has a verdict")
 	}
 }
 
@@ -275,5 +402,9 @@ func compareMutant(t *testing.T, key mutantID, m record.Mutant, x expectMutant, 
 	}
 	if len(x.CoveredBy) > 0 {
 		expect.Permutation(t, m.CoveredBy, x.CoveredBy, key.String()+" names the covering tests of expect.json")
+	}
+	if c.Earlier != "" {
+		expect.Equal(t, m.ObservedAt == newestEarlier.AddDate(0, 0, 1-c.Observed).Format(time.RFC3339), c.Reused,
+			key.String()+" keeps the observation of the history exactly when case.json reuses its verdict")
 	}
 }

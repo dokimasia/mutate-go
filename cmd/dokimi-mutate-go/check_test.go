@@ -11,15 +11,21 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate/internal/load"
 	"go.dokimi.dev/mutate/internal/record"
+	"go.dokimi.dev/mutate/internal/run"
 	"go.dokimi.dev/mutate/internal/spec"
 )
 
 // one is the share of a run of one thread, without threads to spare or to
 // borrow.
 var one = share{procs: 1}
+
+// earlierStart is the start of the earlier run of a history, before every
+// run of a test.
+const earlierStart = "2026-01-01T00:00:00Z"
 
 func TestCheck(t *testing.T) {
 	t.Parallel()
@@ -85,6 +91,77 @@ func TestCheck(t *testing.T) {
 			_, err := os.Stat(filepath.Join(records, record.FileName(fixture)))
 			assert.NoError(t, err, "the record file exists")
 		})
+
+		t.Run("reuses the verdicts of the record in the directory of --history", func(t *testing.T) {
+			t.Parallel()
+			dir, history := module(t, addFiles), t.TempDir()
+			pkg := load.Listed{ImportPath: fixture, Dir: dir}
+			s := testSession(os.Environ(), io.Discard, io.Discard, "")
+			s.history, s.cfg.Sample = history, 1
+			assert.Equal(t, s.check(t.Context(), pkg, one), exitDetected, "the first run tests one mutant")
+			// The earlier run started a day before, so its verdict is older than
+			// any verdict of the next run.
+			earlier, err := record.Read(history, fixture, &definition.Protocol, run.Engine)
+			assert.NoError(t, err, "the first run writes its record into the history")
+			earlier.StartedAt = earlierStart
+			earlier.Observations[0].StartedAt = earlierStart
+			for i := range earlier.Mutants {
+				if earlier.Mutants[i].ObservedAt != "" {
+					earlier.Mutants[i].ObservedAt = earlierStart
+				}
+			}
+			_, err = earlier.Write(history)
+			assert.NoError(t, err, "the earlier record writes")
+			var out bytes.Buffer
+			s.out.stdout = &out
+			assert.Equal(t, s.check(t.Context(), pkg, one), exitDetected, "the second run tests the other mutant")
+			assert.Equal(t, out.String(), "fixture: 2 of 2 mutants detected (100%): 2 killed, 1 reused\n",
+				"the summary counts the reused verdict")
+		})
+
+		t.Run("notes a record of the history that does not count", func(t *testing.T) {
+			t.Parallel()
+			history := t.TempDir()
+			foreign := &record.Record{
+				Record:  definition.Protocol.Record.Name,
+				Version: definition.Protocol.Record.Version,
+				Engine:  record.Engine{Name: "mutate-other"},
+				Target:  record.Target{Name: fixture},
+			}
+			_, err := foreign.Write(history)
+			assert.NoError(t, err, "the record of another engine writes")
+			var errs bytes.Buffer
+			s := testSession(os.Environ(), io.Discard, &errs, "")
+			s.history = history
+			got := s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, addFiles)}, one)
+			assert.Equal(t, got, exitDetected, "the run tests every mutant")
+			assert.HasPrefix(t, errs.String(), name+": fixture: the history does not count: "+record.ErrForeign.Error(),
+				"the note states why the run reuses no verdict")
+			rec, err := record.Read(history, fixture, &definition.Protocol, run.Engine)
+			assert.NoError(t, err, "the run's record replaces the record of the other engine")
+			assert.Equal(t, rec.Engine.Name, run.Engine, "the history's record is the engine's")
+		})
+
+		histories := []struct {
+			name string
+			// env and skip are the environment of the runs and the packages of
+			// --skip.
+			env  []string
+			skip []string
+		}{
+			{"writes no record into the history for a run with a run error", append(os.Environ(), failVar+"=1"), nil},
+			{"writes no record into the history for a package that --skip names", os.Environ(), []string{fixture}},
+		}
+		for _, tt := range histories {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				history := t.TempDir()
+				s := testSession(tt.env, io.Discard, io.Discard, "")
+				s.history, s.skip = history, tt.skip
+				s.check(t.Context(), load.Listed{ImportPath: fixture, Dir: module(t, arithFiles)}, one)
+				files.Absent(t, filepath.Join(history, record.FileName(fixture)), "the history has no record")
+			})
+		}
 
 		t.Run("returns exitFailed for a record that does not write", func(t *testing.T) {
 			t.Parallel()
@@ -161,7 +238,7 @@ func TestCheck(t *testing.T) {
 						{Key: "b", Verdict: spec.NotRun},
 						{Key: "c", Verdict: spec.NoCoverage},
 					},
-					Sample: &record.Sample{Before: "b", Limit: &limit, Detected: 1},
+					Sample: &record.Sample{Before: new("b"), Limit: &limit, Detected: 1},
 				},
 				want: exitDetected,
 			},
@@ -169,7 +246,7 @@ func TestCheck(t *testing.T) {
 				name: "returns exitUndetected for a sample with a mutant that no test covers",
 				give: &record.Record{
 					Mutants: []record.Mutant{{Key: "a", Verdict: spec.NoCoverage}, {Key: "b", Verdict: spec.NotRun}},
-					Sample:  &record.Sample{Before: "b", Limit: &limit, Undetected: 1},
+					Sample:  &record.Sample{Before: new("b"), Limit: &limit, Undetected: 1},
 				},
 				want: exitUndetected,
 			},
@@ -184,7 +261,7 @@ func TestCheck(t *testing.T) {
 				name: "returns exitFailed for a sample that the deadline ended",
 				give: &record.Record{
 					Mutants: []record.Mutant{{Key: "a", Verdict: spec.Killed}, {Key: "b", Verdict: spec.NotRun}},
-					Sample:  &record.Sample{Before: "b", Detected: 1},
+					Sample:  &record.Sample{Before: new("b"), Detected: 1},
 				},
 				want: exitFailed,
 			},

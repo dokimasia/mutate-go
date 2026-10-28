@@ -196,6 +196,7 @@ func (c *cli) test(ctx context.Context, r *gocli.Run[options, options]) (status 
 		out:      out,
 		progress: &progress{stderr: out.stderr, every: c.every, now: c.now, deadline: deadline},
 		records:  o.Record,
+		history:  o.History,
 		skip:     skipPaths,
 	}
 	threads := runtime.GOMAXPROCS(0)

@@ -233,13 +233,15 @@ func TestCLI(t *testing.T) {
 				flagPrefix+flagSample, "5", flagPrefix+flagIncludeGenerated, flagPrefix+flagSkip, "./kit",
 				flagPrefix+flagSuite, "./conformance", flagPrefix+flagConfirm, "-C", "dir", "-p", "2",
 				flagPrefix+flagWorkers, "3", flagPrefix+flagTimeout, "30m", flagPrefix+flagBudget, "16G",
-				flagPrefix+flagJSON, flagPrefix+flagRecord, "out", "./wire", "./codec",
+				flagPrefix+flagJSON, flagPrefix+flagRecord, "out", flagPrefix+flagHistory, "history", "./wire",
+				"./codec",
 			)
 			assert.Equal(t, got, &options{
 				MemoryBudget: &budget,
 				Diff:         changeDiff,
 				Directory:    "dir",
 				Record:       "out",
+				History:      "history",
 				Lines: []selection.Lines{
 					{Path: "a.go", First: 1, Last: 2},
 					{Path: "b.go", First: 3, Last: 3},

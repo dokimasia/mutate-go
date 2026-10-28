@@ -77,8 +77,8 @@ func TestHelp(t *testing.T) {
 			assert.True(t, found, "the help has a section of options")
 			for _, f := range []string{
 				flagLines, flagDiff, flagSample, flagIncludeGenerated, flagSkip, flagSuite, flagConfirm,
-				flagDirectory, flagParallel, flagWorkers, flagTimeout, flagBudget, flagJSON, flagRecord, flagList,
-				flagVersion, flagHelp,
+				flagDirectory, flagParallel, flagWorkers, flagTimeout, flagBudget, flagJSON, flagRecord, flagHistory,
+				flagList, flagVersion, flagHelp,
 			} {
 				expect.Contains(t, opts, flagPrefix+f+" ", "the section of options lists the flag")
 			}

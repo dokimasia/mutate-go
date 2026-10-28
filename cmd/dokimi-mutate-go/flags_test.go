@@ -13,11 +13,17 @@ import (
 	"go.dokimi.dev/assert/expect"
 	"go.dokimi.dev/assert/prop"
 	gocli "go.stealthscale.io/cli"
+
+	"go.dokimi.dev/mutate/internal/selection"
 )
 
 // suffixes are the suffixes of a size, by the power of 1024 that each
 // states.
 var suffixes = []string{"", "K", "M", "G", "T"}
+
+// historyProblem is the problem of --history beside an option that selects
+// lines or lists the mutants.
+const historyProblem = "--history gives every mutant a verdict, so it does not take --lines, --diff or --list"
 
 // fromVariable returns the source of every option in the cases of problem,
 // an environment variable.
@@ -75,6 +81,21 @@ func TestFlags(t *testing.T) {
 					"returns the problem of a listing with records",
 					options{Parallel: 1, Workers: 1, List: true, Record: "out"},
 					"--list writes no record, so it does not take --json or --record",
+				},
+				{
+					"returns the problem of a history with lines",
+					options{Parallel: 1, Workers: 1, History: "history", Lines: []selection.Lines{{Path: "a.go"}}},
+					historyProblem,
+				},
+				{
+					"returns the problem of a history with a diff",
+					options{Parallel: 1, Workers: 1, History: "history", Diff: "change.diff"},
+					historyProblem,
+				},
+				{
+					"returns the problem of a history with a listing",
+					options{Parallel: 1, Workers: 1, History: "history", List: true},
+					historyProblem,
 				},
 			}
 			for _, tt := range tests {

@@ -35,6 +35,7 @@ const (
 	flagBudget           = "memory-budget"
 	flagJSON             = "json"
 	flagRecord           = "record"
+	flagHistory          = "history"
 	flagList             = "list"
 	flagVersion          = "version"
 	flagHelp             = "help"
@@ -61,6 +62,7 @@ type options struct {
 	Diff         gocli.InputFile `help:"Unified diff of the lines to test, or - for standard input."`
 	Directory    string          `help:"Directory to change to before the command resolves paths." short:"C"`
 	Record       string          `help:"Directory that receives the record of each package."`
+	History      string          `help:"Directory of the earlier records, whose verdicts the runs reuse."`
 	// Lines are the entries as each states its file, so the command resolves
 	// the paths after it changes to Directory.
 	Lines            []selection.Lines `help:"Lines to test, as file:first-last."`
@@ -84,8 +86,9 @@ type options struct {
 // --workers take a number of at least 1, and --sample and --timeout one of
 // at least 0.
 // --list beside --json or --record, which write a run's record, has a
-// reason of its own. problem returns the empty string for options that the
-// command runs with.
+// reason of its own, and so does --history beside --lines, --diff or
+// --list. problem returns the empty string for options that the command
+// runs with.
 func (o *options) problem(source func(field any) (gocli.Source, bool)) string {
 	switch {
 	case o.Parallel < 1:
@@ -99,6 +102,9 @@ func (o *options) problem(source func(field any) (gocli.Source, bool)) string {
 	case o.List && (o.JSON || o.Record != ""):
 		return flagPrefix + flagList + " writes no record, so it does not take " + flagPrefix + flagJSON + " or " +
 			flagPrefix + flagRecord
+	case o.History != "" && (len(o.Lines) > 0 || o.Diff != "" || o.List):
+		return flagPrefix + flagHistory + " gives every mutant a verdict, so it does not take " + flagPrefix +
+			flagLines + ", " + flagPrefix + flagDiff + " or " + flagPrefix + flagList
 	}
 	return ""
 }

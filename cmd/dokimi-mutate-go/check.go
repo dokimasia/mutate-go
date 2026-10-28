@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"slices"
 
 	"go.dokimi.dev/mutate/internal/load"
@@ -34,20 +36,24 @@ type session struct {
 	progress *progress
 	// records is the directory of --record, or empty for none.
 	records string
+	// history is the directory of --history, or empty for none.
+	history string
 	// skip lists the import paths of the packages that --skip names.
 	skip []string
 	cfg  run.Config
 }
 
 // config returns the configuration of the run of pkg with its share of the
-// threads: the session's, in pkg's directory. A package that --skip names
-// gets an empty selection, so its run tests none of its mutants, and its
-// record states each of them as not selected.
+// threads: the session's, in pkg's directory, with a history under
+// --history. A package that --skip names gets an empty selection and no
+// history, so its run tests none of its mutants, and its record states each
+// of them as not selected.
 func (s *session) config(pkg load.Listed, sh share) run.Config {
 	cfg := s.cfg
 	cfg.Dir, cfg.Procs, cfg.Spare, cfg.Borrow = pkg.Dir, sh.procs, sh.spare, sh.borrow
+	cfg.History = s.history != ""
 	if slices.Contains(s.skip, pkg.ImportPath) {
-		cfg.Lines = []selection.Lines{}
+		cfg.Lines, cfg.History = []selection.Lines{}, false
 	}
 	return cfg
 }
@@ -57,11 +63,24 @@ func (s *session) config(pkg load.Listed, sh share) run.Config {
 // error or whose record does not write, and the status that exitStatus
 // states otherwise. It writes each listed mutant's line when the mutant's
 // verdict is final, and the run's result when the run ends.
+//
+// In a run with a history, check reads the package's record from the
+// directory of --history before the run. A record that does not read for
+// another reason than its absence gets a note, and the run reuses no
+// verdict. check writes the run's record into that directory in place of
+// the earlier one, unless the record states a run error.
 func (s *session) check(ctx context.Context, pkg load.Listed, sh share) int {
 	cfg := s.config(pkg, sh)
 	cfg.Verdict = func(m record.Mutant, mutants int, path string) {
 		s.progress.verdict(pkg.ImportPath, &m, mutants)
 		s.out.line(&m, path)
+	}
+	if cfg.History {
+		earlier, err := record.Read(s.history, pkg.ImportPath, &definition.Protocol, run.Engine)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			s.out.errorf("%s: the history does not count: %v", pkg.ImportPath, err)
+		}
+		cfg.Earlier = earlier
 	}
 	s.progress.begin(pkg.ImportPath)
 	rec, err := run.Run(ctx, &cfg)
@@ -71,8 +90,15 @@ func (s *session) check(ctx context.Context, pkg load.Listed, sh share) int {
 		return exitFailed
 	}
 	s.out.result(rec)
+	var dirs []string
 	if s.records != "" {
-		if _, err := rec.Write(s.records); err != nil {
+		dirs = append(dirs, s.records)
+	}
+	if cfg.History && len(rec.Errors) == 0 {
+		dirs = append(dirs, s.history)
+	}
+	for _, dir := range dirs {
+		if _, err := rec.Write(dir); err != nil {
 			s.out.errorf("%v", err)
 			return exitFailed
 		}
