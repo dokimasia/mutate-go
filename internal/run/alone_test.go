@@ -17,7 +17,6 @@ import (
 	"go.dokimi.dev/assert"
 
 	"go.dokimi.dev/mutate/internal/record"
-	"go.dokimi.dev/mutate/internal/render"
 	"go.dokimi.dev/mutate/internal/run"
 	"go.dokimi.dev/mutate/internal/selection"
 )
@@ -62,7 +61,7 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(m.Run())
 }
-`, render.TraceVar, runFlag, stmt)
+`, protocol.Trace, runFlag, stmt)
 }
 
 // ordered is a test file of arith whose first test, TestFirst, checks
@@ -108,7 +107,7 @@ func TestAdd(t *testing.T) {
 func TestSub(t *testing.T) {
 	Sub(1, 1)
 }
-`, render.TraceVar, slowVar, protocol.Variable, runsVar, dependsVar)
+`, protocol.Trace, slowVar, protocol.Variable, runsVar, dependsVar)
 
 func TestAlone(t *testing.T) {
 	t.Parallel()
@@ -178,6 +177,48 @@ Unused sbr-zero 0: not-selected
 Unused aor 0: not-selected
 `, "the mutants of Add alone run")
 			assert.Equal(t, firsts, 2, "TestFirst runs in the run of each mutant that runs")
+		})
+
+		t.Run("traces each leaf test alone under Subtests", func(t *testing.T) {
+			t.Parallel()
+			rec := runIn(t, module(t, pairFiles), run.Config{Subtests: true})
+			assert.Equal(t, verdicts(rec), pairVerdicts, "each mutant has the verdict of its run")
+			larger, smaller := []string{"TestPair/larger"}, []string{"TestPair/smaller"}
+			both := []string{"TestPair/larger", "TestEqual"}
+			assert.Equal(t, coveredBy(rec), [][]string{
+				both, both, both, larger, {"TestEqual"}, smaller, smaller, smaller, nil, smaller,
+			}, "each mutant names the leaf tests that executed its site alone")
+		})
+
+		t.Run("traces each leaf test alone under Subtests for fewer mutants than leaf tests", func(t *testing.T) {
+			t.Parallel()
+			// The selection contains the mutant of Smaller's last return, and
+			// the binary has three leaf tests.
+			dir := module(t, pairFiles)
+			lines := []selection.Lines{{Path: filepath.Join(dir, pairFile), First: 14, Last: 14}}
+			rec := runIn(t, dir, run.Config{Subtests: true, Lines: lines})
+			assert.Equal(t, coveredBy(rec)[9], []string{"TestPair/smaller"},
+				"the mutant names the leaf test that executed its site alone")
+		})
+
+		t.Run("runs the whole suite for each mutant when a leaf test does not start alone", func(t *testing.T) {
+			t.Parallel()
+			// The name of TestClock's subtest changes in every run.
+			dir := module(t, with(pairFiles, map[string]string{"clock_test.go": `package fixture
+
+import (
+	"strconv"
+	"testing"
+	"time"
+)
+
+func TestClock(t *testing.T) {
+	t.Run(strconv.FormatInt(time.Now().UnixNano(), 10), func(t *testing.T) {})
+}
+`}))
+			rec := runIn(t, dir, run.Config{Subtests: true})
+			assert.Equal(t, verdicts(rec), pairVerdicts, "each mutant has the verdict of its run")
+			assert.Equal(t, coveredBy(rec), make([][]string, 10), "no mutant names a covering test")
 		})
 
 		t.Run("runs no test alone when the caller's deadline leaves too little time", func(t *testing.T) {

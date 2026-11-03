@@ -108,6 +108,20 @@ func TestRun(t *testing.T) {
 			}, "the run ends after it starts")
 		})
 
+		t.Run("states the first killer and the top-level tests by default", func(t *testing.T) {
+			t.Parallel()
+			rec := runIn(t, module(t, map[string]string{addFile: add}), run.Config{})
+			assert.Equal(t, rec.Killers, spec.KillersFirst, "the record states that a kill names its first killer")
+			assert.Equal(t, rec.Coverage, spec.CoverageTests, "and that the run traces the top-level tests")
+		})
+
+		t.Run("states every killer and the leaf tests under AllKillers and Subtests", func(t *testing.T) {
+			t.Parallel()
+			rec := runIn(t, module(t, map[string]string{addFile: add}), run.Config{AllKillers: true, Subtests: true})
+			assert.Equal(t, rec.Killers, spec.KillersAll, "the record states that a kill names every killer")
+			assert.Equal(t, rec.Coverage, spec.CoverageLeaves, "and that the run traces the leaf tests")
+		})
+
 		t.Run("passes each mutant to Verdict with the number of mutants and its file's path", func(t *testing.T) {
 			t.Parallel()
 			dir := module(t, with(arithFiles, map[string]string{
@@ -391,6 +405,33 @@ Unused aor 0: no-coverage
 	})
 }
 
+// locker is a test of add that takes the owner's write bit from the
+// temporary directory of the engine: the parent of the run's work
+// directory, which contains the temporary directory of the test's run.
+var locker = fmt.Sprintf(`package fixture
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestAdd(t *testing.T) {
+	if err := os.Chmod(filepath.Dir(filepath.Dir(os.TempDir())), %#o); err != nil {
+		t.Fatal(err)
+	}
+	if Add(2, 3) != 5 {
+		t.Error("Add(2, 3) != 5")
+	}
+}
+`, readOnlyMode)
+
+// The modes of a directory: without the owner's write bit, and with it.
+const (
+	readOnlyMode = 0o555
+	writableMode = 0o755
+)
+
 // TestRunEnv sets the temporary directory of the whole process, so neither
 // it nor its subtests run in parallel.
 func TestRunEnv(t *testing.T) {
@@ -402,5 +443,41 @@ func TestRunEnv(t *testing.T) {
 			assert.ErrorIs(t, err, fs.ErrNotExist, "the temporary directory does not exist")
 			assert.HasPrefix(t, err.Error(), errorPrefix, "the error starts with the package's name")
 		})
+
+		leftovers := []struct {
+			name string
+			// report states whether the case passes Leftover.
+			report bool
+		}{
+			{name: "passes the work directory that it cannot remove to Leftover", report: true},
+			{name: "leaves the work directory that it cannot remove without Leftover"},
+		}
+		for _, tt := range leftovers {
+			t.Run(tt.name, func(t *testing.T) {
+				if runtime.GOOS == "windows" {
+					t.Skip("Windows does not honour the permission bits of a directory")
+				}
+				dir := module(t, map[string]string{addFile: add, addTestFile: locker})
+				base := t.TempDir()
+				t.Cleanup(func() { _ = os.Chmod(base, writableMode) })
+				useTempDir(t, base)
+				var dirs []string
+				var errs []error
+				cfg := run.Config{}
+				if tt.report {
+					cfg.Leftover = func(dir string, err error) { dirs, errs = append(dirs, dir), append(errs, err) }
+				}
+				rec := runIn(t, dir, cfg)
+				assert.Equal(t, verdicts(rec), addKilled, "each mutant has the verdict of its run")
+				works, err := filepath.Glob(filepath.Join(base, workGlob))
+				assert.NoError(t, err, "the work directories list")
+				assert.Length(t, works, 1, "the run's work directory remains in the locked directory")
+				if tt.report {
+					assert.Equal(t, dirs, works, "Leftover receives the work directory")
+					assert.Length(t, errs, 1, "with one error")
+					assert.ErrorIs(t, errs[0], fs.ErrPermission, "the locked directory keeps the work directory")
+				}
+			})
+		}
 	})
 }

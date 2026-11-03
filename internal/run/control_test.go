@@ -17,7 +17,6 @@ import (
 
 	"go.dokimi.dev/mutate/internal/process"
 	"go.dokimi.dev/mutate/internal/record"
-	"go.dokimi.dev/mutate/internal/render"
 	"go.dokimi.dev/mutate/internal/run"
 	"go.dokimi.dev/mutate/internal/spec"
 )
@@ -65,7 +64,7 @@ func TestSlow(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 }
-`, render.TraceVar)
+`, protocol.Trace)
 
 // markerTest is a test of add that fails when the file of markerVar exists,
 // and creates it, so each run after the first fails.
@@ -123,6 +122,21 @@ func TestMain(m *testing.M) {
 }
 `
 
+// zeroMain is a test main that exits with the status 0 after the tests,
+// whatever they did.
+const zeroMain = `package fixture
+
+import (
+	"os"
+	"testing"
+)
+
+func TestMain(m *testing.M) {
+	m.Run()
+	os.Exit(0)
+}
+`
+
 // ordinaryOnly is a test of add that fails in an ordinary build, where the
 // protocol's mutant variable is set and the instrumented variable is not.
 var ordinaryOnly = fmt.Sprintf(`package fixture
@@ -159,7 +173,7 @@ func TestAdd(t *testing.T) {
 		t.Error("Add(2, 3) != 5")
 	}
 }
-`, render.TraceVar, brokenFile, broken)
+`, protocol.Trace, brokenFile, broken)
 
 // cappedMemory is a memory budget below 4 times the peak of ballast's
 // binary plus the protocol's constant, and above that peak plus the
@@ -375,6 +389,18 @@ func TestControl(t *testing.T) {
 			assert.Equal(t, verdicts(rec), arithNotRun, "no mutant runs")
 			assert.Nil(t, rec.Control, "a failed opening control run states no control run")
 			assert.Nil(t, rec.Score, "a run with a run error has no score")
+		})
+
+		t.Run("states control-failed when a test fails in a binary that exits with the status 0", func(t *testing.T) {
+			t.Parallel()
+			dir := module(t, with(arithFiles, map[string]string{
+				arithTestFile: arithTest + "\nfunc TestBroken(t *testing.T) {\n\tt.Fatal(\"broken\")\n}\n",
+				mainTestFile:  zeroMain,
+			}))
+			rec := runIn(t, dir, run.Config{})
+			assert.Equal(t, codes(rec), []spec.ErrorCode{spec.ErrorControl}, "the opening control run fails")
+			assert.HasPrefix(t, rec.Errors[0].Message, openingFailure+"TestBroken failed\n",
+				"the message names the failed test")
 		})
 
 		t.Run("states control-failed without a test when the test binary fails before its tests", func(t *testing.T) {

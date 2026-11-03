@@ -82,14 +82,18 @@ func (r *runner) confirmable(programs []*program) bool {
 	return r.fits(need)
 }
 
-// runPrograms runs each of programs in order, with the environment env,
-// until one does not pass, and returns the outcome of the run that did not
-// pass, or survived. binary returns a program's test binary, or the outcome
-// of a build that gave none, which ends the runs. Each program's run ends
-// at the program's deadline and memory ceiling. When first is true, the
-// run of a program starts with the part that runs states for the mutant at
-// index i, which ends at its own deadline, and the program's deadline
-// applies to the parts together.
+// runPrograms runs each of programs in order, with the environment env, and
+// returns the outcome of the first run that did not pass, or survived.
+// binary returns a program's test binary, or the outcome of a build that
+// gave none, which ends the runs. Each program's run ends at the program's
+// deadline and memory ceiling, as runProgram states.
+//
+// Without cfg.AllKillers, the first program that does not pass ends the
+// runs. Under cfg.AllKillers, the runs go on after a program whose run
+// killed the mutant and ended on its own, and the kill's tests are the
+// tests that failed in each program. The first program whose run did not
+// end on its own ends the runs, and the kill names every test that failed
+// only when no program's run ended otherwise.
 func (r *runner) runPrograms(
 	ctx context.Context,
 	i int,
@@ -99,42 +103,83 @@ func (r *runner) runPrograms(
 	binary func(*program) (string, *outcome),
 ) outcome {
 	var seconds float64
+	result := outcome{verdict: spec.Survived, seconds: &seconds}
 	for _, p := range programs {
-		bin, stop := binary(p)
-		if stop != nil {
-			return *stop
+		// A build that gave no binary ends the runs as a run does that did
+		// not end on its own.
+		var o outcome
+		ended := false
+		if bin, stop := binary(p); stop != nil {
+			o = *stop
+		} else {
+			o, ended = r.runProgram(ctx, i, p, bin, env, first, &seconds)
 		}
-		parts := []part{{}}
-		if first {
-			parts = r.runs(p, i)
+		switch {
+		case o.verdict == spec.Survived:
+			continue
+		case !r.cfg.AllKillers:
+			return o
+		case o.verdict == spec.Killed:
+			result.verdict, result.tests = spec.Killed, append(result.tests, o.tests...)
+		case result.verdict == spec.Survived:
+			return o
 		}
-		var used time.Duration
-		for _, pt := range parts {
-			left := max(p.deadline-used, minimumLeft)
-			if pt.deadline > 0 {
-				left = min(left, pt.deadline)
-			}
-			// A run ends at its deadline, unless it hangs before the testing
-			// package's alarm starts. The engine then ends it, at the latest
-			// when the time left falls to the closing control run's deadline.
-			backup := testbin.BackupDelay
-			if !r.cfg.Deadline.IsZero() {
-				backup = min(backup, max(0, time.Until(r.cfg.Deadline)-2*r.total))
-			}
-			args := append(testbin.Flags(left, true), pt.filter...)
-			res := r.execute(ctx, p, bin, env, args, left, backup, true)
-			used += time.Duration(res.Seconds * float64(time.Second))
-			seconds += res.Seconds
-			if v, ts, why := classify(res); v != spec.Survived {
-				o := outcome{verdict: v, tests: named(ts, p.target), reason: why}
-				if res.Err == nil && v != spec.NotRun {
-					o.seconds = &seconds
-				}
-				return o
-			}
+		if !ended {
+			return result
 		}
 	}
-	return outcome{verdict: spec.Survived, seconds: &seconds}
+	result.allKillers = result.verdict == spec.Killed
+	return result
+}
+
+// runProgram runs the test binary bin of program p with the environment env,
+// and adds the wall time of its runs to seconds. It returns the outcome of
+// the first run that did not pass, or survived, and whether that run ended
+// on its own: the binary exited after the testing package stated the end of
+// its tests. When first is true, the run starts with the part that runs
+// states for the mutant at index i, which ends at its own deadline, and the
+// program's deadline applies to the parts together. Without cfg.AllKillers,
+// each run gets -test.failfast and ends at its first failed test.
+func (r *runner) runProgram(
+	ctx context.Context,
+	i int,
+	p *program,
+	bin string,
+	env []string,
+	first bool,
+	seconds *float64,
+) (outcome, bool) {
+	parts := []part{{}}
+	if first {
+		parts = r.runs(p, i)
+	}
+	stop := !r.cfg.AllKillers
+	var used time.Duration
+	for _, pt := range parts {
+		left := max(p.deadline-used, minimumLeft)
+		if pt.deadline > 0 {
+			left = min(left, pt.deadline)
+		}
+		// A run ends at its deadline, unless it hangs before the testing
+		// package's alarm starts. The engine then ends it, at the latest when
+		// the time left falls to the closing control run's deadline.
+		backup := testbin.BackupDelay
+		if !r.cfg.Deadline.IsZero() {
+			backup = min(backup, max(0, time.Until(r.cfg.Deadline)-2*r.total))
+		}
+		args := append(testbin.Flags(left, stop), pt.filter...)
+		res := r.execute(ctx, p, bin, env, args, left, backup, stop)
+		used += time.Duration(res.Seconds * float64(time.Second))
+		*seconds += res.Seconds
+		if v, ts, why := classify(res, r.cfg.AllKillers); v != spec.Survived {
+			o := outcome{verdict: v, tests: named(ts, p.target), reason: why}
+			if res.Err == nil && v != spec.NotRun {
+				o.seconds = seconds
+			}
+			return o, res.Ended == testbin.Exited && res.Output.Complete
+		}
+	}
+	return outcome{verdict: spec.Survived}, true
 }
 
 // runs returns the parts of the runs of program p for the mutant at index

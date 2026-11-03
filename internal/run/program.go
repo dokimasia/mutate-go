@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"go.dokimi.dev/mutate/internal/render"
 	"go.dokimi.dev/mutate/internal/testbin"
 )
 
@@ -108,7 +107,7 @@ func (r *runner) env(ordinal int, trace string) []string {
 		r.cfg.Env,
 		r.def.Protocol.Variable+"="+strconv.Itoa(ordinal),
 		r.def.Protocol.Instrumented+"="+instrumentedValue,
-		render.TraceVar+"="+trace,
+		r.def.Protocol.Trace+"="+trace,
 		procsVar+"="+strconv.Itoa(max(1, r.procs/max(1, r.cfg.Workers))),
 	)
 }
@@ -118,7 +117,16 @@ func (r *runner) env(ordinal int, trace string) []string {
 // mutant's ordinal: the environment of env without the instrumented
 // variable and the trace.
 func (r *runner) ordinaryEnv(ordinal int) []string {
-	return testbin.Setenv(r.env(ordinal, ""), r.def.Protocol.Instrumented, render.TraceVar)
+	return testbin.Setenv(r.env(ordinal, ""), r.def.Protocol.Instrumented, r.def.Protocol.Trace)
+}
+
+// tests returns the tests of out that the run traces alone: the leaf tests
+// under cfg.Subtests, and the top-level tests otherwise.
+func (r *runner) tests(out *testbin.Output) []string {
+	if r.cfg.Subtests {
+		return out.Leaves
+	}
+	return out.Tests
 }
 
 // execute runs the test binary bin of the program p with env and args,

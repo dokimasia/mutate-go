@@ -210,6 +210,12 @@ func TestClassify(t *testing.T) {
 			}
 		})
 
+		t.Run("names the first test that failed and not the test that started it", func(t *testing.T) {
+			t.Parallel()
+			rec := runIn(t, module(t, pairFiles), run.Config{})
+			assert.Equal(t, verdicts(rec), pairVerdicts, "a kill names the subtest that failed first")
+		})
+
 		t.Run("gives timed-out to a mutant that hangs while the package initializes", func(t *testing.T) {
 			t.Parallel()
 			rec := runIn(t, module(t, steps), run.Config{Workers: 2})

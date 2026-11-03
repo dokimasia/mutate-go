@@ -59,9 +59,10 @@ type region struct {
 // the packages that the package imports, by the file's path relative to the
 // root, and the requirements digest. The requirements digest covers the
 // engine's identity, the toolchain, the catalogue's and the overlay's
-// versions, the run's suite, Confirm and IncludeGenerated, and the content
-// of each requirement file of the package. A requirement file that does not
-// exist or does not read is left out, so its absence is part of the digest.
+// versions, the run's suite, Confirm and IncludeGenerated, its killers and
+// its coverage, and the content of each requirement file of the package. A
+// requirement file that does not exist or does not read is left out, so its
+// absence is part of the digest.
 func (r *runner) observe() {
 	files := map[string]string{}
 	r.regions = []region{{dir: rootDir, origin: ownOrigin}}
@@ -96,6 +97,8 @@ func (r *runner) observe() {
 		strings.Join(r.rec.Suite, suiteSeparator),
 		strconv.FormatBool(r.cfg.Confirm),
 		strconv.FormatBool(r.cfg.IncludeGenerated),
+		string(r.rec.Killers),
+		string(r.rec.Coverage),
 	}, settingsSeparator)
 	r.observation = &record.Observation{
 		StartedAt: r.rec.StartedAt,
@@ -281,14 +284,15 @@ func (r *runner) changed(o *record.Observation, counts func(o origin, name strin
 }
 
 // reuse gives the mutant at index i the earlier verdict e: its verdict, its
-// tests, its covering tests, its time, its confirmation and the start of
-// the run that observed it. It then reports the mutant.
+// tests and whether they are every killer, its covering tests, its time, its
+// confirmation and the start of the run that observed it. It then reports
+// the mutant.
 func (r *runner) reuse(i int, e *record.Mutant) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m := &r.rec.Mutants[i]
-	m.Verdict, m.Tests, m.CoveredBy, m.Seconds, m.Confirmed, m.ObservedAt =
-		e.Verdict, e.Tests, e.CoveredBy, e.Seconds, e.Confirmed, e.ObservedAt
+	m.Verdict, m.Tests, m.AllKillers, m.CoveredBy, m.Seconds, m.Confirmed, m.ObservedAt =
+		e.Verdict, e.Tests, e.AllKillers, e.CoveredBy, e.Seconds, e.Confirmed, e.ObservedAt
 	r.report(i)
 }
 

@@ -87,6 +87,10 @@ type Config struct {
 	// the path of the mutant's file relative to the working directory, as
 	// [record.Record.Path] states it. Verdict may be nil.
 	Verdict func(m record.Mutant, mutants int, path string)
+	// Leftover, when it is not nil, receives the run's work directory and the
+	// error of its removal when the run cannot remove the directory at its
+	// end. The directory and what the removal left in it stay on disk.
+	Leftover func(dir string, err error)
 	// Earlier is the record of the history's earlier run of the package, as
 	// [record.Read] returns it, or nil for a history without one. Run reads
 	// it only under History.
@@ -153,8 +157,24 @@ type Config struct {
 	// counts the starts in that order. A mutant with a reusable verdict that
 	// does not start keeps that verdict, so neither the caller's deadline nor
 	// Sample makes it not-run. The record's sample states no first key. A run
-	// with a history takes no Lines.
+	// with a history takes no Lines, and reuses only the verdicts of a run
+	// with the same Suite, Confirm, IncludeGenerated, AllKillers and Subtests.
 	History bool
+	// AllKillers makes each run of a test binary for a mutant run to its end:
+	// the binary gets no -test.failfast, and the run does not end at its first
+	// failed test. A killed mutant's tests are then every leaf test that
+	// failed. After a binary whose run killed the mutant and ended on its own,
+	// the mutant's run goes on with the next binary that executed its site.
+	// The mutant states AllKillers when the run of every binary ended on its
+	// own. Without AllKillers, a killed mutant's tests are the first test that
+	// failed.
+	AllKillers bool
+	// Subtests makes the run trace each leaf test alone in place of each
+	// top-level test: each subtest without subtests of its own, and each
+	// top-level test without subtests. It traces each binary with more than one
+	// leaf test, whatever its number of mutants, and a mutant's coveredBy names
+	// leaf tests.
+	Subtests bool
 }
 
 // runner is the state of one run.
@@ -212,16 +232,18 @@ type runner struct {
 }
 
 // outcome is a mutant's verdict and what its runs state: the tests that
-// failed or were running, the runs' wall time when the engine measured it,
-// the reason, whether a confirmation run decided the verdict, and whether a
-// run of the mutant observed it.
+// failed or were running, whether those tests are every test that failed,
+// the runs' wall time when the engine measured it, the reason, whether a
+// confirmation run decided the verdict, and whether a run of the mutant
+// observed it.
 type outcome struct {
-	verdict   spec.Verdict
-	seconds   *float64
-	reason    string
-	tests     []string
-	confirmed bool
-	observed  bool
+	verdict    spec.Verdict
+	seconds    *float64
+	reason     string
+	tests      []string
+	allKillers bool
+	confirmed  bool
+	observed   bool
 }
 
 // Run runs mutation testing on the package in cfg.Dir and returns the run's
@@ -264,6 +286,11 @@ type outcome struct {
 // states, and the record also states each earlier observation that a
 // reused verdict names.
 //
+// The record states the run's killers and coverage, which cfg.AllKillers
+// and cfg.Subtests choose. Run removes its work directory at its end, as
+// testbin.RemoveAll does, and passes a directory that it cannot remove to
+// cfg.Leftover.
+//
 // # Errors
 //
 // Run returns an error when the package directory or one of its data files
@@ -283,7 +310,18 @@ func Run(ctx context.Context, cfg *Config) (*record.Record, error) {
 	if err != nil {
 		return nil, fmt.Errorf("run: %w", err)
 	}
-	defer os.RemoveAll(work)
+	defer func() {
+		if err := testbin.RemoveAll(work); err != nil && cfg.Leftover != nil {
+			cfg.Leftover(work, err)
+		}
+	}()
+	killers, coverage := spec.KillersFirst, spec.CoverageTests
+	if cfg.AllKillers {
+		killers = spec.KillersAll
+	}
+	if cfg.Subtests {
+		coverage = spec.CoverageLeaves
+	}
 	info, _ := debug.ReadBuildInfo()
 	r := &runner{
 		cfg:       *cfg,
@@ -303,6 +341,8 @@ func Run(ctx context.Context, cfg *Config) (*record.Record, error) {
 			Target:    record.Target{Language: def.Overlay.Language, Name: dir},
 			Root:      dir,
 			StartedAt: time.Now().UTC().Format(time.RFC3339),
+			Killers:   killers,
+			Coverage:  coverage,
 			Limits:    []record.Limits{},
 			Errors:    []record.RunError{},
 			Mutants:   []record.Mutant{},
@@ -392,7 +432,7 @@ func (r *runner) run(ctx context.Context) {
 		r.stop("the run stopped at an annotation error")
 		return
 	}
-	prog, err := render.Render(r.pkg, result, r.def.Protocol.Variable)
+	prog, err := render.Render(r.pkg, result, &r.def.Protocol)
 	r.list(result)
 	r.prog = prog
 	if r.cfg.List {
@@ -630,7 +670,7 @@ func (r *runner) set(i int, o outcome) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m := &r.rec.Mutants[i]
-	m.Verdict, m.Tests, m.Seconds, m.Confirmed = o.verdict, o.tests, o.seconds, o.confirmed
+	m.Verdict, m.Tests, m.AllKillers, m.Seconds, m.Confirmed = o.verdict, o.tests, o.allKillers, o.seconds, o.confirmed
 	m.CoveredBy = r.coveredBy(i)
 	if o.reason != "" {
 		m.Reason = o.reason

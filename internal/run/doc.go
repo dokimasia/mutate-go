@@ -23,6 +23,16 @@
 // a deadline from those tests' own times. The record lists those tests in
 // each mutant's coveredBy.
 //
+// # Killers and coverage
+//
+// A mutant's run of a binary stops at its first failed test, and a killed
+// mutant's tests are that test. Under AllKillers, each run goes to its end,
+// the tests of a kill are every leaf test that failed, and a kill whose runs
+// all ended on their own states that its tests are complete. Under
+// Subtests, Run traces each leaf test of a binary alone in place of each
+// top-level test, also where the binary has more tests than mutants, and
+// coveredBy names leaf tests. The record states both choices.
+//
 // The record states the ranges of the caller's selection that lie in the
 // package's files, and each generated file of the package that the run
 // leaves out or, at the caller's request, includes. A caller's limit on the

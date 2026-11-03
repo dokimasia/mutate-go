@@ -22,7 +22,6 @@ import (
 
 	"go.dokimi.dev/mutate/internal/process"
 	"go.dokimi.dev/mutate/internal/record"
-	"go.dokimi.dev/mutate/internal/render"
 	"go.dokimi.dev/mutate/internal/run"
 	"go.dokimi.dev/mutate/internal/spec"
 	"go.dokimi.dev/mutate/internal/testbin"
@@ -245,6 +244,68 @@ Count uoi-incdec 1: killed [TestCount]
 Count sbr-zero 0: killed [TestCount]
 `
 
+// pairFile is the source file of pairFiles.
+const pairFile = "pair.go"
+
+// pairFiles is a package of two functions. The subtests of TestPair check
+// one each with 3 and 2, and TestEqual checks Larger with two equal numbers.
+// A failed subtest fails TestPair too.
+var pairFiles = map[string]string{
+	pairFile: `package fixture
+
+func Larger(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func Smaller(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+`,
+	"pair_test.go": `package fixture
+
+import "testing"
+
+func TestPair(t *testing.T) {
+	t.Run("larger", func(t *testing.T) {
+		if Larger(3, 2) != 3 {
+			t.Error("Larger(3, 2) != 3")
+		}
+	})
+	t.Run("smaller", func(t *testing.T) {
+		if Smaller(3, 2) != 2 {
+			t.Error("Smaller(3, 2) != 2")
+		}
+	})
+}
+
+func TestEqual(t *testing.T) {
+	if Larger(2, 2) != 2 {
+		t.Error("Larger(2, 2) != 2")
+	}
+}
+`,
+}
+
+// pairVerdicts are the verdicts of pairFiles's mutants, each kill with the
+// first test that failed.
+const pairVerdicts = `Larger sbr-delete 0: killed [TestPair/larger]
+Larger ror-boundary 0: survived
+Larger ror-false 0: killed [TestPair/larger]
+Larger sbr-zero 0: killed [TestPair/larger]
+Larger sbr-zero 1: killed [TestEqual]
+Smaller sbr-delete 0: survived
+Smaller ror-boundary 0: survived
+Smaller ror-false 0: survived
+Smaller sbr-zero 0: no-coverage
+Smaller sbr-zero 1: killed [TestPair/smaller]
+`
+
 // brokenDecl is a declaration that does not compile, and broken a file of
 // the package fixture that contains it.
 const (
@@ -271,7 +332,7 @@ func TestAdd(t *testing.T) {
 		t.Error("Add(2, 3) != 5")
 	}
 }
-`, render.TraceVar)
+`, protocol.Trace)
 
 // procsTest is a test of add that fails unless its binary runs with
 // GOMAXPROCS set to the value of expectedProcsVar.
@@ -370,7 +431,7 @@ func TestAdd(t *testing.T) {
 	}
 }
 `, closingPhase, openingPhase, mutantPhase, ordinaryPhase,
-	render.TraceVar, protocol.Variable, protocol.Instrumented, phaseVar, markerVar)
+	protocol.Trace, protocol.Variable, protocol.Instrumented, phaseVar, markerVar)
 
 // scale is a module whose package's own test cannot tell a multiplication
 // from a division, and whose package conformance tells them apart. The
@@ -630,7 +691,8 @@ func slowBuilds(t *testing.T, pattern string) []string {
 
 // verdicts writes one line per mutant: its scope, its kind, its position
 // among the mutants of its scope and kind, its verdict, the tests that it
-// names, and confirmed for a confirmed mutant.
+// names, all killers for a kill that names every killer, and confirmed for a
+// confirmed mutant.
 func verdicts(rec *record.Record) string {
 	var b strings.Builder
 	seen := map[string]int{}
@@ -640,6 +702,9 @@ func verdicts(rec *record.Record) string {
 		seen[id]++
 		if len(m.Tests) > 0 {
 			fmt.Fprintf(&b, " %v", m.Tests)
+		}
+		if m.AllKillers {
+			b.WriteString(" all killers")
 		}
 		if m.Confirmed {
 			b.WriteString(" confirmed")
@@ -699,5 +764,5 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(m.Run())
 }
-`, pkg, render.TraceVar)
+`, pkg, protocol.Trace)
 }

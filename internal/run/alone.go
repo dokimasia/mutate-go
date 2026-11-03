@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -15,19 +16,22 @@ import (
 	"go.dokimi.dev/mutate/internal/testbin"
 )
 
-// alone runs each top-level test of a program alone, with no mutant active
-// and a trace on, on the workers that dispatch starts and under the
-// program's limits, and records the sites that each test executed. It does
-// so for each program that has more than one test and fewer tests than the
-// mutants without a verdict whose sites the program executed, because each
-// test costs a run.
+// alone runs each test of a program that the run traces alone, with no
+// mutant active and a trace on, on the workers that dispatch starts and
+// under the program's limits, and records the sites that each test executed.
+// The tests are the program's top-level tests, or its leaf tests under
+// cfg.Subtests. alone does so for each program that has more than one test,
+// and, without cfg.Subtests, fewer tests than the mutants without a verdict
+// whose sites the program executed, because each test costs a run.
 //
 // A test's run starts, as dispatch starts it, only while the time left
 // covers the program's deadline and the reserve of a mutant. alone drops a
 // program's record when one of its tests fails alone, when the trace of a
 // test's run does not read or lacks the start mark, because the trace then
-// states no site that the engine can trust, or when ctx or the caller's
-// deadline ends the runs before each of its tests ran.
+// states no site that the engine can trust, when a test's run alone does not
+// start the test, such as a subtest whose name changes from run to run, or
+// when ctx or the caller's deadline ends the runs before each of its tests
+// ran.
 func (r *runner) alone(ctx context.Context) {
 	type job struct {
 		p           *program
@@ -42,7 +46,7 @@ func (r *runner) alone(ctx context.Context) {
 				covered++
 			}
 		}
-		if len(p.tests) < 2 || len(p.tests) >= covered {
+		if len(p.tests) < 2 || !r.cfg.Subtests && len(p.tests) >= covered {
 			continue
 		}
 		p.sites, p.seconds = map[string]map[int]bool{}, map[string]float64{}
@@ -60,9 +64,10 @@ func (r *runner) alone(ctx context.Context) {
 		res := r.execute(ctx, j.p, j.p.bin, r.env(0, j.trace), args, j.p.deadline, testbin.BackupDelay, true)
 		data, err := os.ReadFile(j.trace)
 		sites, started := render.ParseTrace(data)
+		ran := slices.Contains(r.tests(&res.Output), j.test)
 		mu.Lock()
 		defer mu.Unlock()
-		broken[j.p] = broken[j.p] || failed(res) || err != nil || !started
+		broken[j.p] = broken[j.p] || failed(res) || err != nil || !started || !ran
 		j.p.sites[j.test], j.p.seconds[j.test] = sites, res.Seconds
 	})
 	wait()

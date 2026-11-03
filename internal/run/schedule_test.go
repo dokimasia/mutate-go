@@ -19,7 +19,6 @@ import (
 	"go.dokimi.dev/assert"
 
 	"go.dokimi.dev/mutate/internal/record"
-	"go.dokimi.dev/mutate/internal/render"
 	"go.dokimi.dev/mutate/internal/run"
 	"go.dokimi.dev/mutate/internal/spec"
 )
@@ -75,7 +74,7 @@ func TestAdd(t *testing.T) {
 		t.Error("Add(2, 3) != 5")
 	}
 }
-`, render.TraceVar, protocol.Variable)
+`, protocol.Trace, protocol.Variable)
 
 // unconfirmedReason is the pin of the reason of a survivor whose
 // confirmation does not start because the caller's deadline is too near.

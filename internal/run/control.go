@@ -41,9 +41,10 @@ func (r *runner) openingLimit() (time.Duration, bool) {
 }
 
 // opening runs the opening control run of each program, and sets each
-// program's limits and its top-level tests from its run. Without
-// cfg.Confirm, it gives the verdict no-coverage to each mutant whose site
-// the programs never executed. It returns the reason that the run stops
+// program's limits and the tests that the run traces alone from its run:
+// its leaf tests under cfg.Subtests, and its top-level tests otherwise.
+// Without cfg.Confirm, it gives the verdict no-coverage to each mutant whose
+// site the programs never executed. It returns the reason that the run stops
 // before the mutant runs, or "" when they start. A run that the caller's
 // deadline ends is not a failure of the tests.
 func (r *runner) opening(ctx context.Context) string {
@@ -60,7 +61,7 @@ func (r *runner) opening(ctx context.Context) string {
 		r.ran = true
 		trace := filepath.Join(r.work, tracePrefix+strconv.Itoa(i))
 		res := r.execute(ctx, p, p.bin, r.env(0, trace), testbin.Flags(limit, false), limit, testbin.BackupDelay, false)
-		verdict, _, _ := classify(res)
+		verdict, _, _ := classify(res, true)
 		switch {
 		case res.Ended == testbin.Cancelled:
 			return cancelled
@@ -84,7 +85,7 @@ func (r *runner) opening(ctx context.Context) string {
 		for o := range p.executed {
 			executed[o] = true
 		}
-		p.tests = res.Output.Tests
+		p.tests = r.tests(&res.Output)
 		p.deadline = time.Duration(
 			(limits.Deadline.Factor*res.Seconds + limits.Deadline.Seconds) * float64(time.Second),
 		)
@@ -202,9 +203,10 @@ func (r *runner) closing(ctx context.Context) {
 }
 
 // failed reports whether a control run failed: it did not start, a test
-// failed, the binary exited with a failure status, or the engine ended it.
+// failed, also in a binary that exits with the status 0, the binary exited
+// with a failure status, or the engine ended it.
 func failed(res *testbin.Result) bool {
-	return res.Err != nil || res.Ended != testbin.Exited || res.State.ExitCode() != 0
+	return res.Err != nil || res.Ended != testbin.Exited || res.State.ExitCode() != 0 || len(res.Output.Failed) > 0
 }
 
 // describe states a control run's failure after prefix: the tests that the
@@ -212,7 +214,7 @@ func failed(res *testbin.Result) bool {
 // error, and then the end of the run's output. target is the package whose
 // tests the binary runs, or empty for the run's own package.
 func describe(prefix string, res *testbin.Result, target string) string {
-	verdict, tests, reason := classify(res)
+	verdict, tests, reason := classify(res, true)
 	cause := reason
 	if did, ok := failures[verdict]; ok {
 		subject := strings.Join(named(tests, target), ", ")

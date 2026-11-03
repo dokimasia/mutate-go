@@ -92,6 +92,70 @@ func TestSlow(t *testing.T) {
 }
 `
 
+// signFiles is a package whose test runs four subtests of Sign. zero and
+// positive both fail when Sign returns 0 for a number that is not negative,
+// and wait waits a minute when Sign gives -3 another sign than -1, after
+// negative failed.
+var signFiles = map[string]string{
+	"sign.go": `package fixture
+
+func Sign(x int) int {
+	if x < 0 {
+		return -1
+	}
+	return 1
+}
+`,
+	"sign_test.go": `package fixture
+
+import (
+	"testing"
+	"time"
+)
+
+func TestSign(t *testing.T) {
+	t.Run("negative", func(t *testing.T) {
+		if Sign(-2) != -1 {
+			t.Error("Sign(-2) != -1")
+		}
+	})
+	t.Run("zero", func(t *testing.T) {
+		if Sign(0) != 1 {
+			t.Error("Sign(0) != 1")
+		}
+	})
+	t.Run("positive", func(t *testing.T) {
+		if Sign(2) != 1 {
+			t.Error("Sign(2) != 1")
+		}
+	})
+	t.Run("wait", func(t *testing.T) {
+		if Sign(-3) != -1 {
+			time.Sleep(time.Minute)
+		}
+	})
+}
+`,
+}
+
+// waitingConformance is a test of scale's package conformance that waits a
+// minute when Scale is wrong.
+const waitingConformance = `package conformance
+
+import (
+	"testing"
+	"time"
+
+	"fixture"
+)
+
+func TestScale(t *testing.T) {
+	if fixture.Scale(6, 3) != 18 {
+		time.Sleep(time.Minute)
+	}
+}
+`
+
 // confirmOverlay is the shell pattern of the overlay argument of a
 // confirmation's build.
 const confirmOverlay = "*/confirm*/overlay.json"
@@ -192,6 +256,63 @@ Triple sbr-zero 0: killed [fixture/conformance: TestTriple]
 Triple aor 0: killed [fixture/conformance: TestTriple]
 `, "the conformance tests do not run for Scale's mutants")
 			assert.Empty(t, rec.Errors, "the run states no run error")
+		})
+
+		t.Run("names the first test that fails without AllKillers", func(t *testing.T) {
+			t.Parallel()
+			rec := runIn(t, module(t, signFiles), run.Config{})
+			assert.Equal(t, verdicts(rec), `Sign sbr-delete 0: killed [TestSign/negative]
+Sign ror-boundary 0: killed [TestSign/zero]
+Sign ror-false 0: killed [TestSign/negative]
+Sign sbr-zero 0: killed [TestSign/negative]
+Sign sbr-zero 1: killed [TestSign/zero]
+`, "each run ends at its first failed test")
+		})
+
+		t.Run("names every test that fails under AllKillers", func(t *testing.T) {
+			t.Parallel()
+			rec := runIn(t, module(t, signFiles), run.Config{AllKillers: true, Workers: 2})
+			assert.Equal(t, verdicts(rec), `Sign sbr-delete 0: killed [TestSign/negative]
+Sign ror-boundary 0: killed [TestSign/zero] all killers
+Sign ror-false 0: killed [TestSign/negative]
+Sign sbr-zero 0: killed [TestSign/negative]
+Sign sbr-zero 1: killed [TestSign/zero TestSign/positive] all killers
+`, "each run lists the subtests that failed before it ended")
+			assert.Empty(t, rec.Errors, "the run states no run error")
+		})
+
+		t.Run("goes on with the next test binary after a kill under AllKillers", func(t *testing.T) {
+			t.Parallel()
+			rec := runIn(t, module(t, scale), run.Config{AllKillers: true, Suite: []string{conformancePattern}})
+			assert.Equal(t, verdicts(rec),
+				"Scale sbr-zero 0: killed [TestScaleByOne fixture/conformance: TestScale] all killers\n"+
+					"Scale aor 0: killed [fixture/conformance: TestScale] all killers\n",
+				"the tests of both binaries kill the mutant that returns 0")
+		})
+
+		t.Run("ends a kill under AllKillers at a test binary whose run does not end on its own", func(t *testing.T) {
+			t.Parallel()
+			dir := module(t, with(scale, map[string]string{conformanceTestFile: waitingConformance}))
+			rec := runIn(t, dir, run.Config{AllKillers: true, Suite: []string{conformancePattern}, Workers: 2})
+			assert.Equal(t, verdicts(rec), `Scale sbr-zero 0: killed [TestScaleByOne]
+Scale aor 0: timed-out [fixture/conformance: TestScale]
+`, "the conformance test waits until its binary's deadline")
+		})
+
+		t.Run("confirms each survivor under AllKillers in a run that names every killer", func(t *testing.T) {
+			t.Parallel()
+			dir := module(t, confirmFiles)
+			lines := []selection.Lines{{Path: filepath.Join(dir, scaleFile), First: 3, Last: 5}}
+			rec := runIn(t, dir, run.Config{Confirm: true, AllKillers: true, Lines: lines})
+			assert.Equal(t, verdicts(rec), `double sbr-zero 0: killed [TestDouble] all killers confirmed
+double aor 0: killed [TestDouble] all killers confirmed
+half sbr-zero 0: killed [TestCalls] all killers
+half aor 0: survived confirmed
+triple sbr-zero 0: not-selected
+triple aor 0: not-selected
+quarter sbr-zero 0: not-selected
+quarter aor 0: not-selected
+`, "the confirmation of a survivor names every test that fails in its ordinary build")
 		})
 
 		t.Run("ends the run of a mutant's covering tests at a deadline from their own times", func(t *testing.T) {

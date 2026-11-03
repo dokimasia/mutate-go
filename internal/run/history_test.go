@@ -224,12 +224,14 @@ func TestHistory(t *testing.T) {
 			earlier := earlierAt(runIn(t, dir, run.Config{History: true}), earlierStart)
 			earlier.Mutants[0].Seconds = new(42.0)
 			earlier.Mutants[0].CoveredBy = []string{"TestCovering"}
+			earlier.Mutants[0].AllKillers = true
 			files.Write(t, dir, files.Tree{subFile: files.Text(addSub[subFile] + "\n// Sub changed.\n")})
 			rec := runIn(t, dir, run.Config{History: true, Earlier: earlier, Sample: 2})
 			assert.Equal(t, observedAt(rec, earlierStart), addMutants, "the kills of Add are reused")
 			expect.Equal(t, rec.Mutants[0].Seconds, new(42.0), "a reused verdict states the earlier time")
 			expect.Equal(t, rec.Mutants[0].CoveredBy, []string{"TestCovering"}, "and the earlier covering tests")
 			expect.Equal(t, rec.Mutants[0].Tests, []string{"TestAdd"}, "and the earlier killing test")
+			expect.True(t, rec.Mutants[0].AllKillers, "and whether the earlier tests name every killer")
 		})
 
 		changes := []struct {
@@ -238,8 +240,9 @@ func TestHistory(t *testing.T) {
 			give map[string]string
 			// earlier changes the earlier record, when it is not nil.
 			earlier func(e *record.Record)
-			// confirm runs the second run under Confirm.
-			confirm bool
+			// confirm, allKillers and subtests run the second run under
+			// Confirm, AllKillers and Subtests.
+			confirm, allKillers, subtests bool
 			// want lists the mutants that run again.
 			want string
 		}{
@@ -308,6 +311,16 @@ func TestHistory(t *testing.T) {
 				confirm: true,
 				want:    addMutants + subMutants,
 			},
+			{
+				name:       "runs every mutant again in a run that names every killer",
+				allKillers: true,
+				want:       addMutants + subMutants,
+			},
+			{
+				name:     "runs every mutant again in a run that traces each leaf test alone",
+				subtests: true,
+				want:     addMutants + subMutants,
+			},
 		}
 		for _, tt := range changes {
 			t.Run(tt.name, func(t *testing.T) {
@@ -323,7 +336,10 @@ func TestHistory(t *testing.T) {
 				}
 				files.Write(t, dir, tree)
 				runs := strings.Count(tt.want, "\n")
-				rec := runIn(t, dir, run.Config{History: true, Earlier: earlier, Sample: runs, Confirm: tt.confirm})
+				rec := runIn(t, dir, run.Config{
+					History: true, Earlier: earlier, Sample: runs,
+					Confirm: tt.confirm, AllKillers: tt.allKillers, Subtests: tt.subtests,
+				})
 				expect.Equal(t, observedAt(rec, rec.StartedAt), tt.want, "the run tests the mutants of changed inputs")
 				expect.Empty(t, rec.Errors, "the run states no run error")
 				expect.Nil(t, rec.Sample, "every mutant has a verdict")
