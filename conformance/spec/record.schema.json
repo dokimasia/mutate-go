@@ -84,6 +84,14 @@
         }
       ]
     },
+    "killers": {
+      "description": "first for a run that stops each part of a mutant's run at its first failing test, and all for a run that runs each part to its end and names every test that failed. A record without it is the record of a run of first.",
+      "$ref": "#/$defs/killers"
+    },
+    "coverage": {
+      "description": "tests for a run that traces each test of the runner alone, and leaves for a run that traces each leaf test alone, so that coveredBy names leaf tests. A record without it is the record of a run of tests.",
+      "$ref": "#/$defs/coverage"
+    },
     "limits": {
       "description": "The limits of each program of the suite, in the order of a mutant's run, from the program's own run in the opening control run. Empty when no opening control run passed.",
       "type": "array",
@@ -259,6 +267,12 @@
     "family": {
       "enum": ["logging", "timing", "flags", "capacity", "helper", "parallel"]
     },
+    "killers": {
+      "enum": ["first", "all"]
+    },
+    "coverage": {
+      "enum": ["tests", "leaves"]
+    },
     "error": {
       "enum": [
         "load",
@@ -286,9 +300,17 @@
         "original": { "type": "string", "minLength": 1, "maxLength": 120 },
         "replacement": { "type": "string", "maxLength": 120 },
         "verdict": { "$ref": "#/$defs/verdict" },
-        "tests": { "type": "array", "items": { "type": "string" } },
+        "tests": {
+          "description": "The tests that failed, or that were running when the run ended at its deadline or at its memory ceiling. A test that failed is named only when no test that it started failed. In a run of first, the first test that failed is named alone.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "allKillers": {
+          "description": "True on a killed mutant of a run of all whose run ended on its own in every program, so that tests names every test that failed.",
+          "const": true
+        },
         "coveredBy": {
-          "description": "The tests whose run alone executed the mutant's site, named as tests names them. Absent when no test executed the site in its run alone, or when a program of the suite that executed the site did not run each of its tests alone.",
+          "description": "The tests whose run alone executed the mutant's site, named as tests names them: each a leaf test in a run of leaves. Absent when no test executed the site in its run alone, or when a program of the suite that executed the site did not run each of its tests alone.",
           "type": "array",
           "items": { "type": "string" }
         },

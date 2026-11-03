@@ -1,0 +1,10 @@
+{
+  "case": "child",
+  "proves": "A child process of the test program whose environment contains each variable with the protocol's prefix runs the active mutant and appends its sites to the trace, so the test kills the child's mutants and neither gets no-coverage.",
+  "fixture": "double returns twice its argument. TestMain prints double(21) when the variable FIXTURE_CHILD is 1. TestDouble runs the test binary as a child whose environment contains FIXTURE_CHILD and each variable whose name starts with DOKIMI_MUTATE_, and no other, and checks that the child prints 42.",
+  "mutants": [
+    { "scope": "double", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "double", "kind": "aor", "nth": 0, "verdict": "killed" }
+  ],
+  "errors": []
+}

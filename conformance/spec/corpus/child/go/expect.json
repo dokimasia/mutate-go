@@ -1,0 +1,50 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "double",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "8542c6a552dd8ec4",
+      "file": "double.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "return x * 2",
+      "replacement": "return 0",
+      "tests": [
+        "TestDouble"
+      ]
+    },
+    {
+      "scope": "double",
+      "kind": "aor",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "7ba0b20781edadd2",
+      "file": "double.go",
+      "start": {
+        "line": 5,
+        "column": 9
+      },
+      "end": {
+        "line": 5,
+        "column": 14
+      },
+      "original": "x * 2",
+      "replacement": "x / 2",
+      "tests": [
+        "TestDouble"
+      ]
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

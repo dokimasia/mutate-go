@@ -1,0 +1,19 @@
+{
+  "case": "leaves",
+  "coverage": "leaves",
+  "proves": "A run that traces each leaf test alone names in coveredBy the subtests, and the top-level tests without subtests, whose runs alone executed each site. A kill names the first test that failed, and not the test that started it.",
+  "fixture": "larger and smaller return the larger and the smaller of two numbers. TestPair starts the subtests larger and smaller, which check one function each with 3 and 2, and TestEqual calls larger with 2 and 2. The return of b in larger executes in TestEqual alone, and no test executes the return of a in smaller.",
+  "mutants": [
+    { "scope": "larger", "kind": "ror-boundary", "nth": 0, "verdict": "survived" },
+    { "scope": "larger", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "larger", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "larger", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "larger", "kind": "sbr-zero", "nth": 1, "verdict": "killed" },
+    { "scope": "smaller", "kind": "ror-boundary", "nth": 0, "verdict": "survived" },
+    { "scope": "smaller", "kind": "ror-false", "nth": 0, "verdict": "survived" },
+    { "scope": "smaller", "kind": "sbr-delete", "nth": 0, "verdict": "survived" },
+    { "scope": "smaller", "kind": "sbr-zero", "nth": 0, "verdict": "no-coverage" },
+    { "scope": "smaller", "kind": "sbr-zero", "nth": 1, "verdict": "killed" }
+  ],
+  "errors": []
+}

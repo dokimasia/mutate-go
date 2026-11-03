@@ -1,0 +1,14 @@
+{
+  "case": "killers",
+  "killers": "all",
+  "proves": "A run that runs each part of a mutant's run to its end names every test that failed, and states allKillers on each kill whose run ended on its own. A run in which a test failed is killed when the deadline ends it later, and states no allKillers.",
+  "fixture": "sign returns -1 for a negative number and 1 for any other. TestSign starts the subtests negative, zero, positive and wait. negative checks -2, zero checks 0 and positive checks 2. wait blocks until the deadline when sign gives -3 another sign than -1.",
+  "mutants": [
+    { "scope": "sign", "kind": "ror-boundary", "nth": 0, "verdict": "killed", "allKillers": true },
+    { "scope": "sign", "kind": "ror-false", "nth": 0, "verdict": "killed" },
+    { "scope": "sign", "kind": "sbr-delete", "nth": 0, "verdict": "killed" },
+    { "scope": "sign", "kind": "sbr-zero", "nth": 0, "verdict": "killed" },
+    { "scope": "sign", "kind": "sbr-zero", "nth": 1, "verdict": "killed", "allKillers": true }
+  ],
+  "errors": []
+}

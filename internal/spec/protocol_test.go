@@ -72,6 +72,35 @@ func TestProtocol(t *testing.T) {
 		})
 	})
 
+	t.Run("Killers", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("has a constant for every value of the protocol's killers and for no other", func(t *testing.T) {
+			t.Parallel()
+			killers := spec.Load().Protocol.Killers
+			values := make([]string, 0, len(killers))
+			for _, k := range killers {
+				values = append(values, string(k))
+			}
+			assert.Permutation(t, declared(t, "Killers"), values, "the constants of Killers are the protocol's values")
+		})
+	})
+
+	t.Run("Coverage", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("has a constant for every value of the protocol's coverage and for no other", func(t *testing.T) {
+			t.Parallel()
+			coverage := spec.Load().Protocol.Coverage
+			values := make([]string, 0, len(coverage))
+			for _, c := range coverage {
+				values = append(values, string(c))
+			}
+			assert.Permutation(t, declared(t, "Coverage"), values,
+				"the constants of Coverage are the protocol's values")
+		})
+	})
+
 	t.Run("ErrorCode", func(t *testing.T) {
 		t.Parallel()
 

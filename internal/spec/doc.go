@@ -14,14 +14,15 @@
 // # Vocabularies
 //
 // Each value that the definition names and the engine stores has a type:
-// [Kind], [Class] and [Family] from the catalogue, [Verdict], [ScoreClass]
-// and [ErrorCode] from the protocol, and [SkipReason] from the overlay. Each
-// encodes as its string, so a record's JSON spells the definition's values.
+// [Kind], [Class] and [Family] from the catalogue, [Verdict], [ScoreClass],
+// [ErrorCode], [Killers] and [Coverage] from the protocol, and [SkipReason]
+// from the overlay. Each encodes as its string, so a record's JSON spells the
+// definition's values.
 //
-//   - Kind, Verdict, ScoreClass, ErrorCode and SkipReason declare a constant
-//     for every value of the definition, because the engine writes or
-//     branches on single values. The tests of this package fail when the
-//     constants and the definition differ in either direction.
+//   - Kind, Verdict, ScoreClass, ErrorCode, Killers, Coverage and SkipReason
+//     declare a constant for every value of the definition, because the
+//     engine writes or branches on single values. The tests of this package
+//     fail when the constants and the definition differ in either direction.
 //   - Class and Family declare no constant. The engine reads their values
 //     from the catalogue and branches on none of them.
 //

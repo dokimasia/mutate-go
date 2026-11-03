@@ -1,0 +1,233 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "larger",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "f118c734ed1addd7",
+      "file": "pair.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 7,
+        "column": 3
+      },
+      "original": "if a > b { return a }",
+      "replacement": "",
+      "tests": [
+        "TestPair/larger"
+      ],
+      "coveredBy": [
+        "TestPair/larger",
+        "TestEqual"
+      ]
+    },
+    {
+      "scope": "larger",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "40a9a365e6a5513c",
+      "file": "pair.go",
+      "start": {
+        "line": 5,
+        "column": 5
+      },
+      "end": {
+        "line": 5,
+        "column": 10
+      },
+      "original": "a > b",
+      "replacement": "a >= b",
+      "coveredBy": [
+        "TestPair/larger",
+        "TestEqual"
+      ]
+    },
+    {
+      "scope": "larger",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "e2a9d76c9b92be83",
+      "file": "pair.go",
+      "start": {
+        "line": 5,
+        "column": 5
+      },
+      "end": {
+        "line": 5,
+        "column": 10
+      },
+      "original": "a > b",
+      "replacement": "false",
+      "tests": [
+        "TestPair/larger"
+      ],
+      "coveredBy": [
+        "TestPair/larger",
+        "TestEqual"
+      ]
+    },
+    {
+      "scope": "larger",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "efe241a8568c51f8",
+      "file": "pair.go",
+      "start": {
+        "line": 6,
+        "column": 3
+      },
+      "end": {
+        "line": 6,
+        "column": 11
+      },
+      "original": "return a",
+      "replacement": "return 0",
+      "tests": [
+        "TestPair/larger"
+      ],
+      "coveredBy": [
+        "TestPair/larger"
+      ]
+    },
+    {
+      "scope": "larger",
+      "kind": "sbr-zero",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "ce3ffaa4a3490b2c",
+      "file": "pair.go",
+      "start": {
+        "line": 8,
+        "column": 2
+      },
+      "end": {
+        "line": 8,
+        "column": 10
+      },
+      "original": "return b",
+      "replacement": "return 0",
+      "tests": [
+        "TestEqual"
+      ],
+      "coveredBy": [
+        "TestEqual"
+      ]
+    },
+    {
+      "scope": "smaller",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "d3be6c88a508b02f",
+      "file": "pair.go",
+      "start": {
+        "line": 13,
+        "column": 2
+      },
+      "end": {
+        "line": 15,
+        "column": 3
+      },
+      "original": "if a < b { return a }",
+      "replacement": "",
+      "coveredBy": [
+        "TestPair/smaller"
+      ]
+    },
+    {
+      "scope": "smaller",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "8bd35e4de30afe16",
+      "file": "pair.go",
+      "start": {
+        "line": 13,
+        "column": 5
+      },
+      "end": {
+        "line": 13,
+        "column": 10
+      },
+      "original": "a < b",
+      "replacement": "a <= b",
+      "coveredBy": [
+        "TestPair/smaller"
+      ]
+    },
+    {
+      "scope": "smaller",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "c19683709a69418c",
+      "file": "pair.go",
+      "start": {
+        "line": 13,
+        "column": 5
+      },
+      "end": {
+        "line": 13,
+        "column": 10
+      },
+      "original": "a < b",
+      "replacement": "false",
+      "coveredBy": [
+        "TestPair/smaller"
+      ]
+    },
+    {
+      "scope": "smaller",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "5b25d949f7c9324e",
+      "file": "pair.go",
+      "start": {
+        "line": 14,
+        "column": 3
+      },
+      "end": {
+        "line": 14,
+        "column": 11
+      },
+      "original": "return a",
+      "replacement": "return 0"
+    },
+    {
+      "scope": "smaller",
+      "kind": "sbr-zero",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "ef1c16228667b836",
+      "file": "pair.go",
+      "start": {
+        "line": 16,
+        "column": 2
+      },
+      "end": {
+        "line": 16,
+        "column": 10
+      },
+      "original": "return b",
+      "replacement": "return 0",
+      "tests": [
+        "TestPair/smaller"
+      ],
+      "coveredBy": [
+        "TestPair/smaller"
+      ]
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

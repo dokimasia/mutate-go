@@ -1,0 +1,114 @@
+{
+  "language": "go",
+  "mutants": [
+    {
+      "scope": "sign",
+      "kind": "sbr-delete",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "17b4551bb75c54bb",
+      "file": "sign.go",
+      "start": {
+        "line": 5,
+        "column": 2
+      },
+      "end": {
+        "line": 7,
+        "column": 3
+      },
+      "original": "if x < 0 { return -1 }",
+      "replacement": "",
+      "tests": [
+        "TestSign/negative"
+      ]
+    },
+    {
+      "scope": "sign",
+      "kind": "ror-boundary",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "deb8489a939b907c",
+      "file": "sign.go",
+      "start": {
+        "line": 5,
+        "column": 5
+      },
+      "end": {
+        "line": 5,
+        "column": 10
+      },
+      "original": "x < 0",
+      "replacement": "x <= 0",
+      "tests": [
+        "TestSign/zero"
+      ]
+    },
+    {
+      "scope": "sign",
+      "kind": "ror-false",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "20adc442a4327c35",
+      "file": "sign.go",
+      "start": {
+        "line": 5,
+        "column": 5
+      },
+      "end": {
+        "line": 5,
+        "column": 10
+      },
+      "original": "x < 0",
+      "replacement": "false",
+      "tests": [
+        "TestSign/negative"
+      ]
+    },
+    {
+      "scope": "sign",
+      "kind": "sbr-zero",
+      "nth": 0,
+      "occurrence": 0,
+      "key": "4ed96dcf39d95312",
+      "file": "sign.go",
+      "start": {
+        "line": 6,
+        "column": 3
+      },
+      "end": {
+        "line": 6,
+        "column": 12
+      },
+      "original": "return -1",
+      "replacement": "return 0",
+      "tests": [
+        "TestSign/negative"
+      ]
+    },
+    {
+      "scope": "sign",
+      "kind": "sbr-zero",
+      "nth": 1,
+      "occurrence": 0,
+      "key": "709d14d038748f0c",
+      "file": "sign.go",
+      "start": {
+        "line": 8,
+        "column": 2
+      },
+      "end": {
+        "line": 8,
+        "column": 10
+      },
+      "original": "return 1",
+      "replacement": "return 0",
+      "tests": [
+        "TestSign/zero",
+        "TestSign/positive"
+      ]
+    }
+  ],
+  "skipped": [],
+  "generated": [],
+  "errors": []
+}

@@ -5,6 +5,10 @@
   },
   "variable": "DOKIMI_MUTATE_MUTANT",
   "instrumented": "DOKIMI_MUTATE_INSTRUMENTED",
+  "trace": "DOKIMI_MUTATE_TRACE",
+  "prefix": "DOKIMI_MUTATE_",
+  "killers": ["first", "all"],
+  "coverage": ["tests", "leaves"],
   "verdicts": [
     { "id": "killed", "score": "detected" },
     { "id": "timed-out", "score": "detected" },

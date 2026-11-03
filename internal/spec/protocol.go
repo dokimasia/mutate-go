@@ -49,9 +49,38 @@ const (
 	ErrorChangedFiles    ErrorCode = "changed-files"
 )
 
+// Killers is which tests a run names in the tests of a killed mutant, as the
+// protocol spells it.
+type Killers string
+
+// The values of the record's killers.
+const (
+	// KillersFirst names the first test that failed: the run stops at its
+	// first failing test.
+	KillersFirst Killers = "first"
+	// KillersAll names every test that failed: each part of a mutant's run
+	// runs to its end.
+	KillersAll Killers = "all"
+)
+
+// Coverage is which tests a run traces alone, and names in the covering
+// tests of a mutant, as the protocol spells it.
+type Coverage string
+
+// The values of the record's coverage.
+const (
+	// CoverageTests traces each test of the runner alone: in Go, each
+	// top-level test.
+	CoverageTests Coverage = "tests"
+	// CoverageLeaves traces each leaf test alone: a test that starts no
+	// other test, such as a Go subtest without subtests of its own.
+	CoverageLeaves Coverage = "leaves"
+)
+
 // Protocol is the run protocol: the record's name and layout version, the
-// environment variables of the runs of the suite, the verdicts and how the
-// score counts each, the run errors and the limits.
+// environment variables of the runs of the suite and the prefix of each, the
+// values of the record's killers and coverage, the verdicts and how the score
+// counts each, the run errors and the limits.
 type Protocol struct {
 	Record RecordName `json:"record"`
 	// Variable is set to 0 in a control run and to the mutant's ordinal in
@@ -59,10 +88,18 @@ type Protocol struct {
 	Variable string `json:"variable"`
 	// Instrumented is set to 1 in every run of the instrumented program, and
 	// unset in the ordinary control run and in each confirmation run.
-	Instrumented string            `json:"instrumented"`
-	Verdicts     []ProtocolVerdict `json:"verdicts"`
-	Errors       []ErrorCode       `json:"errors"`
-	Limits       Limits            `json:"limits"`
+	Instrumented string `json:"instrumented"`
+	// Trace names the file to which the instrumented program appends its
+	// trace. It is empty or unset in a run without a trace.
+	Trace string `json:"trace"`
+	// Prefix starts the name of each variable of a run, so a child process
+	// takes part in the run when it inherits every variable with it.
+	Prefix   string            `json:"prefix"`
+	Killers  []Killers         `json:"killers"`
+	Coverage []Coverage        `json:"coverage"`
+	Verdicts []ProtocolVerdict `json:"verdicts"`
+	Errors   []ErrorCode       `json:"errors"`
+	Limits   Limits            `json:"limits"`
 }
 
 // Class returns how the score counts the verdict v: the class that the
