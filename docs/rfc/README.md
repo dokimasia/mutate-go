@@ -11,4 +11,4 @@ because they record why not.
 
 | # | Title | Status |
 |---|---|---|
-| [0001](0001-the-go-mutation-engine.md) | The Go mutation engine | Accepted |
+| [0001](0001-the-go-mutation-engine.md) | The Go mutation engine | Accepted, superseded in part by [ADR-0001](../adr/0001-a-peak-without-the-engines-memory.md) and [ADR-0002](../adr/0002-a-failed-test-before-the-limits.md) |

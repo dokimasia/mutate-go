@@ -7,7 +7,7 @@ created: 2026-10-02
 updated: 2026-10-21
 discussion: none
 supersedes: none
-superseded-by: none
+superseded-by: ADR-0001 and ADR-0002, in part
 produces-adr: tbd
 ---
 

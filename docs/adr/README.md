@@ -9,3 +9,5 @@ Each ADR records one decision and what it cost. Once an ADR is accepted, do not 
 
 | ADR | Title | Status |
 |---|---|---|
+| [0001](0001-a-peak-without-the-engines-memory.md) | A test binary's peak without the engine's memory | Accepted |
+| [0002](0002-a-failed-test-before-the-limits.md) | A failed test before the limits of a run | Accepted |
