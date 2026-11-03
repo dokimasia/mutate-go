@@ -41,14 +41,36 @@ func Flags(timeout time.Duration, failfast bool) []string {
 	return flags
 }
 
-// Only returns the flag that runs only the top-level tests that names lists,
-// each matched in full and literally.
+// The separators of a pattern of -test.run: the separator of the elements of
+// a test's name, which the testing package matches one level at a time, and
+// the separator of two alternative patterns of whole names.
+const (
+	levelSeparator = "/"
+	alternatives   = "|"
+)
+
+// Only returns the flag that runs only the tests that names lists, each
+// matched in full and literally. A subtest's name gets one anchored pattern
+// for each element of its name, such as ^TestPair$/^max$, and the testing
+// package reads a | between two such patterns as alternatives, so the flag
+// runs the subtests of the names and no other subtest of their tests.
 func Only(names ...string) string {
-	quoted := make([]string, len(names))
+	var b strings.Builder
+	b.WriteString(flagRun)
 	for i, name := range names {
-		quoted[i] = regexp.QuoteMeta(name)
+		if i > 0 {
+			b.WriteString(alternatives)
+		}
+		for j, element := range strings.Split(name, levelSeparator) {
+			if j > 0 {
+				b.WriteString(levelSeparator)
+			}
+			b.WriteString("^")
+			b.WriteString(regexp.QuoteMeta(element))
+			b.WriteString("$")
+		}
 	}
-	return flagRun + "^(" + strings.Join(quoted, "|") + ")$"
+	return b.String()
 }
 
 // Setenv returns env with each of kv in place of every entry of its key: a

@@ -93,8 +93,15 @@ func TestArgs(t *testing.T) {
 
 		t.Run("returns a pattern that reads each name literally", func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, testbin.Only("TestA", "Test.B"), `-test.run=^(TestA|Test\.B)$`,
+			assert.Equal(t, testbin.Only("TestA", "Test.B"), `-test.run=^TestA$|^Test\.B$`,
 				"the dot of a name is no operator")
+		})
+
+		t.Run("returns one pattern for each element of a subtest's name", func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, testbin.Only("TestPair/max", "TestAbs", "TestA/b.c/1"),
+				`-test.run=^TestPair$/^max$|^TestAbs$|^TestA$/^b\.c$/^1$`,
+				"the testing package matches each element of a name with the pattern of its level")
 		})
 	})
 

@@ -24,8 +24,8 @@ const (
 )
 
 // scanAllocs is the most allocations of a Scan of the output of
-// passingTests, measured with go test -bench on Go 1.27.1.
-const scanAllocs = 49
+// passingTests, measured with testing.AllocsPerRun on Go 1.27.3.
+const scanAllocs = 50
 
 // passingTests is the output of 20 tests that pass, each of which writes
 // one line.
@@ -57,12 +57,26 @@ func TestOutput(t *testing.T) {
 		}{
 			{
 				name: "names each test that a framed FAIL line names once and keeps the line",
-				give: "\x16=== RUN   TestA\n\x16=== RUN   TestA/sub\n    a_test.go:5: broken\n\x16--- FAIL: TestA/sub (0.00s)\n" +
-					"\x16--- FAIL: TestA (0.00s)\n\x16--- FAIL: TestA (0.00s)\n\x16FAIL\n",
+				give: "\x16=== RUN   TestA\n    a_test.go:5: broken\n\x16--- FAIL: TestA (0.00s)\n\x16--- FAIL: TestA (0.00s)\n" +
+					"\x16=== RUN   TestB\n\x16--- FAIL: TestB (0.00s)\n",
 				want: testbin.Output{
-					Failed: []string{"TestA/sub", "TestA"},
+					Failed: []string{"TestA", "TestB"},
+					Tests:  []string{"TestA", "TestB"},
+					Leaves: []string{"TestA", "TestB"},
+					Tail:   "    a_test.go:5: broken\n--- FAIL: TestA (0.00s)\n--- FAIL: TestA (0.00s)\n--- FAIL: TestB (0.00s)\n",
+				},
+			},
+			{
+				name: "leaves out a failed test whose subtest failed",
+				give: "\x16=== RUN   TestA\n\x16=== RUN   TestA/sub\n\x16=== RUN   TestA/sub/case\n" +
+					"\x16--- FAIL: TestA/sub/case (0.00s)\n\x16--- FAIL: TestA/sub (0.00s)\n\x16=== RUN   TestA/other\n" +
+					"\x16--- FAIL: TestA/other (0.00s)\n\x16--- FAIL: TestA (0.00s)\n",
+				want: testbin.Output{
+					Failed: []string{"TestA/sub/case", "TestA/other"},
 					Tests:  []string{"TestA"},
-					Tail:   "    a_test.go:5: broken\n--- FAIL: TestA/sub (0.00s)\n--- FAIL: TestA (0.00s)\n--- FAIL: TestA (0.00s)\n",
+					Leaves: []string{"TestA/sub/case", "TestA/other"},
+					Tail: "--- FAIL: TestA/sub/case (0.00s)\n--- FAIL: TestA/sub (0.00s)\n--- FAIL: TestA/other (0.00s)\n" +
+						"--- FAIL: TestA (0.00s)\n",
 				},
 			},
 			{
@@ -73,6 +87,7 @@ func TestOutput(t *testing.T) {
 				want: testbin.Output{
 					Running: []string{"TestB", "TestD"},
 					Tests:   []string{"TestA", "TestB", "TestC", "TestD"},
+					Leaves:  []string{"TestA", "TestB", "TestC", "TestD"},
 				},
 			},
 			{
@@ -80,33 +95,74 @@ func TestOutput(t *testing.T) {
 				give: "\x16=== RUN   TestB\n\x16=== PAUSE TestB\n\x16=== RUN   TestC\n\x16=== PAUSE TestC\n" +
 					"\x16=== CONT  TestB\n\x16=== RUN   TestB/sub\n\x16=== PAUSE TestB/sub\n\x16=== CONT  TestC\n" +
 					"\x16=== RUN   TestC/x\n\x16=== PAUSE TestC/x\n\x16=== CONT  TestB/sub\n\x16=== RUN   TestB/sub/case\n",
-				want: testbin.Output{Running: []string{"TestB/sub/case"}, Tests: []string{"TestB", "TestC"}},
+				want: testbin.Output{
+					Running: []string{"TestB/sub/case"},
+					Tests:   []string{"TestB", "TestC"},
+					Leaves:  []string{"TestC/x", "TestB/sub/case"},
+				},
 			},
 			{
 				name: "names a test whose subtests in progress all paused when no other test runs",
 				give: "\x16=== RUN   TestCount\n\x16=== RUN   TestCount/a\n\x16=== PAUSE TestCount/a\n" +
 					"\x16=== RUN   TestCount/b\n\x16=== PAUSE TestCount/b\n",
-				want: testbin.Output{Running: []string{"TestCount"}, Tests: []string{"TestCount"}},
+				want: testbin.Output{
+					Running: []string{"TestCount"},
+					Tests:   []string{"TestCount"},
+					Leaves:  []string{"TestCount/a", "TestCount/b"},
+				},
 			},
 			{
 				name: "leaves out a parallel test that paused and did not continue",
 				give: "\x16=== RUN   TestA\n\x16=== PAUSE TestA\n\x16=== RUN   TestB\n\x16=== PAUSE TestB\n" +
 					"\x16=== CONT  TestB\n\x16=== RUN   TestC\n\x16=== PAUSE TestC\n",
-				want: testbin.Output{Running: []string{"TestB"}, Tests: []string{"TestA", "TestB", "TestC"}},
+				want: testbin.Output{
+					Running: []string{"TestB"},
+					Tests:   []string{"TestA", "TestB", "TestC"},
+					Leaves:  []string{"TestA", "TestB", "TestC"},
+				},
 			},
 			{
 				name: "reads the alarm of the testing package",
 				give: "\x16=== RUN   TestHang\npanic: test timed out after 2s\nrunning tests:\n\tTestHang (2s)\n",
 				want: testbin.Output{
 					TimedOut: true, Running: []string{"TestHang"}, Tests: []string{"TestHang"},
-					Tail: "panic: test timed out after 2s\nrunning tests:\n\tTestHang (2s)\n",
+					Leaves: []string{"TestHang"},
+					Tail:   "panic: test timed out after 2s\nrunning tests:\n\tTestHang (2s)\n",
 				},
 			},
 			{
 				name: "lists the top-level tests that started in the order in which they started",
 				give: "\x16=== RUN   TestA\n\x16=== RUN   TestA/sub\n\x16--- PASS: TestA/sub (0.00s)\n\x16--- PASS: TestA (0.00s)\n" +
 					"\x16=== RUN   ExampleB\n\x16--- PASS: ExampleB (0.00s)\n",
-				want: testbin.Output{Tests: []string{"TestA", "ExampleB"}},
+				want: testbin.Output{Tests: []string{"TestA", "ExampleB"}, Leaves: []string{"TestA/sub", "ExampleB"}},
+			},
+			{
+				name: "lists the tests that started no other test as leaves in the order in which they started",
+				give: "\x16=== RUN   TestA\n\x16=== RUN   TestA/x\n\x16--- PASS: TestA/x (0.00s)\n\x16=== RUN   TestA/y\n" +
+					"\x16=== RUN   TestA/y/1\n\x16--- PASS: TestA/y/1 (0.00s)\n\x16--- PASS: TestA/y (0.00s)\n" +
+					"\x16--- PASS: TestA (0.00s)\n\x16=== RUN   TestB\n\x16--- PASS: TestB (0.00s)\n",
+				want: testbin.Output{
+					Tests:  []string{"TestA", "TestB"},
+					Leaves: []string{"TestA/x", "TestA/y/1", "TestB"},
+				},
+			},
+			{
+				name: "reports the end of the tests that the last framed PASS line states",
+				give: "\x16=== RUN   TestA\n\x16--- PASS: TestA (0.00s)\n\x16PASS\n",
+				want: testbin.Output{Tests: []string{"TestA"}, Leaves: []string{"TestA"}, Complete: true},
+			},
+			{
+				name: "reports the end of the tests that the last framed FAIL line states",
+				give: "\x16=== RUN   TestA\n\x16--- FAIL: TestA (0.00s)\n\x16FAIL\n",
+				want: testbin.Output{
+					Failed: []string{"TestA"}, Tests: []string{"TestA"}, Leaves: []string{"TestA"}, Complete: true,
+					Tail: "--- FAIL: TestA (0.00s)\n",
+				},
+			},
+			{
+				name: "reports no end of the tests for a PASS line without the framing byte",
+				give: "\x16=== RUN   TestA\n\x16--- PASS: TestA (0.00s)\nPASS\n",
+				want: testbin.Output{Tests: []string{"TestA"}, Leaves: []string{"TestA"}, Tail: "PASS\n"},
 			},
 		}
 		for _, tt := range tests {

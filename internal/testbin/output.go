@@ -32,6 +32,10 @@ var (
 	failLine  = []byte("--- FAIL: ")
 	passLine  = []byte("--- PASS: ")
 	skipLine  = []byte("--- SKIP: ")
+	// The lines that end the output of a run whose tests ended: the testing
+	// package writes one of them when M.Run returns.
+	passEnd = []byte("PASS")
+	failEnd = []byte("FAIL")
 	// timedOut starts the line of the panic that the testing package's alarm
 	// raises.
 	timedOut = []byte("panic: test timed out after ")
@@ -44,7 +48,10 @@ type Output struct {
 	// out the lines that state that a test started, paused, continued,
 	// passed or was skipped.
 	Tail string
-	// Failed lists the tests that a FAIL line names, in output order.
+	// Failed lists the tests that a FAIL line names, in output order, except
+	// a test whose subtest a FAIL line names. The testing package fails a
+	// test when one of its subtests fails, so that failure states nothing of
+	// its own.
 	Failed []string
 	// Running lists the tests that ran code when the run ended, in the order
 	// in which they started. A test that started and did not end runs code
@@ -58,8 +65,16 @@ type Output struct {
 	// Tests lists the top-level tests that started, in the order in which
 	// they started.
 	Tests []string
+	// Leaves lists the tests that started and started no other test, in the
+	// order in which they started: each subtest without subtests of its own,
+	// and each top-level test without subtests.
+	Leaves []string
 	// TimedOut reports whether the testing package's alarm ended the run.
 	TimedOut bool
+	// Complete reports whether the testing package stated the end of the
+	// tests with the framed line PASS or FAIL. A binary that a panic, the
+	// alarm or os.Exit ended states neither.
+	Complete bool
 }
 
 // test is the state of one test that an output states.
@@ -72,6 +87,9 @@ type test struct {
 	// parent reports a test with a subtest in progress, and waits one with
 	// a subtest in progress that did not pause.
 	parent, waits bool
+	// branch reports a test that started another test, and broken one whose
+	// subtest a FAIL line names.
+	branch, broken bool
 }
 
 // scanner is the state of one Scan.
@@ -94,10 +112,10 @@ type scanner struct {
 //
 // Scan allocates its reader, the buffers of the line and of the tail, which
 // stop growing at 4 KiB and 128 KiB, the name of each test that the output
-// names, the growth of its lists of tests, and the text of the tail. It
-// allocates nothing for a line beyond those, so its count grows with the
-// number of tests and not with the number of lines: 49 allocations for an
-// output of 20 passing tests that each write one line.
+// names, the growth of its lists of tests, the list of the leaf tests, and
+// the text of the tail. It allocates nothing for a line beyond those, so its
+// count grows with the number of tests and not with the number of lines: 50
+// allocations for an output of 20 passing tests that each write one line.
 func Scan(r io.Reader, failed func()) Output {
 	var out Output
 	var line, tail []byte
@@ -112,6 +130,8 @@ func Scan(r io.Reader, failed func()) Output {
 			case !framed:
 				out.TimedOut = out.TimedOut || bytes.HasPrefix(line, timedOut)
 				tail = keep(tail, line)
+			case bytes.Equal(progress, passEnd), bytes.Equal(progress, failEnd):
+				out.Complete = true
 			case bytes.HasPrefix(progress, runLine):
 				t := s.lookup(bytes.TrimSpace(progress[len(runLine):]))
 				if !s.tests[t].started {
@@ -119,6 +139,7 @@ func Scan(r io.Reader, failed func()) Output {
 					if strings.IndexByte(s.tests[t].name, '/') < 0 {
 						out.Tests = append(out.Tests, s.tests[t].name)
 					}
+					s.up(s.tests[t].name, func(a *test) { a.branch = true })
 				}
 			case bytes.HasPrefix(progress, pauseLine):
 				s.tests[s.lookup(bytes.TrimSpace(progress[len(pauseLine):]))].paused = true
@@ -143,6 +164,11 @@ func Scan(r io.Reader, failed func()) Output {
 		}
 	}
 	out.Running = s.running()
+	for _, name := range out.Failed {
+		s.up(name, func(a *test) { a.broken = true })
+	}
+	out.Failed = slices.DeleteFunc(out.Failed, func(name string) bool { return s.tests[s.index[name]].broken })
+	out.Leaves = s.leaves()
 	if len(tail) > maxTail {
 		tail = tail[len(tail)-maxTail:]
 	}
@@ -161,22 +187,31 @@ func (s *scanner) lookup(name []byte) int {
 	return len(s.tests) - 1
 }
 
+// up calls visit with each test that the output named and that started the
+// test name, the nearest first. A subtest's name is its parent's, a slash
+// and its own, so each prefix of a name before a slash names an ancestor of
+// the subtest.
+func (s *scanner) up(name string, visit func(*test)) {
+	for i := strings.LastIndexByte(name, '/'); i > 0; i = strings.LastIndexByte(name[:i], '/') {
+		if a, ok := s.index[name[:i]]; ok {
+			visit(&s.tests[a])
+		}
+	}
+}
+
 // running returns the tests that started, in their order, that ran code
-// when the output ended, as Output.Running states them. A subtest's name is
-// its parent's, a slash and its own, so each prefix of a name before a slash
-// names an ancestor of the subtest. An ancestor of a subtest in progress is
-// a parent, and an ancestor of a subtest that runs waits for it.
+// when the output ended, as Output.Running states them. An ancestor of a
+// subtest in progress is a parent, and an ancestor of a subtest that runs
+// waits for it.
 func (s *scanner) running() []string {
 	for _, t := range s.tests {
 		if !t.started || t.ended {
 			continue
 		}
-		for i := strings.LastIndexByte(t.name, '/'); i > 0; i = strings.LastIndexByte(t.name[:i], '/') {
-			if a, ok := s.index[t.name[:i]]; ok {
-				s.tests[a].parent = true
-				s.tests[a].waits = s.tests[a].waits || !t.paused
-			}
-		}
+		s.up(t.name, func(a *test) {
+			a.parent = true
+			a.waits = a.waits || !t.paused
+		})
 	}
 	var runs, parentsOfPaused []string
 	for _, t := range s.tests {
@@ -192,6 +227,18 @@ func (s *scanner) running() []string {
 		return parentsOfPaused
 	}
 	return runs
+}
+
+// leaves returns the tests that started and started no other test, in the
+// order in which the output named them, as Output.Leaves states them.
+func (s *scanner) leaves() []string {
+	leaves := make([]string, 0, len(s.tests))
+	for _, t := range s.tests {
+		if t.started && !t.branch {
+			leaves = append(leaves, t.name)
+		}
+	}
+	return leaves
 }
 
 // ended returns the name of the test that a line --- STATUS: name (time)
