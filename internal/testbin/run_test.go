@@ -197,6 +197,17 @@ func TestRun(t *testing.T) {
 			expect.Empty(t, entries, "Run removes the temporary directory")
 		})
 
+		t.Run("removes a temporary directory in which a test locked a directory", func(t *testing.T) {
+			t.Parallel()
+			work := t.TempDir()
+			res := testbin.Run(t.Context(), &testbin.Config{
+				Binary: binary(t), Dir: t.TempDir(), Work: work, Env: fakeEnv(locksAndHangs),
+				Timeout: 100 * time.Millisecond, Backup: shortBackup,
+			})
+			expect.Equal(t, res.Ended, testbin.Deadline, "the run ends at the deadline, before the test unlocks")
+			files.Equal(t, os.DirFS(work), files.Tree{}, "and Run removes the temporary directory with the locked one")
+		})
+
 		t.Run("runs the binary with PWD set to its directory", func(t *testing.T) {
 			t.Parallel()
 			// The workspace writes the directory before the link, which sorts

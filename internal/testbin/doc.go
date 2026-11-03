@@ -12,7 +12,8 @@
 // with it. [Scan] reads the output that the testing package writes under
 // -test.v=test2json: the tests that started, failed, were running and timed
 // out. [Flags], [Only] and [Setenv] build the flags and the environment of a
-// run.
+// run. [RemoveAll] removes a directory that a run's tests used, also below a
+// directory that a test locked.
 //
 // # Platforms
 //
@@ -25,7 +26,7 @@
 //
 // # Dependency position
 //
-// Imports bufio, bytes, context, io, os, os/exec, regexp, slices, strings,
-// sync and time from the standard library, and internal/memory and
-// internal/process from this module.
+// Imports bufio, bytes, context, fmt, io, io/fs, os, os/exec, regexp,
+// slices, strings, sync and time from the standard library, and
+// internal/memory and internal/process from this module.
 package testbin

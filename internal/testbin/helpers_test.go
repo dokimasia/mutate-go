@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -46,6 +47,10 @@ const (
 	// orphan starts a copy of itself that hangs and keeps its output open,
 	// writes the copy's process ID into the file of pidFileVar, and exits.
 	orphan = "orphan"
+	// locksAndHangs makes a directory with a file in its temporary
+	// directory, takes the owner's write bit from the directory, and waits a
+	// minute, as a test does that restores the bit in a cleanup.
+	locksAndHangs = "locks-and-hangs"
 )
 
 // The lines that the fake test binary writes.
@@ -124,12 +129,30 @@ func fake(mode string) int {
 		if os.WriteFile(os.Getenv(pidFileVar), pid, fileMode) != nil {
 			return 1
 		}
+	case locksAndHangs:
+		locked := filepath.Join(os.TempDir(), "locked")
+		err := os.Mkdir(locked, dirMode)
+		if err == nil {
+			err = os.WriteFile(filepath.Join(locked, "file"), nil, fileMode)
+		}
+		if err == nil {
+			err = os.Chmod(locked, lockedMode)
+		}
+		if err != nil {
+			return 1
+		}
+		time.Sleep(time.Minute)
 	}
 	return 0
 }
 
-// fileMode is the mode of the files that the tests write.
-const fileMode = 0o644
+// The modes of the files and the directories that the tests write, and of
+// a directory without the owner's write bit.
+const (
+	fileMode   = 0o644
+	dirMode    = 0o755
+	lockedMode = 0o555
+)
 
 // binary returns the path of the test binary, which TestMain makes the fake
 // test binary.

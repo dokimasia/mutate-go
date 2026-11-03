@@ -113,7 +113,9 @@ type Result struct {
 
 // Run runs the test binary that cfg states, in a process group of its own,
 // with a temporary directory of its own under cfg.Work that TMPDIR, TMP and
-// TEMP name and that Run removes afterwards. It ends the process group
+// TEMP name. Run removes that directory afterwards as RemoveAll does, also
+// below a directory that a test locked and did not unlock because the run
+// ended before its cleanup. It ends the process group
 // cfg.Backup after cfg.Timeout, when the resident memory of the group's
 // processes together crosses cfg.Ceiling where that is positive, when ctx
 // is done, and under cfg.StopAtFailure at the first failed test. Run reads
@@ -143,7 +145,9 @@ func Run(ctx context.Context, cfg *Config) *Result {
 	var g *process.Group
 	tmp, err := os.MkdirTemp(cfg.Work, tmpPattern)
 	if err == nil {
-		defer os.RemoveAll(tmp)
+		// What the removal leaves remains below cfg.Work, whose owner removes
+		// it with RemoveAll and reports what remains then.
+		defer func() { _ = RemoveAll(tmp) }()
 		cmd.Env = Setenv(cfg.Env, tmpdirVar+"="+tmp, tmpVar+"="+tmp, tempVar+"="+tmp, pwdVar+"="+cfg.Dir)
 		g, err = process.Start(cmd, writer, writer)
 	}
