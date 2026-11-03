@@ -45,8 +45,8 @@ var tempVars = []string{"TMPDIR", "TMP", "TEMP"}
 const (
 	// failVar makes TestAdd fail.
 	failVar = "FIXTURE_FAIL"
-	// slowVar makes TestAdd sleep half a second in a run with a trace, which
-	// raises the deadline of a mutant's run above 7 seconds.
+	// slowVar makes TestAdd sleep 2 seconds in a run with a trace, which
+	// raises the deadline of a mutant's run above 22 seconds.
 	slowVar = "FIXTURE_SLOW"
 	// expectedProcsVar is the GOMAXPROCS that TestAdd expects.
 	expectedProcsVar = "FIXTURE_PROCS"
@@ -110,7 +110,7 @@ func TestAdd(t *testing.T) {
 		t.Fatal("the fixture fails")
 	}
 	if os.Getenv(%[2]q) != "" && os.Getenv(%[3]q) != "" {
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(2 * time.Second)
 	}
 	if want := os.Getenv(%[4]q); want != "" && os.Getenv(%[5]q) != want {
 		t.Fatal("GOMAXPROCS is " + os.Getenv(%[5]q))
@@ -409,11 +409,13 @@ func TestMutateEnv(t *testing.T) {
 		})
 
 		t.Run("passes the test's deadline to the run", func(t *testing.T) {
-			// The opening control run sleeps half a second, so a mutant's
-			// deadline is above 7 seconds, and less than 10 are left.
+			// The opening control run sleeps 2 seconds, so the deadlines of a
+			// mutant's run and of the closing control run are above 44 seconds
+			// together, and less than 40 are left. The opening control run gets
+			// half of the time that the build of the test binary leaves.
 			enter(t)
 			t.Setenv(slowVar, "1")
-			s := &seat{TB: t, deadline: time.Now().Add(10 * time.Second)}
+			s := &seat{TB: t, deadline: time.Now().Add(40 * time.Second)}
 			mutate.Check(s)
 			lines := failures(t, s)
 			assert.Length(
