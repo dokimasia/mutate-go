@@ -66,6 +66,13 @@ type Record struct { //nolint:govet // the order of the fields is the order of t
 	// for a run that selects every line, and empty for a run that selects
 	// no line of the package.
 	Selection []Range `json:"selection"`
+	// Killers states which tests the tests of a killed mutant name: the
+	// first test that failed, or every test that failed. Coverage states
+	// which tests the run traced alone: the top-level tests, or the leaf
+	// tests. A record that leaves them out is a record of the first killer
+	// and of the top-level tests.
+	Killers  spec.Killers  `json:"killers,omitempty"`
+	Coverage spec.Coverage `json:"coverage,omitempty"`
 	// Limits lists the limits of each test binary of the suite, in the order
 	// of a mutant's run. It is empty when no opening control run passed.
 	Limits  []Limits `json:"limits"`
@@ -184,14 +191,16 @@ type Position struct {
 }
 
 // Mutant is one mutant and its verdict. Tests and Seconds are present for a
-// mutant that ran. CoveredBy lists the tests whose run alone executed the
-// mutant's site, and is nil where no test did, or where a test binary that
-// executed the site did not run each of its tests alone. Confirmed is true
-// for a mutant whose Verdict, Tests and Seconds come from the run of its
-// ordinary build: a survivor of its run, or a mutant without coverage.
-// ObservedAt is the StartedAt of the run that observed the verdict, one of
-// the record's observations, and empty for a verdict that the run decided
-// without a mutant run.
+// mutant that ran. AllKillers is true for a killed mutant whose Tests lists
+// every test that failed in a run that ran each of its tests to the end.
+// CoveredBy lists the tests whose run alone executed the mutant's site, and
+// is nil where no test did, or where a test binary that executed the site
+// did not run each of its tests alone. Confirmed is true for a mutant whose
+// Verdict, Tests and Seconds come from the run of its ordinary build: a
+// survivor of its run, or a mutant without coverage. ObservedAt is the
+// StartedAt of the run that observed the verdict, one of the record's
+// observations, and empty for a verdict that the run decided without a
+// mutant run.
 type Mutant struct { //nolint:govet // the order of the fields is the order of the JSON keys of a record
 	Key         string       `json:"key"`
 	Kind        spec.Kind    `json:"kind"`
@@ -203,6 +212,7 @@ type Mutant struct { //nolint:govet // the order of the fields is the order of t
 	Replacement string       `json:"replacement"`
 	Verdict     spec.Verdict `json:"verdict"`
 	Tests       []string     `json:"tests,omitempty"`
+	AllKillers  bool         `json:"allKillers,omitempty"`
 	CoveredBy   []string     `json:"coveredBy,omitempty"`
 	Seconds     *float64     `json:"seconds,omitempty"`
 	Confirmed   bool         `json:"confirmed,omitempty"`

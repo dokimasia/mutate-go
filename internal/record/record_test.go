@@ -79,6 +79,8 @@ func full() *record.Record {
 		},
 		Suite:     []string{"github.com/google/btree/conformance"},
 		Selection: []record.Range{{File: "btree.go", First: 3, Last: 9}},
+		Killers:   spec.KillersAll,
+		Coverage:  spec.CoverageLeaves,
 		Limits: []record.Limits{
 			{Target: "github.com/google/btree", DeadlineSeconds: 4, MemoryCeilingBytes: &ceiling},
 			{Target: "github.com/google/btree/conformance", DeadlineSeconds: 6, MemoryCeilingBytes: &ceiling},
@@ -93,8 +95,9 @@ func full() *record.Record {
 			Key: "3f9a0c71d2b4e816", Kind: spec.LCRFalse, File: "btree.go", Scope: "items.find",
 			Start: record.Position{Line: 218, Column: 5}, End: record.Position{Line: 218, Column: 33},
 			Original: "i > 0 && !less(s[i-1], item)", Replacement: "false", Verdict: spec.Killed,
-			Tests: []string{"TestBTreeG"}, CoveredBy: []string{"TestBTreeG", "TestDescendRangeG"},
-			Seconds: &seconds, Confirmed: true, ObservedAt: "2026-10-01T21:12:51Z",
+			Tests: []string{"TestBTreeG/Get", "TestBTreeG/Has"}, AllKillers: true,
+			CoveredBy: []string{"TestBTreeG/Get", "TestBTreeG/Has", "TestDescendRangeG"},
+			Seconds:   &seconds, Confirmed: true, ObservedAt: "2026-10-01T21:12:51Z",
 		}, {
 			Key: "0123456789abcdef", Kind: spec.SBRDelete, File: "btree.go", Scope: "items.find",
 			Start: record.Position{Line: 3, Column: 2}, End: record.Position{Line: 3, Column: 9},
@@ -430,6 +433,7 @@ func TestRecord(t *testing.T) {
 			r.Limits = []record.Limits{{Target: r.Target.Name, DeadlineSeconds: 4}}
 			r.Control.Opening.PeakBytes, r.Selection, r.Control.Closing = nil, nil, nil
 			r.Suite, r.Control.Ordinary, r.Mutants[0].Confirmed = nil, nil, false
+			r.Killers, r.Coverage, r.Mutants[0].AllKillers = "", "", false
 			path, err := r.Write(t.TempDir())
 			assert.NoError(t, err, "the record writes")
 			data := string(read(t, path))
@@ -440,7 +444,7 @@ func TestRecord(t *testing.T) {
 			} {
 				assert.Contains(t, data, want, "the record states the measure as null")
 			}
-			for _, absent := range []string{`"closing"`, `"ordinary"`, `"confirmed"`} {
+			for _, absent := range []string{`"closing"`, `"ordinary"`, `"confirmed"`, `"killers"`, `"coverage"`, `"allKillers"`} {
 				assert.NotContains(t, data, absent, "the record leaves out what the run did not have")
 			}
 		})
