@@ -8,11 +8,6 @@ import (
 	"strconv"
 )
 
-// TraceVar is the variable of the environment that names the trace file of
-// a run of the instrumented test binary. The binary appends to the file,
-// and traces nothing when the variable is unset or empty.
-const TraceVar = "DOKIMI_MUTATE_TRACE"
-
 // traceStart is the line that the instrumented package writes into the
 // trace when it initializes, before any site executes.
 const traceStart = "start"

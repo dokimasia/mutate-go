@@ -19,6 +19,7 @@ import (
 
 	"go.dokimi.dev/mutate/internal/enumerate"
 	"go.dokimi.dev/mutate/internal/load"
+	"go.dokimi.dev/mutate/internal/spec"
 )
 
 // generics is the minor version of Go 1.18, the first release with the
@@ -74,14 +75,14 @@ type Program struct {
 	Sites []*enumerate.Site
 }
 
-// Render instruments every site of r that has a runnable mutant. The
-// instrumented package reads the active mutant's ordinal from the variable
-// of the environment that variable names, the protocol's variable, when it
-// initializes, and writes its trace to the file that TraceVar names. Each
-// name that it adds starts with the first of _mutate, _mutate1, _mutate2
-// and so on with which no identifier of the package's files or of its test
-// files starts, so no declaration of the package or of its tests hides one
-// or takes its place.
+// Render instruments every site of r that has a runnable mutant. When it
+// initializes, the instrumented package reads the active mutant's ordinal
+// from the environment variable that protocol.Variable names. It writes its
+// trace to the file that the variable protocol.Trace names. Each name that
+// it adds starts with the first of _mutate, _mutate1, _mutate2 and so on
+// with which no identifier of the package's files or of its test files
+// starts, so no declaration of the package or of its tests hides one or
+// takes its place.
 //
 // Render type-checks the instrumented package. When the type checker
 // rejects a site's form, Render marks each runnable mutant of the site
@@ -93,7 +94,7 @@ type Program struct {
 // Render returns an error when the type checker rejects the instrumented
 // package outside every form, and when the package directory or one of its
 // test files does not read.
-func Render(p *load.Package, r *enumerate.Result, variable string) (*Program, error) {
+func Render(p *load.Package, r *enumerate.Result, protocol *spec.Protocol) (*Program, error) {
 	name, err := helperName(p.Dir)
 	if err != nil {
 		return nil, err
@@ -104,7 +105,7 @@ func Render(p *load.Package, r *enumerate.Result, variable string) (*Program, er
 	}
 	lift := p.Language > 0 && p.Language < generics
 	for {
-		prog, spans := build(p, r, filepath.Join(p.Dir, name), variable, prefix, lift)
+		prog, spans := build(p, r, filepath.Join(p.Dir, name), protocol, prefix, lift)
 		problems := check(p, prog, lift)
 		if len(problems) == 0 {
 			return prog, nil
@@ -150,13 +151,15 @@ func helperName(dir string) (string, error) {
 }
 
 // build instruments the sites of r that have a runnable mutant, with the
-// helper file at helperPath, which reads the protocol's variable that
-// variable names, and each name of the instrumentation starting with
-// prefix. It returns the program and the ranges of its forms by file path.
+// helper file at helperPath, which reads the variables of protocol, and each
+// name of the instrumentation starting with prefix. It returns the program
+// and the ranges of its forms by file path.
 func build(
 	p *load.Package,
 	r *enumerate.Result,
-	helperPath, variable, prefix string,
+	helperPath string,
+	protocol *spec.Protocol,
+	prefix string,
 	lift bool,
 ) (*Program, map[string][]span) {
 	prog := &Program{Files: map[string][]byte{}, Ordinals: map[*enumerate.Mutant]int{}, Prefix: prefix}
@@ -179,7 +182,7 @@ func build(
 	for f, sites := range byFile {
 		prog.Files[f.Path], spans[f.Path] = renderFile(p.Fset, f, sites, first, prefix, lift)
 	}
-	prog.Files[helperPath], spans[helperPath] = helper(p.Name, variable, prog.Sites, first, ordinal, prefix, lift)
+	prog.Files[helperPath], spans[helperPath] = helper(p.Name, protocol, prog.Sites, first, ordinal, prefix, lift)
 	return prog, spans
 }
 

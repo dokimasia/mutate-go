@@ -152,7 +152,7 @@ func TestRender(t *testing.T) {
 			t.Parallel()
 			p, r := fixture(t, map[string]string{"f.go": "package fixture\n\nfunc F(a int) int { return a + 1 }\n"})
 			p.Name = "other"
-			_, err := render.Render(p, r, mutantVar)
+			_, err := render.Render(p, r, &protocol)
 			assert.HasError(t, err, "a helper file of another package does not type-check")
 			assert.HasPrefix(t, err.Error(), "render: the type checker rejects the instrumented package: ",
 				"the error names the rejection")
@@ -162,7 +162,7 @@ func TestRender(t *testing.T) {
 			t.Parallel()
 			p, r := fixture(t, map[string]string{"f.go": "package fixture\n\nfunc F(a int) int { return a + 1 }\n"})
 			p.Dir = filepath.Join(p.Dir, "f.go")
-			_, err := render.Render(p, r, mutantVar)
+			_, err := render.Render(p, r, &protocol)
 			assert.HasError(t, err, "a file in place of the directory fails")
 			assert.HasPrefix(t, err.Error(), "render: ", "the error starts with the package's name")
 		})

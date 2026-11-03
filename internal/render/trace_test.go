@@ -35,7 +35,7 @@ func TestTrace(t *testing.T) {
 			})
 			_, bin := build(t, p, r)
 			trace := filepath.Join(t.TempDir(), "trace")
-			run(t, bin, p.Dir, active(0), render.TraceVar+"="+trace)
+			run(t, bin, p.Dir, active(0), traceVar+"="+trace)
 			data, err := os.ReadFile(trace)
 			assert.NoError(t, err, "the binary writes the trace")
 			assert.Equal(t, string(data), startLine+"1\n2\n", "the trace states the start and each site of Used once")

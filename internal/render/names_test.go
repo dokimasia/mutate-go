@@ -88,7 +88,7 @@ func TestNames(t *testing.T) {
 			p, r := fixture(t, used)
 			// A link to no file is the test file.
 			files.Write(t, p.Dir, files.Tree{"broken_test.go": files.Link(missing)})
-			_, err := render.Render(p, r, mutantVar)
+			_, err := render.Render(p, r, &protocol)
 			assert.HasError(t, err, "Render fails")
 			assert.HasPrefix(t, err.Error(), "render: ", "the error starts with the package's name")
 		})
@@ -97,7 +97,7 @@ func TestNames(t *testing.T) {
 			t.Parallel()
 			p, r := fixture(t, used)
 			p.Dir = filepath.Join(p.Dir, missing)
-			_, err := render.Render(p, r, mutantVar)
+			_, err := render.Render(p, r, &protocol)
 			assert.HasError(t, err, "Render fails")
 			assert.HasPrefix(t, err.Error(), "render: ", "the error starts with the package's name")
 		})

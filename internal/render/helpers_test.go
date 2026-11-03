@@ -31,8 +31,15 @@ const (
 	module = "module fixture\n\ngo 1.21\n"
 )
 
-// mutantVar is the protocol's variable, which states the active mutant.
-var mutantVar = spec.Load().Protocol.Variable
+// protocol is the run protocol. Its variable states the active mutant, and
+// its trace variable names the trace file.
+var protocol = spec.Load().Protocol
+
+// The variables of the protocol that the tests set.
+var (
+	mutantVar = protocol.Variable
+	traceVar  = protocol.Trace
+)
 
 // prefix starts each name of the instrumentation in a package that has no
 // identifier that starts with it.
@@ -561,11 +568,11 @@ func fixture(t *testing.T, texts map[string]string) (*load.Package, *enumerate.R
 	return p, enumerate.Enumerate(p, &d, enumerate.Options{})
 }
 
-// instrument renders the package with the protocol's variable, and stops
+// instrument renders the package with the protocol's variables, and stops
 // the test when Render fails.
 func instrument(t *testing.T, p *load.Package, r *enumerate.Result) *render.Program {
 	t.Helper()
-	prog, err := render.Render(p, r, mutantVar)
+	prog, err := render.Render(p, r, &protocol)
 	assert.NoError(t, err, "the package renders")
 	return prog
 }

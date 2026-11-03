@@ -118,14 +118,15 @@ type _mutateOrdered interface {
 func Imports() []string { return []string{"os", "strconv", "sync/atomic"} }
 
 // helper returns the helper file of the package named name: the shared
-// declarations of helperHead, which read the active mutant's ordinal from
-// the variable variable, and the generic function of each site of sites
-// that calls one. It returns the range of each site's function too. first
-// maps each site to its first ordinal, and ordinals counts every ordinal of
-// the program. Each name of the instrumentation starts with prefix. When
-// lift is true, the file requires go1.18.
+// declarations of helperHead, which read the active mutant's ordinal and the
+// trace's path from the variables of protocol, and the generic function of
+// each site of sites that calls one. It returns the range of each site's
+// function too. first maps each site to its first ordinal, and ordinals
+// counts every ordinal of the program. Each name of the instrumentation
+// starts with prefix. When lift is true, the file requires go1.18.
 func helper(
-	name, variable string,
+	name string,
+	protocol *spec.Protocol,
 	sites []*enumerate.Site,
 	first map[*enumerate.Site]int,
 	ordinals int,
@@ -137,7 +138,8 @@ func helper(
 	if lift {
 		constraint = fmt.Sprintf(buildConstraint, generics) + "\n"
 	}
-	fmt.Fprintf(&b, named(prefix, helperHead), constraint, name, variable, TraceVar, traceStart+"\n", ordinals+1)
+	fmt.Fprintf(&b, named(prefix, helperHead), constraint, name, protocol.Variable, protocol.Trace,
+		traceStart+"\n", ordinals+1)
 	spans := make([]span, 0, len(sites))
 	// site contains the functions of one site. They contain no code of the
 	// package, so named renames the names of the instrumentation in the

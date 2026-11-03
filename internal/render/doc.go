@@ -35,11 +35,14 @@
 //
 // # Trace
 //
-// When the variable [TraceVar] names a file, the instrumented package
+// When the protocol's trace variable names a file, the instrumented package
 // appends the line start to it when it initializes, and the first ordinal
-// of each site, one line each, the first time that the site executes.
-// [ParseTrace] reads that file, so the writer and the reader of the format
-// are in this package.
+// of each site, one line each, the first time that the site executes. It
+// traces nothing when the variable is unset or empty. Each process of the
+// instrumented package opens the file for appending, so a child process
+// that inherits the variable appends to the same trace. [ParseTrace] reads
+// that file, so the writer and the reader of the format are in this
+// package.
 //
 // # Dependency position
 //
