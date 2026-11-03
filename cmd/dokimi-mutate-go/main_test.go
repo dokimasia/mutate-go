@@ -31,6 +31,34 @@ import (
 	"go.dokimi.dev/mutate/internal/memory"
 	"go.dokimi.dev/mutate/internal/record"
 	"go.dokimi.dev/mutate/internal/selection"
+	"go.dokimi.dev/mutate/internal/spec"
+)
+
+// lockTestFile is the name of the file of locker.
+const lockTestFile = "lock_test.go"
+
+// locker is a test of the package fixture that takes the owner's write bit
+// from the temporary directory of the engine: the parent of the run's work
+// directory, which contains the temporary directory of the test's run.
+var locker = fmt.Sprintf(`package fixture
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestLock(t *testing.T) {
+	if err := os.Chmod(filepath.Dir(filepath.Dir(os.TempDir())), %#o); err != nil {
+		t.Fatal(err)
+	}
+}
+`, readOnlyMode)
+
+// The modes of a directory: without the owner's write bit, and with it.
+const (
+	readOnlyMode = 0o555
+	writableMode = 0o755
 )
 
 // generatedFile is a generated file of the package fixture, and
@@ -233,8 +261,8 @@ func TestCLI(t *testing.T) {
 				flagPrefix+flagSample, "5", flagPrefix+flagIncludeGenerated, flagPrefix+flagSkip, "./kit",
 				flagPrefix+flagSuite, "./conformance", flagPrefix+flagConfirm, "-C", "dir", "-p", "2",
 				flagPrefix+flagWorkers, "3", flagPrefix+flagTimeout, "30m", flagPrefix+flagBudget, "16G",
-				flagPrefix+flagJSON, flagPrefix+flagRecord, "out", flagPrefix+flagHistory, "history", "./wire",
-				"./codec",
+				flagPrefix+flagJSON, flagPrefix+flagRecord, "out", flagPrefix+flagHistory, "history",
+				flagPrefix+flagAllKillers, flagPrefix+flagSubtests, "./wire", "./codec",
 			)
 			assert.Equal(t, got, &options{
 				MemoryBudget: &budget,
@@ -255,6 +283,8 @@ func TestCLI(t *testing.T) {
 				Timeout:          30 * time.Minute,
 				IncludeGenerated: true,
 				Confirm:          true,
+				AllKillers:       true,
+				Subtests:         true,
 				JSON:             true,
 			}, "the options state the value of each flag")
 		})
@@ -660,6 +690,33 @@ func TestCLIEnv(t *testing.T) {
 			assert.Equal(t, res.Stdout, addKilled+"fixture/sub: 6 of 6 mutants detected (100%): 6 killed\n",
 				"the package of 2 mutants runs before the package of 6")
 			assert.Equal(t, res.Stderr, "", "the runs write nothing to stderr")
+		})
+
+		t.Run("states the modes of --all-killers and --subtests in the record", func(t *testing.T) {
+			enter(t, addFiles)
+			res := call(t, flagPrefix+flagJSON, flagPrefix+flagAllKillers, flagPrefix+flagSubtests)
+			assert.Equal(t, res.Status, exitDetected, "the run passes")
+			var rec record.Record
+			assert.NoError(t, json.Unmarshal([]byte(res.Stdout), &rec), "the line is a record")
+			expect.Equal(t, rec.Killers, spec.KillersAll, "the record states that a kill names every killer")
+			expect.Equal(t, rec.Coverage, spec.CoverageLeaves, "and that the run traces the leaf tests")
+		})
+
+		t.Run("notes the work directory that a run cannot remove", func(t *testing.T) {
+			if runtime.GOOS == "windows" {
+				t.Skip("Windows does not honour the permission bits of a directory")
+			}
+			enter(t, map[string]string{addFile: add, addTestFile: addTest, lockTestFile: locker})
+			base := t.TempDir()
+			t.Cleanup(func() { _ = os.Chmod(base, writableMode) })
+			for _, variable := range tempVars {
+				t.Setenv(variable, base)
+			}
+			res := call(t)
+			assert.Equal(t, res.Status, exitDetected, "a work directory that remains does not fail the run")
+			assert.Equal(t, res.Stdout, addKilled, "the summary states the run")
+			assert.HasPrefix(t, res.Stderr, name+": "+fixture+": the run left its work directory "+
+				filepath.Join(base, "mutate-"), "the note names the work directory in the locked directory")
 		})
 
 		t.Run("writes each package's record as one line of JSON under --json", func(t *testing.T) {

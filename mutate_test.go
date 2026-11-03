@@ -18,11 +18,12 @@ import (
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/expect"
 	"go.dokimi.dev/assert/files"
 
 	"go.dokimi.dev/mutate"
 	"go.dokimi.dev/mutate/internal/record"
-	"go.dokimi.dev/mutate/internal/render"
+	"go.dokimi.dev/mutate/internal/run"
 	"go.dokimi.dev/mutate/internal/selection"
 	"go.dokimi.dev/mutate/internal/spec"
 	"go.dokimi.dev/mutate/internal/testbin"
@@ -125,7 +126,31 @@ func TestSub(t *testing.T) {
 	}
 	Sub(1, 1)
 }
-`, failVar, slowVar, render.TraceVar, expectedProcsVar, procsVar, ordinaryVar, spec.Load().Protocol.Instrumented)
+`, failVar, slowVar, spec.Load().Protocol.Trace, expectedProcsVar, procsVar, ordinaryVar, spec.Load().Protocol.Instrumented)
+
+// locker is a test of the fixture that takes the owner's write bit from the
+// temporary directory of the engine: the parent of the run's work
+// directory, which contains the temporary directory of the test's run.
+var locker = fmt.Sprintf(`package fixture
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestLock(t *testing.T) {
+	if err := os.Chmod(filepath.Dir(filepath.Dir(os.TempDir())), %#o); err != nil {
+		t.Fatal(err)
+	}
+}
+`, readOnlyMode)
+
+// The modes of a directory: without the owner's write bit, and with it.
+const (
+	readOnlyMode = 0o555
+	writableMode = 0o755
+)
 
 // The lines of Check for arith under arithTest: the survivors of Sub, and
 // the mutants of Unused, which no test covers.
@@ -341,6 +366,38 @@ func TestMutateEnv(t *testing.T) {
 			}), "the generated file's mutants are the package's own")
 			assert.Equal(t, s.logs, []string{"mutate: fixture: 2 of 8 mutants detected (25%): 2 killed, 2 survived, " +
 				"4 not covered, 1 generated file with 2 mutants included"}, "the summary states the included file")
+		})
+
+		t.Run("states every killer and the leaf tests in the record under AllKillers and Subtests", func(t *testing.T) {
+			enter(t)
+			records := t.TempDir()
+			t.Setenv(recordDirVar, records)
+			s := &seat{TB: t}
+			mutate.Check(s, mutate.AllKillers(), mutate.Subtests())
+			protocol := spec.Load().Protocol
+			rec, err := record.Read(records, fixture, &protocol, run.Engine)
+			assert.NoError(t, err, "Check writes the record")
+			expect.Equal(t, rec.Killers, spec.KillersAll, "the record states that a kill names every killer")
+			expect.Equal(t, rec.Coverage, spec.CoverageLeaves, "and that the run traces the leaf tests")
+		})
+
+		t.Run("logs the work directory that the run cannot remove", func(t *testing.T) {
+			if runtime.GOOS == "windows" {
+				t.Skip("Windows does not honour the permission bits of a directory")
+			}
+			dir := enter(t)
+			files.Write(t, dir, files.Tree{"lock_test.go": files.Text(locker)})
+			base := t.TempDir()
+			t.Cleanup(func() { _ = os.Chmod(base, writableMode) })
+			for _, variable := range tempVars {
+				t.Setenv(variable, base)
+			}
+			s := &seat{TB: t}
+			mutate.Check(s)
+			assert.Equal(t, failures(t, s), slices.Concat(survivors, uncovered), "the run reports its mutants")
+			assert.Length(t, s.logs, 2, "Check logs the work directory and the summary")
+			assert.HasPrefix(t, s.logs[0], "mutate: the run left its work directory "+filepath.Join(base, "mutate-"),
+				"the first line names the work directory in the locked directory")
 		})
 
 		t.Run("restricts the run to the lines of the selection's variable", func(t *testing.T) {

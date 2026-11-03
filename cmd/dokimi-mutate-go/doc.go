@@ -61,6 +61,14 @@
 //	instrumented build, such as allocation checks, then run against it. Each
 //	such mutant costs one more build.
 //
+//	--all-killers runs the tests of each killed mutant to their end, so the
+//	record names every test that fails, and not only the first. A kill whose
+//	runs ended on their own states allKillers in the record. --subtests traces
+//	each subtest alone, and each top-level test without subtests, so the
+//	record's coveredBy names the subtests that execute each mutant's site. The
+//	first costs the time of every test of a kill, and the second one run of the
+//	tests per subtest.
+//
 //	--parallel above 1 counts the mutants of each package first, starts the
 //	packages with the most mutants first, and gives each a share of the
 //	command's GOMAXPROCS threads in proportion to its mutants. --workers tests
@@ -107,6 +115,12 @@
 //	is 1 in every run of the instrumented build. Skip an allocation or timing
 //	assertion while DOKIMI_MUTATE_INSTRUMENTED is set, and use --confirm.
 //
+//	Each variable of a run starts with DOKIMI_MUTATE_, and DOKIMI_MUTATE_TRACE
+//	names the file of the run's trace. A process that a test starts runs the
+//	active mutant, and traces the code that it executes, when it inherits every
+//	variable with that prefix. A program that sets the environment of its child,
+//	such as a sandbox, copies those variables into it.
+//
 //	Examples:
 //
 //	  dokimi-mutate-go ./...
@@ -118,6 +132,7 @@
 //	      PACKAGES  Patterns of the packages to test.  default "."
 //
 //	Options:
+//	      --all-killers         Name every test that kills a mutant, not only the first.                env DOKIMI_MUTATE_GO_ALL_KILLERS
 //	      --confirm             Test each undetected mutant once more in a normal build.                env DOKIMI_MUTATE_GO_CONFIRM
 //	      --diff file           Unified diff of the lines to test, or - for standard input.             env DOKIMI_MUTATE_GO_DIFF
 //	  -C, --directory string    Directory to change to before the command resolves paths.               env DOKIMI_MUTATE_GO_DIRECTORY
@@ -133,6 +148,7 @@
 //	      --record string       Directory that receives the record of each package.                     env DOKIMI_MUTATE_GO_RECORD
 //	      --sample int          Number of mutants to test in each package, the first by key.            env DOKIMI_MUTATE_GO_SAMPLE
 //	      --skip string,...     Packages whose mutants the command does not test.                       env DOKIMI_MUTATE_GO_SKIP
+//	      --subtests            Name the subtests that cover a mutant, not only the top-level tests.    env DOKIMI_MUTATE_GO_SUBTESTS
 //	      --suite string,...    Packages whose tests also run against the mutants.                      env DOKIMI_MUTATE_GO_SUITE
 //	      --timeout duration    Time limit of the command, such as 30m.                                 env DOKIMI_MUTATE_GO_TIMEOUT
 //	      --version             Show the version.

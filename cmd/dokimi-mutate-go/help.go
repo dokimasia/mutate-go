@@ -34,7 +34,8 @@ const gibibyte = 1 << 30
 
 // helpText returns the help text of the command. The text states what the
 // command does and the mechanisms behind its options. It then shows the
-// output, the exit statuses, the variables that a test reads and examples.
+// output, the exit statuses, the variables that a test reads, the variables
+// that a child process of a test inherits, and examples.
 // The help lists the options after the text. note is a sentence on the
 // default memory budget of this process, which the text adds to its
 // paragraph on --memory-budget. The documentation passes the empty note, so
@@ -78,6 +79,11 @@ func helpText(note string) string {
 	paragraph(&b, confirm+" tests each mutant that survived or that no test covers once more, in a normal "+
 		"build that contains this mutant alone. Tests that skip in the instrumented build, such as allocation "+
 		"checks, then run against it. Each such mutant costs one more build.")
+	paragraph(&b, flagPrefix+flagAllKillers+" runs the tests of each killed mutant to their end, so the record "+
+		"names every test that fails, and not only the first. A kill whose runs ended on their own states "+
+		"allKillers in the record. "+flagPrefix+flagSubtests+" traces each subtest alone, and each top-level "+
+		"test without subtests, so the record's coveredBy names the subtests that execute each mutant's site. "+
+		"The first costs the time of every test of a kill, and the second one run of the tests per subtest.")
 	paragraph(&b, flagPrefix+flagParallel+" above 1 counts the mutants of each package first, starts the "+
 		"packages with the most mutants first, and gives each a share of the command's GOMAXPROCS threads in "+
 		"proportion to its mutants. "+workers+" tests up to n mutants of one package at once, on the share of "+
@@ -112,6 +118,10 @@ func helpText(note string) string {
 		"mutant's number in a mutant's run. %s is 1 in every run of the instrumented build. Skip an allocation "+
 		"or timing assertion while %[2]s is set, and use %s.",
 		definition.Protocol.Variable, definition.Protocol.Instrumented, confirm))
+	paragraph(&b, fmt.Sprintf("Each variable of a run starts with %s, and %s names the file of the run's "+
+		"trace. A process that a test starts runs the active mutant, and traces the code that it executes, when "+
+		"it inherits every variable with that prefix. A program that sets the environment of its child, such as "+
+		"a sandbox, copies those variables into it.", definition.Protocol.Prefix, definition.Protocol.Trace))
 	b.WriteString("Examples:\n\n" +
 		exampleIndent + name + " ./...\n" +
 		exampleIndent + "git diff origin/main...HEAD | " + name + " " + diff + " " + stdinPath + " ./...\n" +

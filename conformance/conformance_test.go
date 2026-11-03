@@ -5,6 +5,7 @@ package conformance_test
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -57,13 +58,16 @@ var newestEarlier = time.Date(2026, time.January, 9, 0, 0, 0, 0, time.UTC)
 const changedPrefix = "changed "
 
 // caseFile is a case's case.json: the mutants and the run errors of the
-// case in every language, the options of its run and its history.
+// case in every language, the options of its run and its history. Killers
+// and Coverage are empty for the protocol's first and tests.
 type caseFile struct {
 	History          *caseHistory     `json:"history"`
 	Case             string           `json:"case"`
 	Confirm          bool             `json:"confirm"`
 	IncludeGenerated bool             `json:"includeGenerated"`
 	Sample           int              `json:"sample"`
+	Killers          spec.Killers     `json:"killers"`
+	Coverage         spec.Coverage    `json:"coverage"`
 	Proves           string           `json:"proves"`
 	Fixture          string           `json:"fixture"`
 	Mutants          []caseMutant     `json:"mutants"`
@@ -82,16 +86,19 @@ type caseHistory struct {
 // every fixture. In a case with a history, Earlier is the mutant's verdict
 // in the history, empty for a mutant that the history lacks, Observed the
 // age of the run that observed it, and Reused whether the run reuses it.
+// AllKillers states that the record names every test that kills the
+// mutant.
 type caseMutant struct {
-	Scope     string       `json:"scope"`
-	Kind      spec.Kind    `json:"kind"`
-	Nth       int          `json:"nth"`
-	Verdict   spec.Verdict `json:"verdict"`
-	Earlier   spec.Verdict `json:"earlier"`
-	Observed  int          `json:"observed"`
-	Reused    bool         `json:"reused"`
-	Confirmed bool         `json:"confirmed"`
-	Languages []string     `json:"languages"`
+	Scope      string       `json:"scope"`
+	Kind       spec.Kind    `json:"kind"`
+	Nth        int          `json:"nth"`
+	Verdict    spec.Verdict `json:"verdict"`
+	Earlier    spec.Verdict `json:"earlier"`
+	Observed   int          `json:"observed"`
+	Reused     bool         `json:"reused"`
+	Confirmed  bool         `json:"confirmed"`
+	AllKillers bool         `json:"allKillers"`
+	Languages  []string     `json:"languages"`
 }
 
 // expectFile is a fixture's expect.json: what the record states beyond the
@@ -152,7 +159,8 @@ func (m mutantID) String() string { return fmt.Sprintf("%s %s %d", m.Scope, m.Ki
 
 // stated is what the corpus states of one mutant of a record: its key, its
 // position, its source and its replacement, its rule and its reason, its
-// verdict, and whether a confirmation run decided the verdict.
+// verdict, whether a confirmation run decided the verdict, and whether its
+// tests name every killer.
 type stated struct {
 	Key, File             string
 	Start, End            record.Position
@@ -161,6 +169,7 @@ type stated struct {
 	Reason                string
 	Verdict               spec.Verdict
 	Confirmed             bool
+	AllKillers            bool
 }
 
 func TestCorpus(t *testing.T) {
@@ -289,6 +298,8 @@ func config(t *testing.T, dir string, c caseFile, e expectFile) *run.Config {
 		Confirm:          c.Confirm,
 		IncludeGenerated: c.IncludeGenerated,
 		Sample:           c.Sample,
+		AllKillers:       c.Killers == spec.KillersAll,
+		Subtests:         c.Coverage == spec.CoverageLeaves,
 	}
 	for _, entry := range e.Lines {
 		lines, err := selection.ParseEntry(filepath.Join(dir, entry))
@@ -353,6 +364,8 @@ func compare(t *testing.T, language string, c caseFile, e expectFile, rec *recor
 		expect.EquateEmpty())
 	expect.Equal(t, rec.Control != nil && rec.Control.Ordinary != nil, c.Confirm,
 		"the record states an ordinary control run exactly when case.json confirms")
+	expect.Equal(t, rec.Killers, cmp.Or(c.Killers, spec.KillersFirst), "the record states the killers of case.json")
+	expect.Equal(t, rec.Coverage, cmp.Or(c.Coverage, spec.CoverageTests), "and its coverage")
 	// A run with a history states a sample only when a mutant is not-run.
 	sampled := c.Sample > 0 && (c.History == nil || slices.ContainsFunc(c.Mutants, func(m caseMutant) bool {
 		return m.Verdict == spec.NotRun
@@ -390,11 +403,11 @@ func compareMutant(t *testing.T, key mutantID, m record.Mutant, x expectMutant, 
 	expect.Equal(t,
 		stated{
 			Key: m.Key, File: m.File, Start: m.Start, End: m.End, Original: m.Original, Replacement: m.Replacement,
-			Rule: m.Rule, Reason: m.Reason, Verdict: m.Verdict, Confirmed: m.Confirmed,
+			Rule: m.Rule, Reason: m.Reason, Verdict: m.Verdict, Confirmed: m.Confirmed, AllKillers: m.AllKillers,
 		},
 		stated{
 			Key: x.Key, File: x.File, Start: x.Start, End: x.End, Original: x.Original, Replacement: x.Replacement,
-			Rule: x.Rule, Reason: reason, Verdict: verdict, Confirmed: c.Confirmed,
+			Rule: x.Rule, Reason: reason, Verdict: verdict, Confirmed: c.Confirmed, AllKillers: c.AllKillers,
 		},
 		key.String()+" has the fields of expect.json and the verdict of case.json")
 	if len(x.Tests) > 0 {

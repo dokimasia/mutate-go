@@ -192,6 +192,8 @@ func (c *cli) test(ctx context.Context, r *gocli.Run[options, options]) (status 
 			Sample:           o.Sample,
 			IncludeGenerated: o.IncludeGenerated,
 			Confirm:          o.Confirm,
+			AllKillers:       o.AllKillers,
+			Subtests:         o.Subtests,
 		},
 		out:      out,
 		progress: &progress{stderr: out.stderr, every: c.every, now: c.now, deadline: deadline},

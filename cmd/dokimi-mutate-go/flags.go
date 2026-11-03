@@ -28,6 +28,8 @@ const (
 	flagSkip             = "skip"
 	flagSuite            = "suite"
 	flagConfirm          = "confirm"
+	flagAllKillers       = "all-killers"
+	flagSubtests         = "subtests"
 	flagDirectory        = "directory"
 	flagParallel         = "parallel"
 	flagWorkers          = "workers"
@@ -75,6 +77,8 @@ type options struct {
 	Timeout          time.Duration     `help:"Time limit of the command, such as 30m."`
 	IncludeGenerated bool              `help:"Also mutate generated files."`
 	Confirm          bool              `help:"Test each undetected mutant once more in a normal build."`
+	AllKillers       bool              `help:"Name every test that kills a mutant, not only the first."`
+	Subtests         bool              `help:"Name the subtests that cover a mutant, not only the top-level tests."`
 	JSON             bool              `help:"Write the record of each package as one line of JSON."`
 	List             bool              `help:"List the mutants of each package instead of testing them."`
 }

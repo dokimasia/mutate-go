@@ -47,10 +47,14 @@ type session struct {
 // threads: the session's, in pkg's directory, with a history under
 // --history. A package that --skip names gets an empty selection and no
 // history, so its run tests none of its mutants, and its record states each
-// of them as not selected.
+// of them as not selected. A work directory that the run cannot remove gets
+// a note with its path and the error.
 func (s *session) config(pkg load.Listed, sh share) run.Config {
 	cfg := s.cfg
 	cfg.Dir, cfg.Procs, cfg.Spare, cfg.Borrow = pkg.Dir, sh.procs, sh.spare, sh.borrow
+	cfg.Leftover = func(dir string, err error) {
+		s.out.errorf("%s: the run left its work directory %s: %v", pkg.ImportPath, dir, err)
+	}
 	cfg.History = s.history != ""
 	if slices.Contains(s.skip, pkg.ImportPath) {
 		cfg.Lines, cfg.History = []selection.Lines{}, false

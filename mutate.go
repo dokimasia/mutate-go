@@ -53,7 +53,9 @@ const rootDir = "/"
 //
 // Check stops tb with a fatal failure, before any run, when
 // DOKIMI_MUTATE_LINES does not parse or the run cannot make its work
-// directory. A record that does not write fails tb after the report.
+// directory. A record that does not write fails tb after the report. A work
+// directory that the run cannot remove gets a line in the test's log with
+// its path and the error.
 func Check(tb testing.TB, opts ...Option) {
 	tb.Helper()
 	if _, inside := os.LookupEnv(spec.Load().Protocol.Variable); inside {
@@ -79,7 +81,11 @@ func Check(tb testing.TB, opts ...Option) {
 		tb.Context(),
 		&run.Config{
 			Dir: workingDir, Env: os.Environ(), Lines: lines, Suite: c.suite, Workers: c.workers, Deadline: deadline,
-			Confirm: c.confirm, IncludeGenerated: c.includeGenerated, Memory: memory.Limit(os.DirFS(rootDir)),
+			Confirm: c.confirm, IncludeGenerated: c.includeGenerated, AllKillers: c.allKillers, Subtests: c.subtests,
+			Memory: memory.Limit(os.DirFS(rootDir)),
+			Leftover: func(dir string, err error) {
+				tb.Log("mutate: the run left its work directory " + dir + ": " + err.Error())
+			},
 		},
 	)
 	if err != nil {
@@ -133,6 +139,32 @@ type config struct {
 	workers          int
 	confirm          bool
 	includeGenerated bool
+	allKillers       bool
+	subtests         bool
+}
+
+// AllKillers makes Check run the tests of each killed mutant to their end,
+// without -test.failfast, so the record names every test that fails, and
+// not only the first. A kill whose runs ended on their own states
+// allKillers in the record. Each kill then costs the time of all of its
+// tests.
+func AllKillers() Option {
+	return Option{set: func(c config) config {
+		c.allKillers = true
+		return c
+	}}
+}
+
+// Subtests makes Check trace each leaf test alone: each subtest without
+// subtests of its own, and each top-level test without subtests. The
+// record's coveredBy then names the subtests that execute each mutant's
+// site, and a mutant's run starts with them. Each leaf test costs one run of
+// the test binary.
+func Subtests() Option {
+	return Option{set: func(c config) config {
+		c.subtests = true
+		return c
+	}}
 }
 
 // IncludeGenerated makes Check mutate every generated file of the package,
