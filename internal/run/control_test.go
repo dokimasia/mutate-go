@@ -227,14 +227,16 @@ func TestAdd(t *testing.T) {
 }
 `, childVar, ballastMiB)
 
-// ballastScale is a test of scale that touches ballastMiB in every run, so
-// the peak of its binary is above the peak of the binary of scale's package
-// conformance.
+// ballastScale is a test of scale that touches ballastMiB in every run and
+// keeps it for 200 ms, so the peak of its binary is above the peak of the
+// binary of scale's package conformance, also where the engine takes the
+// peak from the samples of its watch.
 var ballastScale = fmt.Sprintf(`package fixture
 
 import (
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestScaleByOne(t *testing.T) {
@@ -242,6 +244,7 @@ func TestScaleByOne(t *testing.T) {
 	for i := range buf {
 		buf[i] = 1
 	}
+	time.Sleep(200 * time.Millisecond)
 	runtime.KeepAlive(buf)
 	if Scale(2, 1) != 2 {
 		t.Error("Scale(2, 1) != 2")

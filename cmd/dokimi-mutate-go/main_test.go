@@ -119,13 +119,15 @@ const (
 	addShare     = "2"
 )
 
-// ballastTest is a test of add that touches 64 MiB in every run, so the
-// peak of its binary is above 64 MiB.
+// ballastTest is a test of add that touches 64 MiB in every run and keeps it
+// for 200 ms, so the peak of its binary is above 64 MiB, also where the
+// engine takes the peak from the samples of its watch.
 const ballastTest = `package fixture
 
 import (
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestAdd(t *testing.T) {
@@ -133,6 +135,7 @@ func TestAdd(t *testing.T) {
 	for i := range buf {
 		buf[i] = 1
 	}
+	time.Sleep(200 * time.Millisecond)
 	runtime.KeepAlive(buf)
 	if Add(2, 3) != 5 {
 		t.Error("Add(2, 3) != 5")

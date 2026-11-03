@@ -5,11 +5,11 @@
 // memory of the processes of a process group, and the peak resident memory
 // of a process that exited.
 //
-// [Limit] and [Group.Resident] read Linux's procfs and sysfs under the file
-// system root that the caller passes, os.DirFS("/") for the machine's own,
-// so a test can pass files of its own. On a platform without procfs, each
-// returns 0. [Peak] reads the resource usage that wait4 reports on Linux,
-// and returns nil elsewhere.
+// [Limit], [Group.Resident] and [Peak] read Linux's procfs and sysfs under
+// the file system root that the caller passes, os.DirFS("/") for the
+// machine's own, so a test can pass files of its own. On a platform without
+// procfs, Limit and Resident return 0. [Peak] also reads the resource usage
+// that wait4 reports on Linux, and returns nil elsewhere.
 //
 // # Concurrency
 //

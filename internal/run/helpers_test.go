@@ -356,13 +356,15 @@ func TestAdd(t *testing.T) {
 // ballastMiB is the memory that ballast touches in every run, in MiB.
 const ballastMiB = 64
 
-// ballast is a test of add that touches ballastMiB in every run, so the
-// peak of its binary is above ballastMiB.
+// ballast is a test of add that touches ballastMiB in every run and keeps it
+// for 200 ms, so the peak of its binary is above ballastMiB, also where the
+// engine takes the peak from the samples of its watch.
 var ballast = fmt.Sprintf(`package fixture
 
 import (
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestAdd(t *testing.T) {
@@ -370,6 +372,7 @@ func TestAdd(t *testing.T) {
 	for i := range buf {
 		buf[i] = 1
 	}
+	time.Sleep(200 * time.Millisecond)
 	runtime.KeepAlive(buf)
 	if Add(2, 3) != 5 {
 		t.Error("Add(2, 3) != 5")

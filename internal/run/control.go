@@ -29,6 +29,10 @@ const tracePrefix = "trace"
 // run error states.
 const messageTail = 8 << 10
 
+// system is the machine's file system, whose procfs memory.Peak reads the
+// high-water mark of the engine's own process from.
+var system = os.DirFS("/")
+
 // openingLimit returns the limit of one test binary's opening control run,
 // and whether the caller's deadline sets it: at most half of the time left.
 func (r *runner) openingLimit() (time.Duration, bool) {
@@ -91,9 +95,11 @@ func (r *runner) opening(ctx context.Context) string {
 		)
 		seconds += res.Seconds
 		//dokimi:mutate-skip ror-true: memory.Peak returns nil only outside Linux, where no test of this package measures a peak
-		if b := memory.Peak(res.State); b != nil {
-			// wait4 reports the largest of the binary and the children that it
-			// waited for, and the watch the processes of its group together.
+		if b := memory.Peak(system, res.State); b != nil {
+			// Peak returns the peak of the binary and the children that it
+			// waited for, or 0 when it cannot tell that peak from the
+			// engine's own. The watch measures the processes of the group
+			// together.
 			bytes := max(*b, res.Peak)
 			p.ceiling = int64(limits.Memory.Factor*float64(bytes)) + limits.Memory.Bytes
 			if r.cfg.Memory > 0 {

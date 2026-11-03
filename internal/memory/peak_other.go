@@ -5,8 +5,11 @@
 
 package memory
 
-import "os"
+import (
+	"io/fs"
+	"os"
+)
 
 // Peak returns nil. The package measures no process's peak on this
 // platform, so a test binary has no memory ceiling.
-func Peak(*os.ProcessState) *int64 { return nil }
+func Peak(fs.FS, *os.ProcessState) *int64 { return nil }
