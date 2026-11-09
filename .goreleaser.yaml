@@ -130,9 +130,9 @@ homebrew_casks:
       template: "https://github.com/dokimasia/mutate-go/releases/download/v{{ .Version }}/{{ .ArtifactName }}"
     hooks:
       post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/dokimi-mutate-go"]
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/dokimi-mutate-go"], must_succeed: false
           end
     repository:
       owner: dokimasia
