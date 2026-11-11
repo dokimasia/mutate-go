@@ -6,6 +6,6 @@ module go.dokimi.dev/mutate
 go 1.27.2
 
 require (
-	go.dokimi.dev/assert v0.16.0
-	go.stealthscale.io/cli v0.8.0
+	go.dokimi.dev/assert v0.19.0
+	go.stealthscale.io/cli v0.8.1
 )
